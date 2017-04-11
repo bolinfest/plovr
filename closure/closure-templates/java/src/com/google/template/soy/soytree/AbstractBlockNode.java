@@ -28,6 +28,7 @@ import com.google.template.soy.soytree.SoyNode.StandaloneNode;
 abstract class AbstractBlockNode extends AbstractParentSoyNode<StandaloneNode>
     implements BlockNode {
 
+
   /**
    * @param id The id for this node.
    * @param sourceLocation The node's source location.
@@ -36,12 +37,13 @@ abstract class AbstractBlockNode extends AbstractParentSoyNode<StandaloneNode>
     super(id, sourceLocation);
   }
 
+
   /**
    * Copy constructor.
-   *
    * @param orig The node to copy.
    */
   protected AbstractBlockNode(AbstractBlockNode orig, CopyState copyState) {
     super(orig, copyState);
   }
+
 }

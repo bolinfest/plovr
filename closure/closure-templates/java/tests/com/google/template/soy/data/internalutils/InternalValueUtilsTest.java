@@ -16,10 +16,6 @@
 
 package com.google.template.soy.data.internalutils;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
 import com.google.common.collect.ImmutableMap;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.data.restricted.BooleanData;
@@ -34,20 +30,19 @@ import com.google.template.soy.exprtree.FloatNode;
 import com.google.template.soy.exprtree.IntegerNode;
 import com.google.template.soy.exprtree.NullNode;
 import com.google.template.soy.exprtree.StringNode;
+
+import junit.framework.TestCase;
+
 import java.util.Iterator;
 import java.util.Map;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 /**
  * Unit tests for InternalValueUtils.
  *
  */
-@RunWith(JUnit4.class)
-public class InternalValueUtilsTest {
+public class InternalValueUtilsTest extends TestCase {
 
-  @Test
+
   public void testConvertPrimitiveDataToExpr() {
 
     assertTrue(
@@ -63,8 +58,7 @@ public class InternalValueUtilsTest {
     assertEquals(
         -3.14159,
         ((FloatNode) InternalValueUtils.convertPrimitiveDataToExpr(FloatData.forValue(-3.14159)))
-            .getValue(),
-        0.0);
+            .getValue());
     assertEquals(
         "boo",
         ((StringNode) InternalValueUtils.convertPrimitiveDataToExpr(StringData.forValue("boo")))
@@ -78,45 +72,35 @@ public class InternalValueUtilsTest {
     }
   }
 
-  @Test
+
   public void testConvertPrimitiveExprToData() {
-    assertTrue(
-        InternalValueUtils.convertPrimitiveExprToData(new NullNode(SourceLocation.UNKNOWN))
-            instanceof NullData);
-    assertTrue(
-        InternalValueUtils.convertPrimitiveExprToData(new BooleanNode(true, SourceLocation.UNKNOWN))
-            .booleanValue());
+    assertTrue(InternalValueUtils.convertPrimitiveExprToData(
+        new NullNode(SourceLocation.UNKNOWN)) instanceof NullData);
+    assertEquals(
+        true,
+        InternalValueUtils.convertPrimitiveExprToData(
+            new BooleanNode(true, SourceLocation.UNKNOWN)).booleanValue());
     assertEquals(
         -1,
-        InternalValueUtils.convertPrimitiveExprToData(new IntegerNode(-1, SourceLocation.UNKNOWN))
-            .integerValue());
+        InternalValueUtils.convertPrimitiveExprToData(
+            new IntegerNode(-1, SourceLocation.UNKNOWN)).integerValue());
     assertEquals(
         6.02e23,
         InternalValueUtils.convertPrimitiveExprToData(
-                new FloatNode(6.02e23, SourceLocation.UNKNOWN))
-            .floatValue(),
-        0.0);
+            new FloatNode(6.02e23, SourceLocation.UNKNOWN)).floatValue());
     assertEquals(
         "foo",
-        InternalValueUtils.convertPrimitiveExprToData(new StringNode("foo", SourceLocation.UNKNOWN))
-            .stringValue());
+        InternalValueUtils.convertPrimitiveExprToData(
+            new StringNode("foo", SourceLocation.UNKNOWN)).stringValue());
   }
 
-  @Test
+
   public void testConvertCompileTimeGlobalsMap() {
 
     Map<String, Object> compileTimeGlobalsMap =
         ImmutableMap.<String, Object>of(
-            "IS_SLEEPY",
-            true,
-            "sleepy.SHEEP",
-            "Baa",
-            "sleepy.NUM_SHEEP",
-            100,
-            "NAME",
-            "\u9EC4\u607A",
-            "WHITESPACE",
-            "\n\r\t");
+            "IS_SLEEPY", true, "sleepy.SHEEP", "Baa", "sleepy.NUM_SHEEP", 100,
+            "NAME", "\u9EC4\u607A", "WHITESPACE", "\n\r\t");
     Map<String, PrimitiveData> actual =
         InternalValueUtils.convertCompileTimeGlobalsMap(compileTimeGlobalsMap);
 
@@ -136,4 +120,5 @@ public class InternalValueUtilsTest {
       assertEquals(expectedIter.next(), actualIter.next());
     }
   }
+
 }

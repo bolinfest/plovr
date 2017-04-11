@@ -17,8 +17,10 @@
 package com.google.template.soy.data;
 
 import java.util.Map;
+
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
+
 
 /**
  * A SoyRecord that also implements the SoyMap interface.
@@ -32,21 +34,21 @@ import javax.annotation.ParametersAreNonnullByDefault;
 @ParametersAreNonnullByDefault
 public interface SoyDict extends SoyRecord, SoyMap {
 
+
   /**
-   * Gets a Java map of all items in this SoyDict, where mappings are string to value provider. Note
-   * that value providers are often just the values themselves, since all values are also providers.
-   *
+   * Gets a Java map of all items in this SoyDict, where mappings are string to value provider.
+   * Note that value providers are often just the values themselves, since all values are also
+   * providers.
    * @return A Java map of all items, where mappings are string to value provider.
    */
-  @Nonnull
-  public Map<String, ? extends SoyValueProvider> asJavaStringMap();
+  @Nonnull public Map<String, ? extends SoyValueProvider> asJavaStringMap();
+
 
   /**
    * Gets a Java map of all items in this SoyDict, where mappings are string to value. All value
    * providers will be eagerly resolved.
-   *
    * @return A Java map of all items, where mappings are string to value.
    */
-  @Nonnull
-  public Map<String, ? extends SoyValue> asResolvedJavaStringMap();
+  @Nonnull public Map<String, ? extends SoyValue> asResolvedJavaStringMap();
+
 }

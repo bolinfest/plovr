@@ -24,6 +24,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.template.soy.basetree.CopyState;
+import com.google.template.soy.data.SoyValueProvider;
 import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
 import com.google.template.soy.exprtree.DataAccessNode;
 import com.google.template.soy.exprtree.ExprEquivalence;
@@ -78,7 +79,6 @@ import com.google.template.soy.soytree.PrintDirectiveNode;
 import com.google.template.soy.soytree.PrintNode;
 import com.google.template.soy.soytree.RawTextNode;
 import com.google.template.soy.soytree.SoyNode;
-import com.google.template.soy.soytree.SoyNode.BlockNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 import com.google.template.soy.soytree.SoyNode.StandaloneNode;
 import com.google.template.soy.soytree.SwitchCaseNode;
@@ -86,6 +86,7 @@ import com.google.template.soy.soytree.SwitchDefaultNode;
 import com.google.template.soy.soytree.SwitchNode;
 import com.google.template.soy.soytree.TemplateNode;
 import com.google.template.soy.soytree.XidNode;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -101,25 +102,23 @@ import java.util.Set;
  * A static analyzer for how templates will access variables.
  *
  * <p>This class contains a generic method for constructing a control flow graph through a given Soy
- * template. We then use this graph to answer questions about the template.
- *
+ * template.  We then use this graph to answer questions about the template. 
+ * 
  * <p>Supported queries
- *
  * <ul>
- *   <li>{@link #isResolved(DataAccessNode)} can tell us whether or not a particular variable or
- *       field reference has already been referenced at a given point and therefore {@link
- *       SoyValueProvider#status()} has already returned {@link RenderResult#done()}.
+ *     <li>{@link #isResolved(DataAccessNode)} can tell us whether or not a particular
+ *         variable or field reference has already been referenced at a given point and therefore
+ *         {@link SoyValueProvider#status()} has already returned {@link RenderResult#done()}.
  * </ul>
- *
+ * 
  * <p>TODO(lukes): consider adding the following
- *
  * <ul>
- *   <li>Identify the last use of a variable. Currently we use variable scopes to decide when to
- *       stop saving/restoring variables, but if we knew they were no longer in use we could save
- *       generating save/restore logic.
- *   <li>Identify the last render of a variable. We could use this to save temporary buffers.
- *   <li>Identify the first use of a variable. We could use this to move {let...} definitions closer
- *       to their uses.
+ *     <li>Identify the last use of a variable.  Currently we use variable scopes to decide when to
+ *         stop saving/restoring variables, but if we knew they were no longer in use we could save
+ *         generating save/restore logic.
+ *     <li>Identify the last render of a variable.  We could use this to save temporary buffers.
+ *     <li>Identify the first use of a variable.  We could use this to move {let...} definitions 
+ *         closer to their uses.
  * </ul>
  */
 final class TemplateAnalysis {
@@ -325,12 +324,12 @@ final class TemplateAnalysis {
       // * no children => don't evaluate the switch expression
       // * no cases => don't evaluate the switch expression
 
-      List<BlockNode> children = node.getChildren();
+      List<SoyNode> children = node.getChildren();
       if (children.isEmpty()) {
         return;
       }
       if (children.size() == 1 && children.get(0) instanceof SwitchDefaultNode) {
-        visitChildren(children.get(0));
+        visitChildren((SwitchDefaultNode) children.get(0));
         return;
       }
       // otherwise we are in the normal case and this is much like an if-elseif-else statement
@@ -564,12 +563,12 @@ final class TemplateAnalysis {
       super.visitChildren(node);
     }
 
-    /** Evaluates the given expression in the current block. */
+    /** Evaluates the given expression in the current block.*/
     void evalInline(ExprUnion expr) {
       evalInline(expr.getExpr());
     }
 
-    /** Evaluates the given expression in the current block. */
+    /** Evaluates the given expression in the current block.*/
     void evalInline(ExprNode expr) {
       Block begin = current;
       Block end = exprVisitor.eval(begin, expr);
@@ -601,7 +600,7 @@ final class TemplateAnalysis {
       this.letNodes = letNodes;
     }
 
-    /** Evaluates the given expression in the given block. Returns the ending or 'exit' block. */
+    /** Evaluates the given expression in the given block.  Returns the ending or 'exit' block. */
     Block eval(Block block, ExprNode expr) {
       Block orig = this.current;
       this.current = block;
@@ -621,11 +620,11 @@ final class TemplateAnalysis {
       AccessGraph letContent = letNodes.get(node.getDefnDecl());
       if (letContent != null) {
         // because let nodes are lazily executed, we model this in the access graph as each let
-        // varref branching to a copy of the implementation and back. This ensures that each
+        // varref branching to a copy of the implementation and back. This ensures that each 
         // variable referenced by the {let} is referenced prior to the let variable.
         // Additionally we add a dead end branch from just prior the let to the canonical let
         // implementation block
-        //
+        // 
         // this means that the graph structure for this:
         // {let $foo : $p /}
         // {$foo}
@@ -716,7 +715,9 @@ final class TemplateAnalysis {
       executeInBranch(node.getChild(1));
     }
 
-    /** Evaluates the given node in an optional branch. */
+    /**
+     * Evaluates the given node in an optional branch.
+     */
     private void executeInBranch(ExprNode expr) {
       Block prev = current;
       Block branch = prev.addBranch();
@@ -724,6 +725,7 @@ final class TemplateAnalysis {
       // Add a successor node to merge the branches back together.
       current = Block.merge(prev, branch);
     }
+
 
     @Override
     protected void visitConditionalOpNode(ConditionalOpNode node) {
@@ -735,7 +737,7 @@ final class TemplateAnalysis {
     }
   }
 
-  /**
+  /** 
    * Traverses the control flow graph reachable from {@code start} and adds all the predecessor
    * links.
    */
@@ -753,6 +755,8 @@ final class TemplateAnalysis {
       addPredecessors(successor, visited);
     }
   }
+  
+  
 
   /**
    * A graph of {@link Block blocks} for a given template showing how control flows through the
@@ -760,12 +764,11 @@ final class TemplateAnalysis {
    *
    * <p>Note this is almost a classic Control Flow Graph
    * https://en.wikipedia.org/wiki/Control_flow_graph with the following exceptions
-   *
    * <ul>
-   *   <li>We aren't tracking 'back edges' (e.g. loops) accurately.
-   *   <li>We are tracking a small subset of the operations performed while evaluating a template.
-   *       Currently only {@link VarRefNode variable references} and {@link DataAccessNode data
-   *       access} operations.
+   *     <li>We aren't tracking 'back edges' (e.g. loops) accurately.
+   *     <li>We are tracking a small subset of the operations performed while evaluating a template.
+   *         Currently only {@link VarRefNode variable references} and {@link DataAccessNode data
+   *         access} operations.
    * </ul>
    *
    * Both of these limitations exist simply because we don't have usecases for tracking this data
@@ -887,9 +890,9 @@ final class TemplateAnalysis {
   /**
    * A block is a linear sequence of evaluations that happen with no branches.
    *
-   * <p>Each block has an arbitrary number of {@link Block#predecessors} and {@link
-   * Block#successors} representing all the blocks that come immediately prior to or after this
-   * node.
+   * <p>Each block has an arbitrary number of {@link Block#predecessors} and
+   * {@link Block#successors} representing all the blocks that come immediately prior to or after
+   * this node.
    *
    * <p>This essentially a 'basic block' https://en.wikipedia.org/wiki/Basic_block with the caveat
    * that we are tracking expressions instead of instructions.
@@ -930,7 +933,7 @@ final class TemplateAnalysis {
 
     @Override
     public String toString() {
-      return getClass().getSimpleName()
+      return getClass().getSimpleName() 
           + ImmutableMap.of(
               "exprs", exprs,
               "in_edges", predecessors.size(),

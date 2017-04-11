@@ -16,21 +16,17 @@
 
 package com.google.template.soy.soytree;
 
-import static org.junit.Assert.assertEquals;
-
 import com.google.template.soy.base.SourceLocation;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.*;
+
 
 /**
  * Unit tests for RawTextNode.
  *
  */
-@RunWith(JUnit4.class)
-public final class RawTextNodeTest {
+public final class RawTextNodeTest extends TestCase {
 
-  @Test
   public void testToSourceString() {
     RawTextNode rtn = new RawTextNode(0, "Aa`! \n \r \t { }", SourceLocation.UNKNOWN);
     assertEquals("Aa`! {\\n} {\\r} {\\t} {lb} {rb}", rtn.toSourceString());

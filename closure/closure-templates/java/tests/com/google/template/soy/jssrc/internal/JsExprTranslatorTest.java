@@ -24,32 +24,32 @@ import com.google.inject.Injector;
 import com.google.inject.Key;
 import com.google.template.soy.SoyModule;
 import com.google.template.soy.base.SourceLocation;
-import com.google.template.soy.base.internal.UniqueNameGenerator;
 import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.exprtree.FunctionNode;
 import com.google.template.soy.exprtree.IntegerNode;
 import com.google.template.soy.exprtree.NullNode;
 import com.google.template.soy.exprtree.OperatorNodes.TimesOpNode;
-import com.google.template.soy.jssrc.dsl.CodeChunk;
+import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.passes.ResolveFunctionsVisitor;
 import com.google.template.soy.shared.restricted.SoyFunction;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
+
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.Map;
 
 /**
  * Unit tests for JsExprTranslator.
  *
  */
-@RunWith(JUnit4.class)
-public final class JsExprTranslatorTest {
+public final class JsExprTranslatorTest extends TestCase {
   private static final Injector INJECTOR = Guice.createInjector(new SoyModule());
 
   private static final ImmutableMap<String, ? extends SoyFunction> SOY_FUNCTIONS =
       INJECTOR.getInstance(new Key<ImmutableMap<String, ? extends SoyFunction>>() {});
 
-  @Test
-  public void testTranslateToCodeChunk() {
+  public void testTranslateToJsExpr() {
     JsSrcTestUtils.simulateNewApiCall(INJECTOR);
     JsExprTranslator jsExprTranslator = INJECTOR.getInstance(JsExprTranslator.class);
 
@@ -64,23 +64,18 @@ public final class JsExprTranslatorTest {
     FunctionNode randomIntFnNode = new FunctionNode("randomInt", SourceLocation.UNKNOWN);
     randomIntFnNode.addChild(new IntegerNode(4, SourceLocation.UNKNOWN));
 
+    Deque<Map<String, JsExpr>> localVarTranslations = new ArrayDeque<>();
+
     // Test unsupported function (Soy V1 syntax).
     expr.replaceChild(1, userFnNode);
     new ResolveFunctionsVisitor(SOY_FUNCTIONS).exec(expr);
     String exprText = "3   *   userFn(5)";
-    UniqueNameGenerator nameGenerator = JsSrcNameGenerators.forLocalVariables();
     assertThat(
             jsExprTranslator
-                .translateToCodeChunk(
-                    expr,
-                    exprText,
-                    TranslationContext.of(
-                        SoyToJsVariableMappings.forNewTemplate(),
-                        CodeChunk.Generator.create(nameGenerator),
-                        nameGenerator),
-                    ExplodingErrorReporter.get())
-                .getCode())
-        .isEqualTo("3 * userFn(5);");
+                .translateToJsExpr(
+                    expr, exprText, localVarTranslations, ExplodingErrorReporter.get())
+                .getText())
+        .isEqualTo("3 * userFn(5)");
 
     // Test supported function.
     expr.replaceChild(1, randomIntFnNode);
@@ -88,15 +83,9 @@ public final class JsExprTranslatorTest {
     exprText = "3   *   randomInt(4)";
     assertThat(
             jsExprTranslator
-                .translateToCodeChunk(
-                    expr,
-                    exprText,
-                    TranslationContext.of(
-                        SoyToJsVariableMappings.forNewTemplate(),
-                        CodeChunk.Generator.create(nameGenerator),
-                        nameGenerator),
-                    ExplodingErrorReporter.get())
-                .getCode())
-        .isEqualTo("3 * (Math.floor(Math.random() * 4));");
+                .translateToJsExpr(
+                    expr, exprText, localVarTranslations, ExplodingErrorReporter.get())
+                .getText())
+        .isEqualTo("3 * Math.floor(Math.random() * 4)");
   }
 }

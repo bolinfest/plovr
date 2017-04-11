@@ -16,6 +16,7 @@
 
 package com.google.template.soy.jssrc.internal;
 
+
 /**
  * Provides a way to look up local variable aliases for the JavaScript function that corresponds to
  * a given Soy template.
@@ -27,3 +28,4 @@ public interface TemplateAliases {
    */
   String get(String fullyQualifiedName);
 }
+

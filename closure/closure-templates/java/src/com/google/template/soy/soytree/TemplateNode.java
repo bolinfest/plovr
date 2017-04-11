@@ -24,7 +24,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.internal.BaseUtils;
-import com.google.template.soy.base.internal.Identifier;
 import com.google.template.soy.basetree.CopyState;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.error.ErrorReporter;
@@ -33,9 +32,11 @@ import com.google.template.soy.soytree.SoyNode.RenderUnitNode;
 import com.google.template.soy.soytree.defn.HeaderParam;
 import com.google.template.soy.soytree.defn.TemplateParam;
 import com.google.template.soy.soytree.defn.TemplateParam.DeclLoc;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
@@ -47,7 +48,9 @@ import javax.annotation.concurrent.Immutable;
  */
 public abstract class TemplateNode extends AbstractBlockCommandNode implements RenderUnitNode {
 
-  /** Priority for delegate templates. */
+  /**
+   * Priority for delegate templates.
+   */
   public enum Priority {
     STANDARD(0),
     HIGH_PRIORITY(1);
@@ -81,12 +84,12 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
   /**
    * Info from the containing Soy file's {@code delpackage} and {@code namespace} declarations.
    *
-   * <p>Important: Do not use outside of Soy code (treat as superpackage-private).
+   * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
    *
-   * <p>Note: Currently, there are only 2 delegate priority values: 0 and 1. Delegate templates that
-   * are not in a delegate package are given priority 0 (lowest). Delegate templates in a delegate
-   * package are given priority 1. There is currently no syntax for the user to override these
-   * default priority values.
+   * <p> Note: Currently, there are only 2 delegate priority values: 0 and 1. Delegate templates
+   * that are not in a delegate package are given priority 0 (lowest). Delegate templates in a
+   * delegate package are given priority 1. There is currently no syntax for the user to override
+   * these default priority values.
    */
   @Immutable
   public static class SoyFileHeaderInfo {
@@ -101,18 +104,12 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
     final Priority priority;
     @Nullable public final String namespace;
     public final AutoescapeMode defaultAutoescapeMode;
-    public final StrictHtmlMode strictHtmlMode;
 
-    public SoyFileHeaderInfo(
-        ErrorReporter errorReporter,
-        @Nullable Identifier delpackageName,
-        NamespaceDeclaration namespaceDeclaration,
+    public SoyFileHeaderInfo(ErrorReporter errorReporter,
+        @Nullable String delpackageName, NamespaceDeclaration namespaceDeclaration,
         Collection<AliasDeclaration> aliases) {
-      this(
-          delpackageName == null ? null : delpackageName.identifier(),
-          namespaceDeclaration.getNamespace(),
+      this(delpackageName, namespaceDeclaration.getNamespace(),
           namespaceDeclaration.getDefaultAutoescapeMode(),
-          namespaceDeclaration.getStrictHtmlMode(),
           createAliasMap(errorReporter, namespaceDeclaration, aliases),
           ImmutableList.copyOf(aliases));
     }
@@ -123,31 +120,24 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
           null,
           namespace,
           AutoescapeMode.NONCONTEXTUAL,
-          StrictHtmlMode.UNSET, // Don't use stricthtml mode for testing.
           ImmutableMap.<String, String>of(),
           ImmutableList.<AliasDeclaration>of());
     }
 
     private SoyFileHeaderInfo(
-        @Nullable String delPackageName,
-        String namespace,
-        AutoescapeMode defaultAutoescapeMode,
-        StrictHtmlMode strictHtmlMode,
+        @Nullable String delPackageName, String namespace, AutoescapeMode defaultAutoescapeMode,
         ImmutableMap<String, String> aliasToNamespaceMap,
         ImmutableList<AliasDeclaration> aliasDeclarations) {
       this.delPackageName = delPackageName;
       this.priority = (delPackageName == null) ? Priority.STANDARD : Priority.HIGH_PRIORITY;
       this.namespace = namespace;
       this.defaultAutoescapeMode = defaultAutoescapeMode;
-      this.strictHtmlMode = strictHtmlMode;
       this.aliasToNamespaceMap = aliasToNamespaceMap;
       this.aliasDeclarations = aliasDeclarations;
     }
 
-    private static ImmutableMap<String, String> createAliasMap(
-        ErrorReporter errorReporter,
-        NamespaceDeclaration namespaceDeclaration,
-        Collection<AliasDeclaration> aliases) {
+    private static ImmutableMap<String, String> createAliasMap(ErrorReporter errorReporter,
+        NamespaceDeclaration namespaceDeclaration, Collection<AliasDeclaration> aliases) {
       Map<String, String> map = Maps.newLinkedHashMap();
       String aliasForFileNamespace =
           namespaceDeclaration.isDefined()
@@ -212,9 +202,6 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
   /** The description portion of the SoyDoc (before declarations), or null. */
   private String soyDocDesc;
 
-  /** If the template is using strict html mode. */
-  private final boolean strictHtml;
-
   /** The params from template header or SoyDoc. Null if no decls and no SoyDoc. */
   @Nullable private ImmutableList<TemplateParam> params;
 
@@ -252,17 +239,7 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
     this.cssBaseNamespace = nodeBuilder.getCssBaseNamespace();
     this.soyDoc = nodeBuilder.getSoyDoc();
     this.soyDocDesc = nodeBuilder.getSoyDocDesc();
-    if (nodeBuilder.getStrictHtmlMode() != StrictHtmlMode.UNSET) {
-      // use the value that is explicitly set in template.
-      this.strictHtml = nodeBuilder.getStrictHtmlMode() == StrictHtmlMode.YES;
-    } else if (soyFileHeaderInfo.strictHtmlMode != StrictHtmlMode.UNSET
-        && contentKind == ContentKind.HTML) {
-      // If the value is not set, HTML templates will inherit from namespace declaration.
-      this.strictHtml = soyFileHeaderInfo.strictHtmlMode == StrictHtmlMode.YES;
-    } else {
-      // Default value is false.
-      this.strictHtml = false;
-    }
+
     // Split out @inject params into a separate list because we don't want them
     // to be visible to code that looks at the template's calling signature.
     ImmutableList.Builder<TemplateParam> regularParams = ImmutableList.builder();
@@ -287,7 +264,7 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
    */
   protected TemplateNode(TemplateNode orig, CopyState copyState) {
     super(orig, copyState);
-    this.soyFileHeaderInfo = orig.soyFileHeaderInfo; // immutable
+    this.soyFileHeaderInfo = orig.soyFileHeaderInfo;  // immutable
     this.templateName = orig.templateName;
     this.partialTemplateName = orig.partialTemplateName;
     this.templateNameForUserMsgs = orig.templateNameForUserMsgs;
@@ -299,11 +276,10 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
     this.soyDoc = orig.soyDoc;
     this.soyDocDesc = orig.soyDocDesc;
     // TODO(lukes): params and injectedParams are not really immutable, just mostly.  Consider
-    // cloning them here and modifying SoyTreeUtils.cloneNode to reassign these as well.
-    this.params = orig.params; // immutable
+    // cloning them here and modifying SoytreeUtils.cloneNode to reassign these as well.
+    this.params = orig.params;  // immutable
     this.injectedParams = orig.injectedParams;
     this.maxLocalVariableTableSize = orig.maxLocalVariableTableSize;
-    this.strictHtml = orig.strictHtml;
   }
 
   /** Returns info from the containing Soy file's header declarations. */
@@ -327,8 +303,7 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
   }
 
   /** Returns this template's partial name. Only applicable for V2 (null for V1). */
-  @Nullable
-  public String getPartialTemplateName() {
+  @Nullable public String getPartialTemplateName() {
     return partialTemplateName;
   }
 
@@ -342,22 +317,15 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
     return autoescapeMode;
   }
 
-  /** Returns if this template is in strict html mode. */
-  public boolean isStrictHtml() {
-    return strictHtml;
-  }
-
   /** Returns the content kind for strict autoescaping. Nonnull iff autoescapeMode is strict. */
-  @Override
-  @Nullable
-  public ContentKind getContentKind() {
+  @Override @Nullable public ContentKind getContentKind() {
     return contentKind;
   }
 
   /**
    * Returns required CSS namespaces.
    *
-   * <p>CSS "namespaces" are monikers associated with CSS files that by convention, dot-separated
+   * CSS "namespaces" are monikers associated with CSS files that by convention, dot-separated
    * lowercase names. They don't correspond to CSS features, but are processed by external tools
    * that impose dependencies from templates to CSS.
    */
@@ -366,14 +334,16 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
   }
 
   /**
-   * Returns the base CSS namespace for resolving package-relative class names. Package relative
-   * class names are ones beginning with a percent (%). The compiler will replace the percent sign
-   * with the name of the current CSS package converted to camel-case form.
+   * Returns the base CSS namespace for resolving package-relative class names.
+   * Package relative class names are ones beginning with a percent (%). The compiler
+   * will replace the percent sign with the name of the current CSS package converted
+   * to camel-case form.
    *
-   * <p>Packages are defined using dotted-id syntax (foo.bar), which is identical to the syntax for
-   * required CSS namespaces. If no base CSS namespace is defined, it will use the first required
-   * css namespace, if any are present. If there is no base CSS name, and no required css
-   * namespaces, then use of package-relative class names will be reported as an error.
+   * Packages are defined using dotted-id syntax (foo.bar), which is identical to
+   * the syntax for required CSS namespaces. If no base CSS namespace is defined,
+   * it will use the first required css namespace, if any are present. If there is no
+   * base CSS name, and no required css namespaces, then use of package-relative
+   * class names will be reported as an error.
    */
   public String getCssBaseNamespace() {
     return cssBaseNamespace;
@@ -392,7 +362,7 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
     soyDoc = null;
     soyDocDesc = null;
 
-    assert params != null; // prevent warnings
+    assert params != null;  // prevent warnings
     List<TemplateParam> newParams = Lists.newArrayListWithCapacity(params.size());
     for (TemplateParam origParam : params) {
       newParams.add(origParam.copyEssential());
@@ -401,14 +371,12 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
   }
 
   /** Returns the SoyDoc, or null. */
-  @Nullable
-  public String getSoyDoc() {
+  @Nullable public String getSoyDoc() {
     return soyDoc;
   }
 
   /** Returns the description portion of the SoyDoc (before @param tags), or null. */
-  @Nullable
-  public String getSoyDocDesc() {
+  @Nullable public String getSoyDocDesc() {
     return soyDocDesc;
   }
 
@@ -423,18 +391,15 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
   }
 
   /** Returns all params from template header or SoyDoc, both regular and injected. */
-  @Nullable
-  public Iterable<TemplateParam> getAllParams() {
+  @Nullable public Iterable<TemplateParam> getAllParams() {
     return Iterables.concat(params, injectedParams);
   }
 
-  @Override
-  public SoyFileNode getParent() {
+  @Override public SoyFileNode getParent() {
     return (SoyFileNode) super.getParent();
   }
 
-  @Override
-  public String toSourceString() {
+  @Override public String toSourceString() {
     StringBuilder sb = new StringBuilder();
 
     // SoyDoc.
@@ -456,11 +421,8 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
         if (!headerParam.isRequired()) {
           sb.append('?');
         }
-        sb.append(' ')
-            .append(headerParam.name())
-            .append(": ")
-            .append(headerParam.type())
-            .append("}");
+        sb.append(' ').append(headerParam.name()).append(": ")
+            .append(headerParam.typeSrc()).append("}");
         if (headerParam.desc() != null) {
           sb.append("  /** ").append(headerParam.desc()).append(" */");
         }
@@ -490,7 +452,6 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
     return sb.toString();
   }
 
-
   /**
    * Construct a StackTraceElement that will point to the given source location of the current
    * template.
@@ -502,7 +463,7 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
           /* declaringClass */ "(UnknownSoyNamespace)",
           /* methodName */ templateName,
           srcLocation.getFileName(),
-          srcLocation.getBeginLine());
+          srcLocation.getLineNumber());
     } else {
       // V2 soy templates.
       return new StackTraceElement(
@@ -511,7 +472,7 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
           // print "namespace..templateName" otherwise.
           /* methodName */ partialTemplateName.substring(1),
           srcLocation.getFileName(),
-          srcLocation.getBeginLine());
+          srcLocation.getLineNumber());
     }
   }
 }

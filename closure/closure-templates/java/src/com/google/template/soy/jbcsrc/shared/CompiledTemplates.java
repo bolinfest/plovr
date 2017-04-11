@@ -25,15 +25,19 @@ import com.google.common.collect.ImmutableSortedSet;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.jbcsrc.shared.TemplateMetadata.DelTemplateMetadata;
 import com.google.template.soy.shared.internal.DelTemplateSelector;
+
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+
 import javax.annotation.Nullable;
 
-/** The result of template compilation. */
+/**
+ * The result of template compilation.
+ */
 public final class CompiledTemplates {
   private final ClassLoader loader;
-  private final ConcurrentHashMap<String, TemplateData> templateNameToFactory =
+  private final ConcurrentHashMap<String, TemplateData> templateNameToFactory = 
       new ConcurrentHashMap<>();
   private final DelTemplateSelector<TemplateData> selector;
 
@@ -42,8 +46,8 @@ public final class CompiledTemplates {
   }
 
   /**
-   * @param delTemplateNames The names of all the compiled deltemplates (the mangled names). This is
-   *     needed to construct a valid deltemplate selector.
+   * @param delTemplateNames The names of all the compiled deltemplates (the mangled names).  This
+   *     is needed to construct a valid deltemplate selector.
    * @param loader The classloader that contains the classes
    */
   public CompiledTemplates(ImmutableSet<String> delTemplateNames, ClassLoader loader) {
@@ -91,12 +95,16 @@ public final class CompiledTemplates {
     return getTemplateData(name).kind;
   }
 
-  /** Returns a factory for the given fully qualified template name. */
+  /**
+   * Returns a factory for the given fully qualified template name.
+   */
   public CompiledTemplate.Factory getTemplateFactory(String name) {
     return getTemplateData(name).factory;
   }
 
-  /** Eagerly load all the given templates. */
+  /**
+   * Eagerly load all the given templates.
+   */
   public void loadAll(Iterable<String> templateNames) {
     for (String templateName : templateNames) {
       getTemplateData(templateName);
@@ -159,10 +167,10 @@ public final class CompiledTemplates {
       Class<? extends CompiledTemplate.Factory> factoryClass =
           Class.forName(factoryName, true /* run clinit */, loader)
               .asSubclass(CompiledTemplate.Factory.class);
-      factory = factoryClass.getConstructor().newInstance();
+      factory = factoryClass.newInstance();
     } catch (ClassNotFoundException e) {
       throw new IllegalArgumentException("No class was compiled for template: " + name, e);
-    } catch (ReflectiveOperationException e) {
+    } catch (InstantiationException | IllegalAccessException e) {
       // this should be impossible since our factories are public with a default constructor.
       // TODO(lukes): failures of bytecode verification will propagate as Errors, we should
       // consider catching them here to add information about our generated types. (e.g. add the
@@ -172,7 +180,10 @@ public final class CompiledTemplates {
     return new TemplateData(factory);
   }
 
-  /** Adds all transitively called templates to {@code visited} */
+
+  /**
+   * Adds all transitively called templates to {@code visited}
+   */
   private void collectTransitiveCallees(TemplateData templateData, Set<TemplateData> visited) {
     if (!visited.add(templateData)) {
       return; // avoids chasing recursive cycles

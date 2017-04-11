@@ -18,14 +18,10 @@ package com.google.template.soy.soytree;
 
 import static com.google.template.soy.soytree.TemplateSubject.assertThatTemplateContent;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import junit.framework.TestCase;
 
-@RunWith(JUnit4.class)
-public final class CommandTextAttributesParserTest {
+public final class CommandTextAttributesParserTest extends TestCase {
 
-  @Test
   public void testParse() {
     assertThatTemplateContent("{msg desc=\"a\\\"b\"}{/msg}\n").isWellFormed();
   }

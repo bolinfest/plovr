@@ -16,24 +16,17 @@
 
 package com.google.template.soy.data.restricted;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
 import com.google.template.soy.data.SoyDataException;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
 
 /**
  * Unit tests for subclasses of PrimitiveData.
  *
  */
-@RunWith(JUnit4.class)
-public class PrimitiveDataTest {
+public class PrimitiveDataTest extends TestCase {
 
-  @Test
+
   public void testUndefinedData() {
 
     UndefinedData ud = UndefinedData.INSTANCE;
@@ -47,7 +40,7 @@ public class PrimitiveDataTest {
     assertTrue(ud.equals(UndefinedData.INSTANCE));
   }
 
-  @Test
+
   public void testNullData() {
 
     NullData nd = NullData.INSTANCE;
@@ -56,7 +49,7 @@ public class PrimitiveDataTest {
     assertTrue(nd.equals(NullData.INSTANCE));
   }
 
-  @Test
+
   public void testBooleanData() {
 
     BooleanData bd0 = BooleanData.FALSE;
@@ -75,7 +68,7 @@ public class PrimitiveDataTest {
     assertFalse(bd1.equals(bd0));
   }
 
-  @Test
+
   public void testIntegerData() {
 
     IntegerData id0 = IntegerData.ZERO;
@@ -94,17 +87,17 @@ public class PrimitiveDataTest {
     assertFalse(id1.equals(id0));
   }
 
-  @Test
+
   public void testFloatData() {
 
     FloatData fd0 = FloatData.forValue(0.0);
-    assertEquals(0.0, fd0.getValue(), 0.0);
+    assertEquals(0.0, fd0.getValue());
     assertEquals("0", fd0.coerceToString());
     assertEquals(false, fd0.coerceToBoolean());
     assertTrue(fd0.equals(FloatData.forValue(0.0)));
 
     FloatData fd1 = FloatData.forValue(3.14);
-    assertEquals(3.14, fd1.getValue(), 0.0);
+    assertEquals(3.14, fd1.getValue());
     assertEquals("3.14", fd1.coerceToString());
     assertEquals(true, fd1.coerceToBoolean());
     assertTrue(fd1.equals(FloatData.forValue(3.14)));
@@ -113,7 +106,7 @@ public class PrimitiveDataTest {
     assertFalse(fd1.equals(fd0));
   }
 
-  @Test
+
   public void testFloatDataToString() {
     // Tests that our toString is similar to Javascript's number toString.
     assertEquals("0", FloatData.toString(0.0));
@@ -129,7 +122,7 @@ public class PrimitiveDataTest {
     assertEquals("-Infinity", FloatData.toString(Double.NEGATIVE_INFINITY));
   }
 
-  @Test
+
   public void testNumberData() {
 
     IntegerData id0 = IntegerData.ZERO;
@@ -137,10 +130,10 @@ public class PrimitiveDataTest {
     FloatData fd0 = FloatData.forValue(0.0);
     FloatData fd1 = FloatData.forValue(2.0);
 
-    assertEquals(0.0, id0.toFloat(), 0.0);
-    assertEquals(2.0, id1.toFloat(), 0.0);
-    assertEquals(0.0, fd0.toFloat(), 0.0);
-    assertEquals(2.0, fd1.toFloat(), 0.0);
+    assertEquals(0.0, id0.toFloat());
+    assertEquals(2.0, id1.toFloat());
+    assertEquals(0.0, fd0.toFloat());
+    assertEquals(2.0, fd1.toFloat());
 
     assertTrue(id0.equals(fd0));
     assertTrue(fd0.equals(id0));
@@ -152,7 +145,7 @@ public class PrimitiveDataTest {
     assertFalse(fd0.equals(id1));
   }
 
-  @Test
+
   public void testStringData() {
 
     StringData sd0 = StringData.EMPTY_STRING;
@@ -170,4 +163,5 @@ public class PrimitiveDataTest {
     assertFalse(sd0.equals(sd1));
     assertFalse(sd1.equals(sd0));
   }
+
 }

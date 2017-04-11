@@ -16,20 +16,16 @@
 
 package com.google.template.soy.base.internal;
 
-import static org.junit.Assert.assertEquals;
+import junit.framework.TestCase;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 /**
  * Unit tests for IndentedLinesBuilder.
  *
  */
-@RunWith(JUnit4.class)
-public final class IndentedLinesBuilderTest {
+public final class IndentedLinesBuilderTest extends TestCase {
 
-  @Test
+
   public void testIndentedLinesBuilder() {
 
     IndentedLinesBuilder ilb = new IndentedLinesBuilder(2);
@@ -45,6 +41,12 @@ public final class IndentedLinesBuilderTest {
     assertEquals(2, ilb.getIndentIncrementLen());
     assertEquals(4, ilb.getCurrIndentLen());
     assertEquals(
-        "Line 1\n  Line 2\n      Line 3\nLine 4 not indented\n    Line 5\n", ilb.toString());
+        "Line 1\n" +
+        "  Line 2\n" +
+        "      Line 3\n" +
+        "Line 4 not indented\n" +
+        "    Line 5\n",
+        ilb.toString());
   }
+
 }

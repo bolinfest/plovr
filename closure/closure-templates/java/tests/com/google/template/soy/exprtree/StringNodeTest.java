@@ -16,21 +16,17 @@
 
 package com.google.template.soy.exprtree;
 
-import static org.junit.Assert.assertEquals;
-
 import com.google.template.soy.base.SourceLocation;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.*;
+
 
 /**
  * Unit tests for StringNode.
  *
  */
-@RunWith(JUnit4.class)
-public final class StringNodeTest {
+public final class StringNodeTest extends TestCase {
 
-  @Test
   public void testToSourceString() {
     StringNode sn = new StringNode("Aa`! \n \r \t \\ \' \"", SourceLocation.UNKNOWN);
     assertEquals("'Aa`! \\n \\r \\t \\\\ \\\' \"'", sn.toSourceString());

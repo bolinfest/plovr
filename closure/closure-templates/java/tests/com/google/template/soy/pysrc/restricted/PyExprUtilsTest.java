@@ -18,20 +18,18 @@ package com.google.template.soy.pysrc.restricted;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import junit.framework.TestCase;
+
 import java.util.ArrayList;
 import java.util.List;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
 
 /**
  * Unit tests for CodeBuilder.
  *
  */
-@RunWith(JUnit4.class)
-public final class PyExprUtilsTest {
+public final class PyExprUtilsTest extends TestCase {
 
-  @Test
   public void testConcatPyExprs() {
     List<PyExpr> exprs = new ArrayList<>();
 

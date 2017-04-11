@@ -16,21 +16,15 @@
 
 package com.google.template.soy.i18ndirectives;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import junit.framework.TestCase;
 
 /**
  * Unit tests for {@link I18nUtils}.
  *
  */
-@RunWith(JUnit4.class)
-public class I18nUtilsTest {
+public class I18nUtilsTest extends TestCase {
 
-  @Test
+
   public void testParseLocale() {
     assertEquals("en_US", I18nUtils.parseLocale(null).toString());
     assertEquals("en_US", I18nUtils.parseLocale("en-us").toString());
@@ -41,9 +35,8 @@ public class I18nUtilsTest {
     assertEquals("no_NO", I18nUtils.parseLocale("no_no").toString());
   }
 
-  @Test
   public void testParseLocale_InvalidLocale() {
-    // ParseLocale throws an error if the locale has too many parts.
+   // ParseLocale throws an error if the locale has too many parts.
     try {
       I18nUtils.parseLocale("xx-yy_zz_as");
       fail();

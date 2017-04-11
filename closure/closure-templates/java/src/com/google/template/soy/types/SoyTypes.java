@@ -22,7 +22,9 @@ import com.google.template.soy.types.primitive.FloatType;
 import com.google.template.soy.types.primitive.IntType;
 import com.google.template.soy.types.primitive.NullType;
 
-/** Utility methods for operating on {@link SoyType} instances. */
+/**
+ * Utility methods for operating on {@link SoyType} instances.
+ */
 public final class SoyTypes {
   /** Shared constant for the 'number' type. */
   public static final SoyType NUMBER_TYPE =
@@ -30,12 +32,12 @@ public final class SoyTypes {
 
   public static SoyType removeNull(SoyType type) {
     checkArgument(!NullType.getInstance().equals(type), "Can't remove null from null");
-    if (type.getKind() == SoyType.Kind.UNION) {
+    if (type instanceof UnionType) {
       return ((UnionType) type).removeNullability();
     }
     return type;
   }
-
+  
   public static SoyType makeNullable(SoyType type) {
     if (isNullable(type)) {
       return type;
@@ -44,7 +46,7 @@ public final class SoyTypes {
   }
 
   public static boolean isNullable(SoyType type) {
-    return type.equals(NullType.getInstance())
-        || (type.getKind() == SoyType.Kind.UNION && ((UnionType) type).isNullable());
+    return type.equals(NullType.getInstance()) 
+        || (type instanceof UnionType && ((UnionType) type).isNullable());
   }
 }

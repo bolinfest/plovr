@@ -24,26 +24,30 @@ import com.google.template.soy.msgs.restricted.SoyMsgBundleImpl;
 import com.google.template.soy.msgs.restricted.SoyMsgPart;
 import com.google.template.soy.msgs.restricted.SoyMsgPlaceholderPart;
 import com.google.template.soy.msgs.restricted.SoyMsgRawTextPart;
-import java.io.IOException;
-import java.io.StringReader;
-import java.util.List;
-import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.parsers.SAXParser;
-import javax.xml.parsers.SAXParserFactory;
+
 import org.xml.sax.Attributes;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.List;
+
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.parsers.SAXParser;
+import javax.xml.parsers.SAXParserFactory;
+
 /**
  * Static function for parsing the content of a translated XLIFF file and creating a SoyMsgBundle.
  *
- * <p>XLIFF specification: http://docs.oasis-open.org/xliff/xliff-core/xliff-core.html
+ * <p> XLIFF specification: http://docs.oasis-open.org/xliff/xliff-core/xliff-core.html
  *
  */
 class XliffParser {
 
   private XliffParser() {}
+
 
   /**
    * Parses the content of a translated XLIFF file and creates a SoyMsgBundle.
@@ -79,10 +83,15 @@ class XliffParser {
     return new SoyMsgBundleImpl(xliffSaxHandler.getTargetLocaleString(), xliffSaxHandler.getMsgs());
   }
 
+
   // -----------------------------------------------------------------------------------------------
 
-  /** SAX handler for parsing the target messages from an XLIFF file. */
+
+  /**
+   * SAX handler for parsing the target messages from an XLIFF file.
+   */
   private static class XliffSaxHandler extends DefaultHandler {
+
 
     /** Target locale string. */
     private String targetLocaleString;
@@ -105,10 +114,12 @@ class XliffParser {
      */
     private String currRawTextPart;
 
+
     public XliffSaxHandler() {
       msgs = Lists.newArrayList();
       isInMsg = false;
     }
+
 
     /** Returns the target locale string parsed from the XLIFF file. */
     public String getTargetLocaleString() {
@@ -120,8 +131,9 @@ class XliffParser {
       return msgs;
     }
 
-    @Override
-    public void startElement(String uri, String localName, String qName, Attributes atts) {
+
+    @Override public void startElement(
+        String uri, String localName, String qName, Attributes atts) {
 
       if (qName.equals("file")) {
         // Start 'file': Save the target locale string.
@@ -130,8 +142,8 @@ class XliffParser {
         } else {
           if (!atts.getValue("target-language").equals(targetLocaleString)) {
             throw new SoyMsgException(
-                "If XLIFF input contains multiple 'file' elements, they must have the same"
-                    + " 'target-language'.");
+                "If XLIFF input contains multiple 'file' elements, they must have the same" +
+                " 'target-language'.");
           }
         }
 
@@ -154,10 +166,8 @@ class XliffParser {
       } else if (isInMsg) {
         if (!qName.equals("x")) {
           throw new SoyMsgException(
-              "In messages extracted by the Soy compiler, all placeholders should be element 'x'"
-                  + " (found element '"
-                  + qName
-                  + "' in message).");
+              "In messages extracted by the Soy compiler, all placeholders should be element 'x'" +
+              " (found element '" + qName + "' in message).");
         }
         // Placeholder in message: Save the preceding raw text (if any) and then save the
         // placeholder name.
@@ -169,8 +179,8 @@ class XliffParser {
       }
     }
 
-    @Override
-    public void endElement(String uri, String localName, String qName) {
+
+    @Override public void endElement(String uri, String localName, String qName) {
 
       if (qName.equals("target")) {
         // End 'target': Save the preceding raw text (if any). Then create a SoyMsg object from the
@@ -181,15 +191,14 @@ class XliffParser {
         }
         isInMsg = false;
         if (!currMsgParts.isEmpty()) {
-          msgs.add(
-              new SoyMsg(
-                  currMsgId, targetLocaleString, null, null, false, null, null, currMsgParts));
+          msgs.add(new SoyMsg(
+              currMsgId, targetLocaleString, null, null, false, null, null, currMsgParts));
         }
       }
     }
 
-    @Override
-    public void characters(char[] buffer, int start, int length) {
+
+    @Override public void characters(char[] buffer, int start, int length) {
 
       if (!isInMsg) {
         // We don't care about characters if not currently inside a message.
@@ -203,5 +212,7 @@ class XliffParser {
         currRawTextPart += new String(buffer, start, length);
       }
     }
+
   }
+
 }

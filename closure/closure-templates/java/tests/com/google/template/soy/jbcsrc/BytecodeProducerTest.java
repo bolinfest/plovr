@@ -17,35 +17,31 @@
 package com.google.template.soy.jbcsrc;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.fail;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import junit.framework.TestCase;
+
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.MethodNode;
 
-/** Tests for {@link BytecodeProducer} */
-@RunWith(JUnit4.class)
-public class BytecodeProducerTest {
+/**
+ * Tests for {@link BytecodeProducer}
+ */
+public class BytecodeProducerTest extends TestCase {
 
-  @Test
   public void testGenDoesntOverlapWithCompile() {
-    BytecodeProducer producer =
-        new BytecodeProducer() {
-          @Override
-          void doGen(CodeBuilder adapter) {
-            BytecodeUtils.constant('c').gen(adapter);
-          }
-        };
+    BytecodeProducer producer = new BytecodeProducer() {
+      @Override void doGen(CodeBuilder adapter) {
+        BytecodeUtils.constant('c').gen(adapter);
+      }
+    };
     try {
-      CodeBuilder adaterAdapter =
+      CodeBuilder adaterAdapter = 
           new CodeBuilder(Opcodes.ACC_PUBLIC, BytecodeUtils.NULLARY_INIT, new MethodNode());
       producer.gen(adaterAdapter);
       fail();
     } catch (IllegalStateException e) {
-      assertThat(e.getMessage())
-          .contains("All bytecode producers should be constructed prior to code generation");
+      assertThat(e).hasMessage(
+          "All bytecode producers should be created prior to code generation beginning.");
     }
   }
 }

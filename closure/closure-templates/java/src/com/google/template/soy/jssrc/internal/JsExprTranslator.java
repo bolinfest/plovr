@@ -25,29 +25,35 @@ import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
 import com.google.template.soy.exprtree.FunctionNode;
-import com.google.template.soy.jssrc.dsl.CodeChunk;
-import com.google.template.soy.jssrc.internal.TranslateExprNodeVisitor.TranslateExprNodeVisitorFactory;
+import com.google.template.soy.jssrc.internal.TranslateToJsExprVisitor.TranslateToJsExprVisitorFactory;
+import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcFunction;
 import com.google.template.soy.shared.internal.BuiltinFunction;
 import com.google.template.soy.shared.restricted.SoyFunction;
 import com.google.template.soy.soytree.ExprUnion;
+
+import java.util.Deque;
+import java.util.Map;
+
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 
 /**
  * Translator of Soy expressions to their equivalent JS expressions.
  *
- * <p>This class only handles switching between V1 and V2 expressions. All actual work is done in
- * either {@link TranslateExprNodeVisitor} or {@link V1JsExprTranslator}.
- *
  */
 public final class JsExprTranslator {
 
-  private final TranslateExprNodeVisitorFactory translateExprNodeVisitorFactory;
+  /** Factory for creating an instance of TranslateToJsExprVisitor. */
+  private final TranslateToJsExprVisitorFactory translateToJsExprVisitorFactory;
 
+  /**
+   * @param translateToJsExprVisitorFactory Factory for creating an instance of
+   *     TranslateToJsExprVisitor.
+   */
   @Inject
-  JsExprTranslator(TranslateExprNodeVisitorFactory translateExprNodeVisitorFactory) {
-    this.translateExprNodeVisitorFactory = translateExprNodeVisitorFactory;
+  JsExprTranslator(TranslateToJsExprVisitorFactory translateToJsExprVisitorFactory) {
+    this.translateToJsExprVisitorFactory = translateToJsExprVisitorFactory;
   }
 
 
@@ -59,55 +65,51 @@ public final class JsExprTranslator {
    *
    * @param expr The Soy expression to translate.
    * @param exprText The expression text. Only required for V1 support, nullable otherwise.
-   * @param errorReporter
+   * @param localVarTranslations The current stack of replacement JS expressions for the local
+   *     variables (and foreach-loop special functions) current in scope.
    * @return The built JS expression.
    */
-  CodeChunk.WithValue translateToCodeChunk(
+  JsExpr translateToJsExpr(
       @Nullable ExprNode expr,
       @Nullable String exprText,
-      TranslationContext translationContext,
+      Deque<Map<String, JsExpr>> localVarTranslations,
       ErrorReporter errorReporter) {
 
     if (expr != null &&
         (exprText == null ||
          new CheckAllFunctionsSupportedVisitor().exec(expr))) {
       // V2 expression.
-      return translateExprNodeVisitorFactory
-          .create(translationContext, errorReporter)
-          .exec(expr);
+      return translateToJsExprVisitorFactory.create(localVarTranslations, errorReporter).exec(expr);
     } else {
       // V1 expression.
       SourceLocation sourceLocation = expr != null
           ? expr.getSourceLocation()
           : SourceLocation.UNKNOWN;
       Preconditions.checkNotNull(exprText);
-      return CodeChunk
-          .fromExpr(
-              V1JsExprTranslator.translateToJsExpr(
-                  exprText,
-                  sourceLocation,
-                  translationContext.soyToJsVariableMappings(),
-                  errorReporter));
+      return V1JsExprTranslator.translateToJsExpr(
+          exprText, sourceLocation, localVarTranslations, errorReporter);
     }
   }
 
   /**
    * Translates a Soy expression to the equivalent JS expression. Only supports V2 exprs.
    */
-  CodeChunk.WithValue translateToCodeChunk(
-      ExprNode expr, TranslationContext translationContext, ErrorReporter errorReporter) {
+  JsExpr translateToJsExpr(
+      ExprNode expr, Deque<Map<String, JsExpr>> localVarTranslations, ErrorReporter errorReporter) {
     checkNotNull(expr);
-    return translateToCodeChunk(expr, null /* exprText */, translationContext, errorReporter);
+    return translateToJsExpr(expr, null, localVarTranslations, errorReporter);
   }
 
   /**
    * Translates a Soy expression to the equivalent JS expression. Detects whether an expression
    * is Soy V2 or V1 syntax and performs the translation accordingly.
    */
-  CodeChunk.WithValue translateToCodeChunk(
-      ExprUnion union, TranslationContext translationContext, ErrorReporter errorReporter) {
-    return translateToCodeChunk(
-        union.getExpr(), union.getExprText(), translationContext, errorReporter);
+  JsExpr translateToJsExpr(
+      ExprUnion union,
+      Deque<Map<String, JsExpr>> localVarTranslations,
+      ErrorReporter errorReporter) {
+    return translateToJsExpr(
+        union.getExpr(), union.getExprText(), localVarTranslations, errorReporter);
   }
 
   /**
@@ -144,4 +146,5 @@ public final class JsExprTranslator {
       }
     }
   }
+
 }

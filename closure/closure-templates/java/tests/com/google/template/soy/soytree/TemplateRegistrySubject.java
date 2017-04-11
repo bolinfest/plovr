@@ -22,6 +22,7 @@ import com.google.common.truth.Subject;
 import com.google.common.truth.SubjectFactory;
 import com.google.common.truth.Truth;
 import com.google.template.soy.base.SourceLocation;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,14 +33,14 @@ import java.util.List;
  */
 final class TemplateRegistrySubject extends Subject<TemplateRegistrySubject, TemplateRegistry> {
 
-  private static final SubjectFactory<TemplateRegistrySubject, TemplateRegistry> TEMPLATE_REGISTRY =
-      new SubjectFactory<TemplateRegistrySubject, TemplateRegistry>() {
-        @Override
-        public TemplateRegistrySubject getSubject(
-            FailureStrategy failureStrategy, TemplateRegistry registry) {
-          return new TemplateRegistrySubject(failureStrategy, registry);
-        }
-      };
+  private static final SubjectFactory<TemplateRegistrySubject, TemplateRegistry> TEMPLATE_REGISTRY
+      = new SubjectFactory<TemplateRegistrySubject, TemplateRegistry>() {
+    @Override
+    public TemplateRegistrySubject getSubject(FailureStrategy failureStrategy,
+        TemplateRegistry registry) {
+      return new TemplateRegistrySubject(failureStrategy, registry);
+    }
+  };
 
   private TemplateRegistrySubject(FailureStrategy failureStrategy, TemplateRegistry registry) {
     super(failureStrategy, registry);
@@ -50,46 +51,47 @@ final class TemplateRegistrySubject extends Subject<TemplateRegistrySubject, Tem
   }
 
   TemplateBasicNodeSubject containsBasicTemplate(String name) {
-    Truth.assertThat(actual().getBasicTemplatesMap()).containsKey(name);
-    TemplateBasicNode templateBasicNode = actual().getBasicTemplatesMap().get(name);
+    Truth.assertThat(getSubject().getBasicTemplatesMap()).containsKey(name);
+    TemplateBasicNode templateBasicNode = getSubject().getBasicTemplatesMap().get(name);
     return Truth.assertAbout(TemplateBasicNodeSubject.TEMPLATE_BASIC_NODE).that(templateBasicNode);
   }
 
   void doesNotContainBasicTemplate(String name) {
-    Truth.assertThat(actual().getBasicTemplatesMap()).doesNotContainKey(name);
+    Truth.assertThat(getSubject().getBasicTemplatesMap()).doesNotContainKey(name);
   }
 
   TemplateDelegateNodesSubject containsDelTemplate(String name) {
     ImmutableList<TemplateDelegateNode> delTemplates =
-        actual().getDelTemplateSelector().delTemplateNameToValues().get(name);
+        getSubject().getDelTemplateSelector().delTemplateNameToValues().get(name);
     Truth.assertThat(delTemplates).isNotEmpty();
     return Truth.assertAbout(TemplateDelegateNodesSubject.TEMPLATE_DELEGATE_NODES)
         .that(delTemplates);
   }
 
   void doesNotContainDelTemplate(String name) {
-    Truth.assertThat(actual().getDelTemplateSelector().hasDelTemplateNamed(name)).isFalse();
+    Truth.assertThat(getSubject().getDelTemplateSelector().hasDelTemplateNamed(name)).isFalse();
   }
 
   static class TemplateBasicNodeSubject
       extends Subject<TemplateBasicNodeSubject, TemplateBasicNode> {
 
     private static final SubjectFactory<TemplateBasicNodeSubject, TemplateBasicNode>
-        TEMPLATE_BASIC_NODE =
-            new SubjectFactory<TemplateBasicNodeSubject, TemplateBasicNode>() {
-              @Override
-              public TemplateBasicNodeSubject getSubject(
-                  FailureStrategy failureStrategy, TemplateBasicNode templateBasicNode) {
-                return new TemplateBasicNodeSubject(failureStrategy, templateBasicNode);
-              }
-            };
+        TEMPLATE_BASIC_NODE
+        = new SubjectFactory<TemplateBasicNodeSubject, TemplateBasicNode>() {
+      @Override
+      public TemplateBasicNodeSubject getSubject(FailureStrategy failureStrategy,
+          TemplateBasicNode templateBasicNode) {
+        return new TemplateBasicNodeSubject(failureStrategy, templateBasicNode);
+      }
+    };
 
-    TemplateBasicNodeSubject(FailureStrategy failureStrategy, TemplateBasicNode templateBasicNode) {
+    TemplateBasicNodeSubject(FailureStrategy failureStrategy,
+        TemplateBasicNode templateBasicNode) {
       super(failureStrategy, templateBasicNode);
     }
 
     void definedAt(SourceLocation srcLocation) {
-      Truth.assertThat(actual().getSourceLocation()).isEqualTo(srcLocation);
+      Truth.assertThat(getSubject().getSourceLocation()).isEqualTo(srcLocation);
     }
   }
 
@@ -97,14 +99,14 @@ final class TemplateRegistrySubject extends Subject<TemplateRegistrySubject, Tem
       extends Subject<TemplateDelegateNodesSubject, List<TemplateDelegateNode>> {
 
     private static final SubjectFactory<TemplateDelegateNodesSubject, List<TemplateDelegateNode>>
-        TEMPLATE_DELEGATE_NODES =
-            new SubjectFactory<TemplateDelegateNodesSubject, List<TemplateDelegateNode>>() {
-              @Override
-              public TemplateDelegateNodesSubject getSubject(
-                  FailureStrategy failureStrategy, List<TemplateDelegateNode> nodes) {
-                return new TemplateDelegateNodesSubject(failureStrategy, nodes);
-              }
-            };
+        TEMPLATE_DELEGATE_NODES
+        = new SubjectFactory<TemplateDelegateNodesSubject, List<TemplateDelegateNode>>() {
+      @Override
+      public TemplateDelegateNodesSubject getSubject(FailureStrategy failureStrategy,
+          List<TemplateDelegateNode> nodes) {
+        return new TemplateDelegateNodesSubject(failureStrategy, nodes);
+      }
+    };
 
     TemplateDelegateNodesSubject(
         FailureStrategy failureStrategy, List<TemplateDelegateNode> nodes) {
@@ -113,7 +115,7 @@ final class TemplateRegistrySubject extends Subject<TemplateRegistrySubject, Tem
 
     void definedAt(SourceLocation sourceLocation) {
       List<SourceLocation> locations = new ArrayList<>();
-      for (TemplateDelegateNode delegateNode : actual()) {
+      for (TemplateDelegateNode delegateNode : getSubject()) {
         locations.add(delegateNode.getSourceLocation());
       }
       Truth.assertThat(locations).contains(sourceLocation);

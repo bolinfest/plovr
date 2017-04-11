@@ -17,7 +17,6 @@
 package com.google.template.soy.basicfunctions;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertEquals;
 
 import com.google.common.collect.ImmutableList;
 import com.google.template.soy.data.SoyValue;
@@ -25,43 +24,38 @@ import com.google.template.soy.data.restricted.FloatData;
 import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.pysrc.restricted.PyExpr;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
+
 
 /**
  * Unit tests for MaxFunction.
  *
  */
-@RunWith(JUnit4.class)
-public class MaxFunctionTest {
+public class MaxFunctionTest extends TestCase {
 
-  @Test
   public void testComputeForJava() {
     MaxFunction maxFunction = new MaxFunction();
 
     SoyValue float0 = FloatData.forValue(7.5);
     SoyValue float1 = FloatData.forValue(7.777);
-    assertEquals(
-        FloatData.forValue(7.777), maxFunction.computeForJava(ImmutableList.of(float0, float1)));
+    assertEquals(FloatData.forValue(7.777),
+                 maxFunction.computeForJava(ImmutableList.of(float0, float1)));
 
     SoyValue integer0 = IntegerData.forValue(-7);
     SoyValue integer1 = IntegerData.forValue(-8);
-    assertEquals(
-        IntegerData.forValue(-7), maxFunction.computeForJava(ImmutableList.of(integer0, integer1)));
+    assertEquals(IntegerData.forValue(-7),
+                 maxFunction.computeForJava(ImmutableList.of(integer0, integer1)));
   }
 
-  @Test
   public void testComputeForJsSrc() {
     MaxFunction maxFunction = new MaxFunction();
     JsExpr expr0 = new JsExpr("JS_CODE_0", Integer.MAX_VALUE);
     JsExpr expr1 = new JsExpr("JS_CODE_1", Integer.MAX_VALUE);
-    assertEquals(
-        new JsExpr("Math.max(JS_CODE_0, JS_CODE_1)", Integer.MAX_VALUE),
-        maxFunction.computeForJsSrc(ImmutableList.of(expr0, expr1)));
+    assertEquals(new JsExpr("Math.max(JS_CODE_0, JS_CODE_1)", Integer.MAX_VALUE),
+                 maxFunction.computeForJsSrc(ImmutableList.of(expr0, expr1)));
   }
 
-  @Test
   public void testComputeForPySrc() {
     MaxFunction maxFunction = new MaxFunction();
     PyExpr expr0 = new PyExpr("number0", Integer.MAX_VALUE);

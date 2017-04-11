@@ -17,50 +17,56 @@
 package com.google.template.soy.data.restricted;
 
 import com.google.template.soy.data.SoyDataException;
+
 import javax.annotation.concurrent.Immutable;
 
+
 /**
- * Undefined data. Used only by Tofu, not jbcsrc.
+ * Undefined data.
  *
- * <p>Important: This class may only be used in implementing plugins (e.g. functions, directives).
+ * <p> Important: This class may only be used in implementing plugins (e.g. functions, directives).
  *
  */
 @Immutable
 public final class UndefinedData extends PrimitiveData {
 
+
   /** Static singleton instance of UndefinedData. */
+  @SuppressWarnings("deprecation")
   public static final UndefinedData INSTANCE = new UndefinedData();
 
-  private UndefinedData() {}
 
-  @Override
-  public String toString() {
+  /**
+   * @deprecated Use {@link UndefinedData#INSTANCE}.
+   */
+  @Deprecated
+  public UndefinedData() {}
+
+
+  @Override public String toString() {
     throw new SoyDataException("Attempted to coerce undefined value into a string.");
   }
+
 
   /**
    * {@inheritDoc}
    *
-   * <p>Undefined is falsy.
+   * <p> Undefined is falsy.
    */
-  @Override
-  public boolean coerceToBoolean() {
+  @Deprecated
+  @Override public boolean toBoolean() {
     return false;
   }
 
-  @Override
-  public String coerceToString() {
-    return toString();
-  }
 
   @SuppressWarnings("EqualsWhichDoesntCheckParameterClass")
-  @Override
-  public boolean equals(Object other) {
-    return other == UndefinedData.INSTANCE || other == NullData.INSTANCE;
+  @Override public boolean equals(Object other) {
+    return this == other;  // only equal if exact same UndefinedData object
   }
 
-  @Override
-  public int hashCode() {
+
+  @Override public int hashCode() {
     return super.hashCode();
   }
+
 }

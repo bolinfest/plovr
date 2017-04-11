@@ -47,8 +47,7 @@ public class LoopVar extends LocalVar {
     this.isLastIndex = loop.isLastIndex;
   }
 
-  @Override
-  public Kind kind() {
+  @Override public Kind kind() {
     return Kind.LOCAL_VAR;
   }
 

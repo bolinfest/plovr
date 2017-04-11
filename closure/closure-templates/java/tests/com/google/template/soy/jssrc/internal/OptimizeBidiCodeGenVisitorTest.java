@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+
 package com.google.template.soy.jssrc.internal;
 
 import static com.google.common.truth.Truth.assertThat;
@@ -26,21 +27,18 @@ import com.google.template.soy.soytree.PrintNode;
 import com.google.template.soy.soytree.RawTextNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.TemplateNode;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
 
 /**
  * Unit tests for OptimizeBidiCodeGenVisitor.
  *
  */
-@RunWith(JUnit4.class)
-public final class OptimizeBidiCodeGenVisitorTest {
+public final class OptimizeBidiCodeGenVisitorTest extends TestCase {
 
   private static final BidiGlobalDir BIDI_GLOBAL_DIR_FOR_ISRTL_CODE_SNIPPET =
-      BidiGlobalDir.forIsRtlCodeSnippet("IS_RTL", null, SoyBackendKind.JS_SRC);
+      BidiGlobalDir.forIsRtlCodeSnippet("IS_RTL", SoyBackendKind.JS_SRC);
 
-  @Test
   public void testOptimizeBidiCodeGenForStaticDir() {
 
     String soyCode =
@@ -66,7 +64,7 @@ public final class OptimizeBidiCodeGenVisitorTest {
     assertThat(((PrintNode) template.getChild(4)).getExprText()).isEqualTo("bidiStartEdge()");
   }
 
-  @Test
+
   public void testOptimizeBidiCodeGenForCodeSnippetDir() {
 
     String soyCode =
@@ -93,7 +91,10 @@ public final class OptimizeBidiCodeGenVisitorTest {
     assertThat(((PrintNode) template.getChild(6)).getExprText()).isEqualTo("bidiStartEdge()");
   }
 
-  private static SoyFileSetNode parse(String soyCode) {
-    return SoyFileSetParserBuilder.forTemplateContents(soyCode).parse().fileSet();
+
+  private SoyFileSetNode parse(String soyCode) {
+    return SoyFileSetParserBuilder.forTemplateContents(soyCode)
+        .parse()
+        .fileSet();
   }
 }

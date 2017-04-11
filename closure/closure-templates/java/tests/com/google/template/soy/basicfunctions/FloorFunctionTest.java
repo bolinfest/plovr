@@ -17,7 +17,6 @@
 package com.google.template.soy.basicfunctions;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertEquals;
 
 import com.google.common.collect.ImmutableList;
 import com.google.template.soy.data.SoyValue;
@@ -25,29 +24,30 @@ import com.google.template.soy.data.restricted.FloatData;
 import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.pysrc.restricted.PyExpr;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
+
 
 /**
  * Unit tests for FloorFunction.
  *
  */
-@RunWith(JUnit4.class)
-public class FloorFunctionTest {
+public class FloorFunctionTest extends TestCase {
 
-  @Test
   public void testComputeForJava() {
     FloorFunction floorFunction = new FloorFunction();
 
     SoyValue float0 = FloatData.forValue(7.5);
-    assertEquals(IntegerData.forValue(7), floorFunction.computeForJava(ImmutableList.of(float0)));
+    assertEquals(
+        IntegerData.forValue(7),
+        floorFunction.computeForJava(ImmutableList.of(float0)));
 
     SoyValue integer = IntegerData.forValue(14);
-    assertEquals(IntegerData.forValue(14), floorFunction.computeForJava(ImmutableList.of(integer)));
+    assertEquals(
+        IntegerData.forValue(14),
+        floorFunction.computeForJava(ImmutableList.of(integer)));
   }
 
-  @Test
   public void testComputeForJsSrc() {
     FloorFunction floorFunction = new FloorFunction();
     JsExpr expr = new JsExpr("JS_CODE", Integer.MAX_VALUE);
@@ -56,7 +56,6 @@ public class FloorFunctionTest {
         floorFunction.computeForJsSrc(ImmutableList.of(expr)));
   }
 
-  @Test
   public void testComputeForPySrc() {
     FloorFunction floorFunction = new FloorFunction();
     PyExpr expr = new PyExpr("number", Integer.MAX_VALUE);

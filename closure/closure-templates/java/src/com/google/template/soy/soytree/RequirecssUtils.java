@@ -20,7 +20,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.internal.BaseUtils;
 import com.google.template.soy.base.internal.LegacyInternalSyntaxException;
+
 import javax.annotation.Nullable;
+
 
 /**
  * Utilities for processing the 'requirecss' attribute (for a Soy file or for a template).
@@ -28,8 +30,10 @@ import javax.annotation.Nullable;
  */
 final class RequirecssUtils {
 
+
   // Disallow instantiation.
   private RequirecssUtils() {}
+
 
   /**
    * Parses a 'requirecss' attribute value (for a Soy file or a template).
@@ -37,8 +41,8 @@ final class RequirecssUtils {
    * @param requirecssAttr The 'requirecss' attribute value to parse.
    * @return A list of required CSS namespaces parsed from the given attribute value.
    */
-  static ImmutableList<String> parseRequirecssAttr(
-      @Nullable String requirecssAttr, SourceLocation srcLoc) {
+  static ImmutableList<String> parseRequirecssAttr(@Nullable String requirecssAttr,
+      SourceLocation srcLoc) {
 
     if (requirecssAttr == null) {
       return ImmutableList.of();
@@ -53,4 +57,5 @@ final class RequirecssUtils {
     }
     return ImmutableList.copyOf(namespaces);
   }
+
 }

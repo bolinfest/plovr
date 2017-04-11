@@ -19,11 +19,12 @@ package com.google.template.soy.error;
 import com.google.common.base.Optional;
 import com.google.common.base.Strings;
 import com.google.template.soy.base.SourceLocation;
+
 import java.io.IOException;
 
 /**
- * Displays {@link SoyErrorKind}s in a useful way, with a snippet of Soy source code containing the
- * error and a caret pointing at the exact place where the error was found.
+ * Displays {@link SoyErrorKind}s in a useful way, with a snippet of Soy source
+ * code containing the error and a caret pointing at the exact place where the error was found.
  *
  * @author brndn@google.com (Brendan Linn)
  */
@@ -36,7 +37,7 @@ public final class PrettyErrorFactory implements SoyError.Factory {
   }
 
   @Override
-  public SoyError create(SourceLocation location, SoyErrorKind kind, Object... args) {
+  public SoyError create(SourceLocation location, SoyErrorKind kind, Object ...args) {
     String message = kind.format(args);
     return SoyError.createError(location, kind, message, getFormattedError(location, message));
   }
@@ -45,15 +46,7 @@ public final class PrettyErrorFactory implements SoyError.Factory {
     StringBuilder builder = new StringBuilder();
 
     // Start by printing the actual text of the exception.
-    // NOTE: we don't put the column offset in the error message because it is redundant with the
-    // caret location.
-    builder
-        .append(sourceLocation.getFilePath())
-        .append(':')
-        .append(sourceLocation.getBeginLine())
-        .append(": error: ")
-        .append(message)
-        .append("\n");
+    builder.append("In file " + sourceLocation + ": " + message).append("\n");
 
     // Try to find a snippet of source code associated with the exception and print it.
     Optional<String> snippet;

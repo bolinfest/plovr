@@ -19,8 +19,11 @@ package com.google.template.soy;
 import com.google.common.annotations.Beta;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
-import java.io.IOException;
+
 import org.kohsuke.args4j.Option;
+
+import java.io.IOException;
+
 
 /**
  * Executable for compiling a set of Soy files into corresponding Incremental DOM source files. This
@@ -50,7 +53,7 @@ public final class SoyToIncrementalDomSrcCompiler extends AbstractSoyCompiler {
   )
   private String outputPathFormat;
 
-  /**
+   /**
    * Compiles a set of Soy files into corresponding Incremental DOM source files.
    *
    * @param args Should contain command-line flags and the list of paths to the Soy files.

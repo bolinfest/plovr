@@ -24,27 +24,30 @@ import com.google.template.soy.exprtree.Operator.Operand;
 import com.google.template.soy.exprtree.Operator.Spacer;
 import com.google.template.soy.exprtree.Operator.SyntaxElement;
 import com.google.template.soy.exprtree.Operator.Token;
+
 import java.util.List;
 
 /**
  * Abstract implementation of an OperatorNode.
  *
- * <p>Important: Do not use outside of Soy code (treat as superpackage-private).
+ * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
 public abstract class AbstractOperatorNode extends AbstractParentExprNode implements OperatorNode {
 
+
   /** The operator. */
   private final Operator operator;
+
 
   public AbstractOperatorNode(Operator operator, SourceLocation sourceLocation) {
     super(sourceLocation);
     this.operator = operator;
   }
 
+
   /**
    * Copy constructor.
-   *
    * @param orig The node to copy.
    */
   protected AbstractOperatorNode(AbstractOperatorNode orig, CopyState copyState) {
@@ -52,13 +55,13 @@ public abstract class AbstractOperatorNode extends AbstractParentExprNode implem
     this.operator = orig.operator;
   }
 
-  @Override
-  public Operator getOperator() {
+
+  @Override public Operator getOperator() {
     return operator;
   }
 
-  @Override
-  public String toSourceString() {
+
+  @Override public String toSourceString() {
 
     boolean isLeftAssociative = operator.getAssociativity() == Associativity.LEFT;
     StringBuilder sourceSb = new StringBuilder();
@@ -72,7 +75,7 @@ public abstract class AbstractOperatorNode extends AbstractParentExprNode implem
         // If left (right) associative, first (last) operand doesn't need protection if it's an
         // operator of equal precedence to this one. (Note: Actually, the middle operand of our only
         // ternary operator doesn't need protection either, but we do it anyway for readability.)
-        if (i == (isLeftAssociative ? 0 : n - 1)) {
+        if (i == (isLeftAssociative ? 0 : n-1)) {
           sourceSb.append(getOperandProtectedForLowerPrec(operand.getIndex()));
         } else {
           sourceSb.append(getOperandProtectedForLowerOrEqualPrec(operand.getIndex()));
@@ -92,6 +95,7 @@ public abstract class AbstractOperatorNode extends AbstractParentExprNode implem
     return sourceSb.toString();
   }
 
+
   /**
    * Gets the source string for the operand at the given index, possibly protected by surrounding
    * parentheses if the operand is an operator with lower precedence than this operator.
@@ -103,6 +107,7 @@ public abstract class AbstractOperatorNode extends AbstractParentExprNode implem
   private String getOperandProtectedForLowerPrec(int index) {
     return getOperandProtectedForPrecHelper(index, false);
   }
+
 
   /**
    * Gets the source string for the operand at the given index, possibly protected by surrounding
@@ -116,9 +121,9 @@ public abstract class AbstractOperatorNode extends AbstractParentExprNode implem
     return getOperandProtectedForPrecHelper(index, true);
   }
 
+
   /**
    * Helper for getOperandProtectedForLowerPrec() and getOperandProtectedForLowerOrEqualPrec().
-   *
    * @param index The index of the operand to get.
    * @param shouldProtectEqualPrec Whether to proect the operand if it is an operator with equal
    *     precedence to this operator.
@@ -134,7 +139,8 @@ public abstract class AbstractOperatorNode extends AbstractParentExprNode implem
     boolean shouldProtect;
     if (child instanceof OperatorNode) {
       int childOpPrec = ((OperatorNode) child).getOperator().getPrecedence();
-      shouldProtect = shouldProtectEqualPrec ? childOpPrec <= thisOpPrec : childOpPrec < thisOpPrec;
+      shouldProtect = shouldProtectEqualPrec ? childOpPrec <= thisOpPrec
+                                             : childOpPrec <  thisOpPrec;
     } else {
       shouldProtect = false;
     }
@@ -145,4 +151,5 @@ public abstract class AbstractOperatorNode extends AbstractParentExprNode implem
       return child.toSourceString();
     }
   }
+
 }

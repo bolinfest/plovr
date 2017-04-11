@@ -41,16 +41,14 @@ import com.google.template.soy.soytree.SwitchCaseNode;
 import com.google.template.soy.soytree.SwitchDefaultNode;
 import com.google.template.soy.soytree.SwitchNode;
 import com.google.template.soy.soytree.TemplateNode;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
 
 /**
  * Unit tests for ReplaceMsgsWithGoogMsgsVisitor.
  *
  */
-@RunWith(JUnit4.class)
-public final class ExtractMsgVariablesVisitorTest {
+public final class ExtractMsgVariablesVisitorTest extends TestCase {
 
   private static TemplateNode parseTemplate(String soyCode) {
     ErrorReporter boom = ExplodingErrorReporter.get();
@@ -65,20 +63,18 @@ public final class ExtractMsgVariablesVisitorTest {
     return (MsgFallbackGroupNode) ((LetContentNode) parent.getChild(index)).getChild(0);
   }
 
-  @Test
   public void testReplacement() {
 
-    TemplateNode template =
-        parseTemplate(
-            ""
-                + "{@param userName: ?}\n"
-                + "{@param url: ?}\n"
-                + "{msg desc=\"Tells the user to click a link.\"}\n"
-                + "  Hello {$userName}, please click <a href=\"{$url}\">here</a>.\n"
-                + "{/msg}\n"
-                + "{msg meaning=\"blah\" desc=\"A span with generated id.\" hidden=\"true\"}\n"
-                + "  <span id=\"{for $i in range(3)}{$i}{/for}\">\n"
-                + "{/msg}\n");
+    TemplateNode template = parseTemplate(""
+        + "{@param userName: ?}\n"
+        + "{@param url: ?}\n"
+        + "{msg desc=\"Tells the user to click a link.\"}\n"
+        + "  Hello {$userName}, please click <a href=\"{$url}\">here</a>.\n"
+        + "{/msg}\n"
+        + "{msg meaning=\"blah\" desc=\"A span with generated id.\" hidden=\"true\"}\n"
+        + "  <span id=\"{for $i in range(3)}{$i}{/for}\">\n"
+        + "{/msg}\n");
+
 
     MsgFallbackGroupNode gmd0 = getMsgFallbackGroupNode(template, 1);
     MsgNode m0 = gmd0.getChild(0);
@@ -124,18 +120,15 @@ public final class ExtractMsgVariablesVisitorTest {
     assertThat(gm2pc0.getChild(1)).isInstanceOf(ForNode.class);
   }
 
-  @Test
   public void testLetPositionBasic() {
 
-    TemplateNode template =
-        parseTemplate(
-            ""
-                + "{@param goo: ?}\n"
-                + "{msg desc=\"msg1\"}blah{/msg}\n"
-                + "blah\n"
-                + "{msg desc=\"msg2\"}{$goo}{/msg}\n"
-                + "{$goo}\n"
-                + "{msg desc=\"msg3\"}blah{/msg}\n");
+    TemplateNode template = parseTemplate(""
+        + "{@param goo: ?}\n"
+        + "{msg desc=\"msg1\"}blah{/msg}\n"
+        + "blah\n"
+        + "{msg desc=\"msg2\"}{$goo}{/msg}\n"
+        + "{$goo}\n"
+        + "{msg desc=\"msg3\"}blah{/msg}\n");
 
     // Expected:
     // [TemplateNode]
@@ -154,24 +147,22 @@ public final class ExtractMsgVariablesVisitorTest {
     assertThat(getMsgFallbackGroupNode(template, 2).getChild(0).getDesc()).isEqualTo("msg1");
   }
 
-  @Test
+
   public void testLetPositionIf() {
 
-    TemplateNode template =
-        parseTemplate(
-            ""
-                + "{@param goo1: ?}\n"
-                + "{@param goo2: ?}\n"
-                + "{if $goo1}\n"
-                + "  {msg desc=\"msg1\"}blah{/msg}\n"
-                + "  {msg desc=\"msg2\"}blah{/msg}\n"
-                + "{elseif $goo2}\n"
-                + "  {msg desc=\"msg3\"}blah{/msg}\n"
-                + "  {msg desc=\"msg4\"}blah{/msg}\n"
-                + "{else}\n"
-                + "  {msg desc=\"msg5\"}blah{/msg}\n"
-                + "  {msg desc=\"msg6\"}blah{/msg}\n"
-                + "{/if}\n");
+    TemplateNode template = parseTemplate(""
+        + "{@param goo1: ?}\n"
+        + "{@param goo2: ?}\n"
+        + "{if $goo1}\n"
+        + "  {msg desc=\"msg1\"}blah{/msg}\n"
+        + "  {msg desc=\"msg2\"}blah{/msg}\n"
+        + "{elseif $goo2}\n"
+        + "  {msg desc=\"msg3\"}blah{/msg}\n"
+        + "  {msg desc=\"msg4\"}blah{/msg}\n"
+        + "{else}\n"
+        + "  {msg desc=\"msg5\"}blah{/msg}\n"
+        + "  {msg desc=\"msg6\"}blah{/msg}\n"
+        + "{/if}\n");
 
     // Expected:
     // [TemplateNode]
@@ -209,24 +200,22 @@ public final class ExtractMsgVariablesVisitorTest {
     assertThat(getMsgFallbackGroupNode(ien2, 1).getChild(0).getDesc()).isEqualTo("msg5");
   }
 
-  @Test
+
   public void testLetPositionSwitch() {
 
-    TemplateNode template =
-        parseTemplate(
-            ""
-                + "{@param goo: ?}\n"
-                + "{switch $goo}\n"
-                + "  {case 0}\n"
-                + "    {msg desc=\"msg1\"}blah{/msg}\n"
-                + "    {msg desc=\"msg2\"}blah{/msg}\n"
-                + "  {case 1, 2, 3}\n"
-                + "    {msg desc=\"msg3\"}blah{/msg}\n"
-                + "    {msg desc=\"msg4\"}blah{/msg}\n"
-                + "  {default}\n"
-                + "    {msg desc=\"msg5\"}blah{/msg}\n"
-                + "    {msg desc=\"msg6\"}blah{/msg}\n"
-                + "{/switch}\n");
+    TemplateNode template = parseTemplate(""
+        + "{@param goo: ?}\n"
+        + "{switch $goo}\n"
+        + "  {case 0}\n"
+        + "    {msg desc=\"msg1\"}blah{/msg}\n"
+        + "    {msg desc=\"msg2\"}blah{/msg}\n"
+        + "  {case 1, 2, 3}\n"
+        + "    {msg desc=\"msg3\"}blah{/msg}\n"
+        + "    {msg desc=\"msg4\"}blah{/msg}\n"
+        + "  {default}\n"
+        + "    {msg desc=\"msg5\"}blah{/msg}\n"
+        + "    {msg desc=\"msg6\"}blah{/msg}\n"
+        + "{/switch}\n");
 
     // Expected:
     // [TemplateNode]
@@ -264,25 +253,23 @@ public final class ExtractMsgVariablesVisitorTest {
     assertThat(getMsgFallbackGroupNode(sdn2, 1).getChild(0).getDesc()).isEqualTo("msg5");
   }
 
-  @Test
+
   public void testLetPositionForeach() {
 
-    TemplateNode template =
-        parseTemplate(
-            ""
-                + "{@param goose: ?}\n"
-                + "{@param moo: ?}\n"
-                + "{foreach $goo in $goose}\n"
-                + "  {msg desc=\"msg1\"}blah{/msg}\n"
-                + "  {msg desc=\"msg2\"}{$goo}{/msg}\n"
-                + // dep on $goo
-                "  {msg desc=\"msg3\"}{$moo}{/msg}\n"
-                + "  {msg desc=\"msg4\"}{$goo}{/msg}\n"
-                + // dep on $goo
-                "{ifempty}\n"
-                + "  {msg desc=\"msg5\"}{$moo}{/msg}\n"
-                + "  {msg desc=\"msg6\"}blah{/msg}\n"
-                + "{/foreach}\n");
+    TemplateNode template = parseTemplate(""
+        + "{@param goose: ?}\n"
+        + "{@param moo: ?}\n"
+        + "{foreach $goo in $goose}\n"
+        + "  {msg desc=\"msg1\"}blah{/msg}\n"
+        + "  {msg desc=\"msg2\"}{$goo}{/msg}\n"
+        + // dep on $goo
+        "  {msg desc=\"msg3\"}{$moo}{/msg}\n"
+        + "  {msg desc=\"msg4\"}{$goo}{/msg}\n"
+        + // dep on $goo
+        "{ifempty}\n"
+        + "  {msg desc=\"msg5\"}{$moo}{/msg}\n"
+        + "  {msg desc=\"msg6\"}blah{/msg}\n"
+        + "{/foreach}\n");
 
     // Expected:
     // [TemplateNode]
@@ -306,6 +293,7 @@ public final class ExtractMsgVariablesVisitorTest {
     assertThat(getMsgFallbackGroupNode(template, 0).getChild(0).getDesc()).isEqualTo("msg3");
     assertThat(getMsgFallbackGroupNode(template, 1).getChild(0).getDesc()).isEqualTo("msg1");
 
+
     ForeachNode foreachNode = (ForeachNode) template.getChild(2);
     ForeachNonemptyNode fnn0 = (ForeachNonemptyNode) foreachNode.getChild(0);
     assertThat(fnn0.numChildren()).isEqualTo(6);
@@ -317,21 +305,19 @@ public final class ExtractMsgVariablesVisitorTest {
     assertThat(getMsgFallbackGroupNode(fin1, 1).getChild(0).getDesc()).isEqualTo("msg5");
   }
 
-  @Test
+
   public void testLetPositionFor() {
 
-    TemplateNode template =
-        parseTemplate(
-            ""
-                + "{@param moo: ?}\n"
-                + "{for $i in range(3)}\n"
-                + "  {msg desc=\"msg1\"}blah{/msg}\n"
-                + "  {msg desc=\"msg2\"}{$i}{/msg}\n"
-                + // dep on $i
-                "  {msg desc=\"msg3\"}{$moo}{/msg}\n"
-                + "  {msg desc=\"msg4\"}{$i}{/msg}\n"
-                + // dep on $i
-                "{/for}\n");
+    TemplateNode template = parseTemplate(""
+        + "{@param moo: ?}\n"
+        + "{for $i in range(3)}\n"
+        + "  {msg desc=\"msg1\"}blah{/msg}\n"
+        + "  {msg desc=\"msg2\"}{$i}{/msg}\n"
+        + // dep on $i
+        "  {msg desc=\"msg3\"}{$moo}{/msg}\n"
+        + "  {msg desc=\"msg4\"}{$i}{/msg}\n"
+        + // dep on $i
+        "{/for}\n");
 
     // Expected:
     // [TemplateNode]
@@ -355,36 +341,34 @@ public final class ExtractMsgVariablesVisitorTest {
     assertThat(getMsgFallbackGroupNode(forNode, 1).getChild(0).getDesc()).isEqualTo("msg2");
   }
 
-  @Test
+
   public void testLetPositionNested() {
 
-    TemplateNode template =
-        parseTemplate(
-            ""
-                + "{@param goo: ?}\n"
-                + "{@param moose: ?}\n"
-                + "{@param zoo: ?}\n"
-                + "{if $goo}\n"
-                + "  {foreach $moo in $moose}\n"
-                + "    {for $i in range(3)}\n"
-                + "      {msg desc=\"msg1\"}blah{/msg}\n"
-                + "      {msg desc=\"msg2\"}{$goo}{/msg}\n"
-                + // dep on $goo (irrelevant)
-                "      {msg desc=\"msg3\"}{$moo}{/msg}\n"
-                + // dep on $moo
-                "      {msg desc=\"msg4\"}{$i}{/msg}\n"
-                + // dep on $i
-                "      {msg desc=\"msg5\"}{$zoo}{/msg}\n"
-                + "      {msg desc=\"msg6\"}{$goo}{$moo}{/msg}\n"
-                + // dep on $goo (irrelevant) and $moo
-                "      {msg desc=\"msg7\"}{$goo}{$i}{/msg}\n"
-                + // dep on $goo (irrelevant) and $i
-                "      {msg desc=\"msg8\"}{$moo}{$i}{/msg}\n"
-                + // dep on $moo and $i
-                "    {/for}\n"
-                + "  {/foreach}\n"
-                + "{/if}\n"
-                + "{msg desc=\"msg9\"}{$goo}{/msg}\n"); // dep on $goo (irrelevant)
+    TemplateNode template = parseTemplate(""
+        + "{@param goo: ?}\n"
+        + "{@param moose: ?}\n"
+        + "{@param zoo: ?}\n"
+        + "{if $goo}\n"
+        + "  {foreach $moo in $moose}\n"
+        + "    {for $i in range(3)}\n"
+        + "      {msg desc=\"msg1\"}blah{/msg}\n"
+        + "      {msg desc=\"msg2\"}{$goo}{/msg}\n"
+        + // dep on $goo (irrelevant)
+        "      {msg desc=\"msg3\"}{$moo}{/msg}\n"
+        + // dep on $moo
+        "      {msg desc=\"msg4\"}{$i}{/msg}\n"
+        + // dep on $i
+        "      {msg desc=\"msg5\"}{$zoo}{/msg}\n"
+        + "      {msg desc=\"msg6\"}{$goo}{$moo}{/msg}\n"
+        + // dep on $goo (irrelevant) and $moo
+        "      {msg desc=\"msg7\"}{$goo}{$i}{/msg}\n"
+        + // dep on $goo (irrelevant) and $i
+        "      {msg desc=\"msg8\"}{$moo}{$i}{/msg}\n"
+        + // dep on $moo and $i
+        "    {/for}\n"
+        + "  {/foreach}\n"
+        + "{/if}\n"
+        + "{msg desc=\"msg9\"}{$goo}{/msg}\n"); // dep on $goo (irrelevant)
 
     // Expected:
     // [TemplateNode]
@@ -435,4 +419,5 @@ public final class ExtractMsgVariablesVisitorTest {
     assertThat(getMsgFallbackGroupNode(forNode, 1).getChild(0).getDesc()).isEqualTo("msg7");
     assertThat(getMsgFallbackGroupNode(forNode, 2).getChild(0).getDesc()).isEqualTo("msg4");
   }
+
 }

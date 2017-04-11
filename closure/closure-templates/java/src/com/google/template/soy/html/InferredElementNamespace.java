@@ -22,6 +22,5 @@ package com.google.template.soy.html;
  * correctly. Treat as package-private.
  */
 public enum InferredElementNamespace {
-  SVG,
-  XHTML
+  SVG, XHTML
 }

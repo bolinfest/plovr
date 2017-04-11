@@ -18,12 +18,13 @@ package com.google.template.soy.exprtree;
 
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.basetree.CopyState;
+import com.google.template.soy.types.SoyType;
 import com.google.template.soy.types.primitive.FloatType;
 
 /**
  * Node representing a float value.
  *
- * <p>Important: Do not use outside of Soy code (treat as superpackage-private).
+ * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
 public final class FloatNode extends AbstractPrimitiveNode {
@@ -40,9 +41,9 @@ public final class FloatNode extends AbstractPrimitiveNode {
     this.value = value;
   }
 
+
   /**
    * Copy constructor.
-   *
    * @param orig The node to copy.
    */
   private FloatNode(FloatNode orig, CopyState copyState) {
@@ -50,28 +51,30 @@ public final class FloatNode extends AbstractPrimitiveNode {
     this.value = orig.value;
   }
 
-  @Override
-  public Kind getKind() {
+
+  @Override public Kind getKind() {
     return Kind.FLOAT_NODE;
   }
 
-  @Override
-  public FloatType getType() {
+
+  @Override public SoyType getType() {
     return FloatType.getInstance();
   }
+
 
   /** Returns the float value. */
   public double getValue() {
     return value;
   }
 
-  @Override
-  public String toSourceString() {
+
+  @Override public String toSourceString() {
     return Double.toString(value).replace('E', 'e');
   }
 
-  @Override
-  public FloatNode copy(CopyState copyState) {
+
+  @Override public FloatNode copy(CopyState copyState) {
     return new FloatNode(this, copyState);
   }
+
 }

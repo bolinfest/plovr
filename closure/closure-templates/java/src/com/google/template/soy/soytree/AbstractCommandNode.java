@@ -27,11 +27,13 @@ import com.google.template.soy.soytree.SoyNode.CommandNode;
  */
 abstract class AbstractCommandNode extends AbstractSoyNode implements CommandNode {
 
+
   /** The name of the Soy command. */
   private final String commandName;
 
   /** The command text, or empty string if none. */
   private final String commandText;
+
 
   /**
    * @param id The id for this node.
@@ -46,9 +48,9 @@ abstract class AbstractCommandNode extends AbstractSoyNode implements CommandNod
     this.commandText = commandText.trim();
   }
 
+
   /**
    * Copy constructor.
-   *
    * @param orig The node to copy.
    */
   protected AbstractCommandNode(AbstractCommandNode orig, CopyState copyState) {
@@ -57,22 +59,26 @@ abstract class AbstractCommandNode extends AbstractSoyNode implements CommandNod
     this.commandText = orig.commandText;
   }
 
-  /** May be overridden by subclasses to keep consistent with tree modifications. */
-  @Override
-  public String getCommandName() {
+
+  /**
+   * May be overridden by subclasses to keep consistent with tree modifications.
+   */
+  @Override public String getCommandName() {
     return commandName;
   }
 
-  /** May be overridden by subclasses to keep consistent with tree modifications. */
-  @Override
-  public String getCommandText() {
+  /**
+   * May be overridden by subclasses to keep consistent with tree modifications.
+   */
+  @Override public String getCommandText() {
     return commandText;
   }
 
-  @Override
-  public String getTagString() {
+
+  @Override public String getTagString() {
     return buildTagStringHelper(false);
   }
+
 
   /**
    * Helper to build the source tag string (usually for testing/debugging). Handles most cases,
@@ -85,6 +91,7 @@ abstract class AbstractCommandNode extends AbstractSoyNode implements CommandNod
   protected String buildTagStringHelper(boolean isSelfEnding) {
     return buildTagStringHelper(isSelfEnding, false);
   }
+
 
   /**
    * Helper to build the source tag string (usually for testing/debugging). Handles all cases,
@@ -104,7 +111,7 @@ abstract class AbstractCommandNode extends AbstractSoyNode implements CommandNod
     String maybeSelfEndingStr = isSelfEnding ? " /" : "";
 
     if (commandText.length() == 0) {
-      Preconditions.checkArgument(!isImplicitCommandName);
+      Preconditions.checkArgument(! isImplicitCommandName);
       return "{" + commandName + maybeSelfEndingStr + "}";
 
     } else {
@@ -114,8 +121,9 @@ abstract class AbstractCommandNode extends AbstractSoyNode implements CommandNod
     }
   }
 
-  @Override
-  public String toSourceString() {
+
+  @Override public String toSourceString() {
     return getTagString();
   }
+
 }

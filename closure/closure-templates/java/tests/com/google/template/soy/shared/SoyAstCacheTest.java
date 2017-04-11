@@ -18,32 +18,26 @@ package com.google.template.soy.shared;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.auto.value.AutoValue;
 import com.google.template.soy.base.internal.SoyFileKind;
+import com.google.template.soy.base.internal.SoyFileSupplier;
 import com.google.template.soy.base.internal.SoyFileSupplier.Version;
 import com.google.template.soy.shared.SoyAstCache.VersionedFile;
 import com.google.template.soy.soytree.NamespaceDeclaration;
 import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.soytree.TemplateNode;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
+
+import org.easymock.EasyMock;
 
 /**
  * Unit tests for {@link SoyAstCache}.
  *
  */
-@RunWith(JUnit4.class)
-public final class SoyAstCacheTest {
-  @AutoValue
-  abstract static class FakeVersion implements Version {
-    abstract int version();
-  }
-
+public final class SoyAstCacheTest extends TestCase {
   private SoyAstCache cache = new SoyAstCache();
-  private final FakeVersion version1 = new AutoValue_SoyAstCacheTest_FakeVersion(1);
-  private final FakeVersion version2 = new AutoValue_SoyAstCacheTest_FakeVersion(2);
-
+  private Version version1 = EasyMock.createMock(Version.class);
+  private Version version2 = EasyMock.createMock(Version.class);
   private SoyFileNode fileNode1 =
       new SoyFileNode(
           0xdeadbeef,
@@ -51,8 +45,23 @@ public final class SoyAstCacheTest {
           SoyFileKind.SRC,
           NamespaceDeclaration.NULL,
           new TemplateNode.SoyFileHeaderInfo("fake.namespace"));
+  private SoyFileSupplier supplier1 = EasyMock.createMock(SoyFileSupplier.class);
+  private SoyFileSupplier supplier2 = EasyMock.createMock(SoyFileSupplier.class);
 
-  @Test
+  @Override public void setUp() throws Exception {
+    super.setUp();
+
+    EasyMock.expect(supplier1.hasChangedSince(version2)).andStubReturn(false);
+    EasyMock.expect(supplier1.hasChangedSince(version1)).andStubReturn(true);
+    EasyMock.expect(supplier1.getFilePath()).andStubReturn("supplier1.soy");
+    EasyMock.replay(supplier1);
+
+    EasyMock.expect(supplier2.hasChangedSince(version2)).andStubReturn(false);
+    EasyMock.expect(supplier2.hasChangedSince(version1)).andStubReturn(true);
+    EasyMock.expect(supplier2.getFilePath()).andStubReturn("supplier2.soy");
+    EasyMock.replay(supplier2);
+  }
+
   public void testGetSet() {
 
     // Matching version.
@@ -75,7 +84,6 @@ public final class SoyAstCacheTest {
     assertThat(cache.get("bar", version1)).isNull();
   }
 
-  @Test
   public void testIdGenerator() {
 
     // Make sure it always returns the same generator.

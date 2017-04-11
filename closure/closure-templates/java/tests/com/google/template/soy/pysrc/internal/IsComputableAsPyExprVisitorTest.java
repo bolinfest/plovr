@@ -22,25 +22,21 @@ import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.shared.SharedTestUtils;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.SoyNode;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
 
 /**
  * Unit tests for IsComputableAsPyExprVisitor.
  *
  */
-@RunWith(JUnit4.class)
-public class IsComputableAsPyExprVisitorTest {
+public class IsComputableAsPyExprVisitorTest extends TestCase {
 
-  @Test
   public void testAlwaysTrueNodes() {
     runTestHelper("Blah blah.", true);
     runTestHelper("{@param boo:?}\n{$boo.foo}", true);
     // TODO(dcphillips): Add tests for other nodes (such as messages) when support is available.
   }
 
-  @Test
   public void testAlwaysFalseNodes() {
     runTestHelper("{let $data: 'foo'/}", false);
     runTestHelper(
@@ -49,7 +45,6 @@ public class IsComputableAsPyExprVisitorTest {
     runTestHelper("{for $i in range(4)}{$i + 1}{/for}", false);
   }
 
-  @Test
   public void testIfNode() {
     runTestHelper(
         "{@param boo:?}\n{@param foo:?}\n{if $boo}Blah{elseif $foo}Bleh{else}Bluh{/if}", true);
@@ -58,7 +53,6 @@ public class IsComputableAsPyExprVisitorTest {
         false);
   }
 
-  @Test
   public void testCallNode() {
     runTestHelper("{call .foo data=\"all\" /}", true);
     runTestHelper(

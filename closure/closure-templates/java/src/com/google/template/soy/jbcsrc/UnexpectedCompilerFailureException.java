@@ -16,45 +16,32 @@
 
 package com.google.template.soy.jbcsrc;
 
+import com.google.common.base.Joiner;
 import com.google.template.soy.base.SourceLocation;
-import com.google.template.soy.basetree.Node;
+
 import java.util.ArrayDeque;
-import java.util.Deque;
 
 /**
  * A wrapper for an unexpected compilation failure. Allows for associating unexpected errors with
  * the soy source locations that led to them.
  */
 final class UnexpectedCompilerFailureException extends RuntimeException {
-  private final Deque<Node> compilationPath = new ArrayDeque<>();
-
-  UnexpectedCompilerFailureException(Node original, Throwable cause) {
+  private final ArrayDeque<SourceLocation> compilationPath = new ArrayDeque<>();
+  
+  UnexpectedCompilerFailureException(SourceLocation original, Throwable cause) {
     super("unexpected compile failure", cause, false, false);
     compilationPath.add(original);
   }
 
-  void addLocation(Node sourceLocation) {
+  void addLocation(SourceLocation sourceLocation) {
     compilationPath.add(sourceLocation);
   }
 
   SourceLocation getOriginalLocation() {
-    return compilationPath.getFirst().getSourceLocation();
+    return compilationPath.getFirst();
   }
 
   String printSoyStack() {
-    StringBuilder sb = new StringBuilder();
-    for (Node node : compilationPath) {
-      sb.append(node.getClass().getSimpleName())
-          .append(": ")
-          .append(node.getSourceLocation())
-          .append("\n");
-    }
-    // delete last \n
-    return sb.deleteCharAt(sb.length() - 1).toString();
-  }
-
-  @Override
-  public String getMessage() {
-    return super.getMessage() + "\nwhile compiling:\n" + printSoyStack();
+    return Joiner.on('\n').join(compilationPath);
   }
 }

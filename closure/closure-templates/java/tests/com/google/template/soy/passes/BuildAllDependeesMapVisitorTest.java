@@ -21,6 +21,7 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ExplodingErrorReporter;
+import com.google.template.soy.passes.BuildAllDependeesMapVisitor;
 import com.google.template.soy.soytree.CallNode;
 import com.google.template.soy.soytree.CallParamContentNode;
 import com.google.template.soy.soytree.CallParamValueNode;
@@ -36,20 +37,19 @@ import com.google.template.soy.soytree.PrintNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.SoyNode;
 import com.google.template.soy.soytree.TemplateNode;
+
+import junit.framework.TestCase;
+
 import java.util.List;
 import java.util.Map;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 /**
  * Unit tests for BuildAllDependeesMapVisitor.
  *
  */
-@RunWith(JUnit4.class)
-public final class BuildAllDependeesMapVisitorTest {
+public final class BuildAllDependeesMapVisitorTest extends TestCase {
 
-  @Test
+
   public void testGetTopLevelRefsVisitor() {
 
     String testFileContent =
@@ -156,4 +156,5 @@ public final class BuildAllDependeesMapVisitorTest {
         .containsExactly(foreachNonemptyNode, ifCondNode, template)
         .inOrder();
   }
+
 }

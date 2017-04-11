@@ -16,21 +16,16 @@
 
 package com.google.template.soy.jssrc.internal;
 
-import static com.google.template.soy.jssrc.dsl.CodeChunk.WithValue.LITERAL_EMPTY_STRING;
-import static com.google.template.soy.jssrc.dsl.CodeChunk.dottedId;
-import static com.google.template.soy.jssrc.dsl.CodeChunk.id;
-import static com.google.template.soy.jssrc.dsl.CodeChunk.stringLiteral;
-
 import com.google.common.base.Preconditions;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
+import com.google.template.soy.base.internal.BaseUtils;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.SoyErrorKind;
 import com.google.template.soy.exprtree.ExprRootNode;
-import com.google.template.soy.jssrc.dsl.CodeChunk;
-import com.google.template.soy.jssrc.dsl.CodeChunkUtils;
-import com.google.template.soy.jssrc.dsl.ConditionalBuilder;
-import com.google.template.soy.jssrc.dsl.SoyJsPluginUtils;
+import com.google.template.soy.exprtree.Operator;
+import com.google.template.soy.jssrc.restricted.JsExpr;
+import com.google.template.soy.jssrc.restricted.JsExprUtils;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcPrintDirective;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.CallNode;
@@ -48,7 +43,9 @@ import com.google.template.soy.soytree.SoyNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 import com.google.template.soy.soytree.TemplateNode;
 import com.google.template.soy.soytree.XidNode;
+
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 
@@ -58,7 +55,7 @@ import java.util.Map;
  * <p> Precondition: MsgNode should not exist in the tree.
  *
  */
-public class GenJsExprsVisitor extends AbstractSoyNodeVisitor<List<CodeChunk.WithValue>> {
+public class GenJsExprsVisitor extends AbstractSoyNodeVisitor<List<JsExpr>> {
 
   /**
    * Injectable factory for creating an instance of this class.
@@ -66,11 +63,13 @@ public class GenJsExprsVisitor extends AbstractSoyNodeVisitor<List<CodeChunk.Wit
   public interface GenJsExprsVisitorFactory {
 
     /**
+     * @param localVarTranslations The current stack of replacement JS expressions for the local
+     *     variables (and foreach-loop special functions) current in scope.
      * @param templateAliases A mapping for looking up the function name for a given fully
      *     qualified name.
      */
     GenJsExprsVisitor create(
-        TranslationContext translationContext,
+        Deque<Map<String, JsExpr>> localVarTranslations,
         TemplateAliases templateAliases,
         ErrorReporter errorReporter);
   }
@@ -85,12 +84,16 @@ public class GenJsExprsVisitor extends AbstractSoyNodeVisitor<List<CodeChunk.Wit
   private final GenCallCodeUtils genCallCodeUtils;
   protected final IsComputableAsJsExprsVisitor isComputableAsJsExprsVisitor;
   private final GenJsExprsVisitorFactory genJsExprsVisitorFactory;
-
-  private final TranslationContext translationContext;
   private final ErrorReporter errorReporter;
 
+  /**
+   * The current stack of replacement JS expressions for the local variables (and foreach-loop
+   * special functions) current in scope.
+   */
+  private final Deque<Map<String, JsExpr>> localVarTranslations;
+
   /** List to collect the results. */
-  protected List<CodeChunk.WithValue> chunks;
+  protected List<JsExpr> jsExprs;
 
   /**
    * Used for looking up the local name for a given template call to a fully qualified template
@@ -105,6 +108,9 @@ public class GenJsExprsVisitor extends AbstractSoyNodeVisitor<List<CodeChunk.Wit
    * @param isComputableAsJsExprsVisitor The IsComputableAsJsExprsVisitor used by this instance
    *     (when needed).
    * @param genJsExprsVisitorFactory Factory for creating an instance of GenJsExprsVisitor.
+   * @param errorReporter For reporting errors.
+   * @param localVarTranslations The current stack of replacement JS expressions for the local
+   *     variables (and foreach-loop special functions) current in scope.
    * @param templateAliases A mapping for looking up the function name for a given fully
    *     qualified name.
    */
@@ -115,36 +121,35 @@ public class GenJsExprsVisitor extends AbstractSoyNodeVisitor<List<CodeChunk.Wit
       GenCallCodeUtils genCallCodeUtils,
       IsComputableAsJsExprsVisitor isComputableAsJsExprsVisitor,
       GenJsExprsVisitorFactory genJsExprsVisitorFactory,
-      @Assisted TranslationContext translationContext,
       @Assisted ErrorReporter errorReporter,
+      @Assisted Deque<Map<String, JsExpr>> localVarTranslations,
       @Assisted TemplateAliases templateAliases) {
+    this.errorReporter = errorReporter;
     this.soyJsSrcDirectivesMap = soyJsSrcDirectivesMap;
     this.jsExprTranslator = jsExprTranslator;
     this.genCallCodeUtils = genCallCodeUtils;
     this.isComputableAsJsExprsVisitor = isComputableAsJsExprsVisitor;
     this.genJsExprsVisitorFactory = genJsExprsVisitorFactory;
-
-    this.translationContext = translationContext;
-    this.errorReporter = errorReporter;
+    this.localVarTranslations = localVarTranslations;
     this.templateAliases = templateAliases;
   }
 
-  @Override public List<CodeChunk.WithValue> exec(SoyNode node) {
+  @Override public List<JsExpr> exec(SoyNode node) {
     Preconditions.checkArgument(isComputableAsJsExprsVisitor.exec(node));
-    chunks = new ArrayList<>();
+    jsExprs = new ArrayList<>();
     visit(node);
-    return chunks;
+    return jsExprs;
   }
 
   /**
    * Executes this visitor on the children of the given node, without visiting the given node
    * itself.
    */
-  public List<CodeChunk.WithValue> execOnChildren(ParentSoyNode<?> node) {
+  public List<JsExpr> execOnChildren(ParentSoyNode<?> node) {
     Preconditions.checkArgument(isComputableAsJsExprsVisitor.execOnChildren(node));
-    chunks = new ArrayList<>();
+    jsExprs = new ArrayList<>();
     visitChildren(node);
-    return chunks;
+    return jsExprs;
   }
 
   // -----------------------------------------------------------------------------------------------
@@ -165,7 +170,15 @@ public class GenJsExprsVisitor extends AbstractSoyNodeVisitor<List<CodeChunk.Wit
    * </pre>
    */
   @Override protected void visitRawTextNode(RawTextNode node) {
-    chunks.add(stringLiteral(node.getRawText()));
+
+    // Escape non-ASCII characters since browsers are inconsistent in how they interpret utf-8 in
+    // JS source files.
+    String exprText = BaseUtils.escapeToSoyString(node.getRawText(), true);
+    // Note: </script> in a JavaScript string will end the current script tag
+    // in most browsers.  Escape the forward slash in the string to get around
+    // this issue.
+    exprText = exprText.replace("</script>", "<\\/script>");
+    jsExprs.add(new JsExpr(exprText, Integer.MAX_VALUE));
   }
 
   @Override protected void visitMsgPlaceholderNode(MsgPlaceholderNode node) {
@@ -199,8 +212,10 @@ public class GenJsExprsVisitor extends AbstractSoyNodeVisitor<List<CodeChunk.Wit
    * </pre>
    */
   @Override protected void visitPrintNode(PrintNode node) {
-    CodeChunk.WithValue expr = jsExprTranslator.translateToCodeChunk(
-        node.getExprUnion(), translationContext, errorReporter);
+
+    JsExpr jsExpr =
+        jsExprTranslator.translateToJsExpr(
+            node.getExprUnion(), localVarTranslations, errorReporter);
 
     // Process directives.
     for (PrintDirectiveNode directiveNode : node.getChildren()) {
@@ -209,40 +224,34 @@ public class GenJsExprsVisitor extends AbstractSoyNodeVisitor<List<CodeChunk.Wit
       SoyJsSrcPrintDirective directive = soyJsSrcDirectivesMap.get(directiveNode.getName());
       if (directive == null) {
         errorReporter.report(
-            node.getSourceLocation(),
-            UNKNOWN_SOY_JS_SRC_PRINT_DIRECTIVE,
-            directiveNode.getName());
+            node.getSourceLocation(), UNKNOWN_SOY_JS_SRC_PRINT_DIRECTIVE, directiveNode.getName());
         return;
       }
 
       // Get directive args.
-      List<ExprRootNode> argNodes = directiveNode.getArgs();
-      if (!directive.getValidArgsSizes().contains(argNodes.size())) {
+      List<ExprRootNode> args = directiveNode.getArgs();
+      if (!directive.getValidArgsSizes().contains(args.size())) {
         errorReporter.report(
             node.getSourceLocation(),
             ARITY_MISMATCH,
             directiveNode.getName(),
-            argNodes.size(),
+            args.size(),
             directive.getValidArgsSizes());
         return;
       }
 
-      // Convert args to CodeChunks.
-      List<CodeChunk.WithValue> argChunks = new ArrayList<>(argNodes.size());
-      for (ExprRootNode argNode : argNodes) {
-        argChunks.add(
-            jsExprTranslator.translateToCodeChunk(argNode, translationContext, errorReporter));
+      // Translate directive args.
+      List<JsExpr> argsJsExprs = new ArrayList<>(args.size());
+      for (ExprRootNode arg : args) {
+        argsJsExprs.add(
+            jsExprTranslator.translateToJsExpr(arg, localVarTranslations, errorReporter));
       }
 
       // Apply directive.
-      expr = SoyJsPluginUtils.applyDirective(
-          translationContext.codeGenerator(),
-          expr,
-          directive,
-          argChunks);
+      jsExpr = directive.applyForJsSrc(jsExpr, argsJsExprs);
     }
 
-    chunks.add(expr);
+    jsExprs.add(jsExpr);
   }
 
   /**
@@ -256,7 +265,9 @@ public class GenJsExprsVisitor extends AbstractSoyNodeVisitor<List<CodeChunk.Wit
    * </pre>
    */
   @Override protected void visitXidNode(XidNode node) {
-    chunks.add(id("xid").call(stringLiteral(node.getText())));
+    String xid = node.getText();
+    String js = "xid('" + xid + "')";
+    jsExprs.add(new JsExpr(js, Integer.MAX_VALUE));
   }
 
   /**
@@ -275,15 +286,21 @@ public class GenJsExprsVisitor extends AbstractSoyNodeVisitor<List<CodeChunk.Wit
    * </p>
    */
   @Override protected void visitCssNode(CssNode node) {
-    List<CodeChunk.WithValue> args = new ArrayList<>();
-    ExprRootNode componentName = node.getComponentNameExpr();
-    if (componentName != null) {
-      args.add(
-          jsExprTranslator.translateToCodeChunk(componentName, translationContext, errorReporter));
-    }
-    args.add(stringLiteral(node.getSelectorText()));
 
-    chunks.add(dottedId("goog.getCssName").call(args));
+    StringBuilder sb = new StringBuilder();
+    sb.append("goog.getCssName(");
+
+    ExprRootNode componentNameExpr = node.getComponentNameExpr();
+    if (componentNameExpr != null) {
+      JsExpr baseJsExpr =
+          jsExprTranslator.translateToJsExpr(
+              componentNameExpr, localVarTranslations, errorReporter);
+      sb.append(baseJsExpr.getText()).append(", ");
+    }
+
+    sb.append('\'').append(node.getSelectorText()).append("')");
+
+    jsExprs.add(new JsExpr(sb.toString(), Integer.MAX_VALUE));
   }
 
   /**
@@ -306,42 +323,43 @@ public class GenJsExprsVisitor extends AbstractSoyNodeVisitor<List<CodeChunk.Wit
 
     // Create another instance of this visitor class for generating JS expressions from children.
     GenJsExprsVisitor genJsExprsVisitor =
-        genJsExprsVisitorFactory.create(translationContext, templateAliases, errorReporter);
-    CodeChunk.Generator generator = translationContext.codeGenerator();
+        genJsExprsVisitorFactory.create(localVarTranslations, templateAliases, errorReporter);
 
-    List<CodeChunk.WithValue> ifs = new ArrayList<>();
-    List<CodeChunk.WithValue> thens = new ArrayList<>();
-    CodeChunk.WithValue trailingElse = null;
+    StringBuilder jsExprTextSb = new StringBuilder();
 
+    boolean hasElse = false;
     for (SoyNode child : node.getChildren()) {
 
       if (child instanceof IfCondNode) {
-        IfCondNode ifCond = (IfCondNode) child;
+        IfCondNode icn = (IfCondNode) child;
 
-        ifs.add(jsExprTranslator.translateToCodeChunk(
-            ifCond.getExprUnion(), translationContext, errorReporter));
-        thens.add(CodeChunkUtils.concatChunks(genJsExprsVisitor.exec(ifCond)));
+        JsExpr condJsExpr =
+            jsExprTranslator.translateToJsExpr(
+                icn.getExprUnion(), localVarTranslations, errorReporter);
+        jsExprTextSb.append('(').append(condJsExpr.getText()).append(") ? ");
+
+        List<JsExpr> condBlockJsExprs = genJsExprsVisitor.exec(icn);
+        jsExprTextSb.append(JsExprUtils.concatJsExprs(condBlockJsExprs).getText());
+
+        jsExprTextSb.append(" : ");
+
       } else if (child instanceof IfElseNode) {
-        trailingElse = CodeChunkUtils.concatChunks(genJsExprsVisitor.exec(child));
+        hasElse = true;
+        IfElseNode ien = (IfElseNode) child;
+
+        List<JsExpr> elseBlockJsExprs = genJsExprsVisitor.exec(ien);
+        jsExprTextSb.append(JsExprUtils.concatJsExprs(elseBlockJsExprs).getText());
+
       } else {
         throw new AssertionError();
       }
     }
 
-    Preconditions.checkState(ifs.size() == thens.size());
-
-    ConditionalBuilder builder = generator.newChunk()
-        .if_(ifs.get(0), thens.get(0));
-
-    for (int i = 1; i < ifs.size(); i++) {
-      builder.elseif_(ifs.get(i), thens.get(i));
+    if (!hasElse) {
+      jsExprTextSb.append("''");
     }
 
-    CodeChunk.WithValue ifChunk = (trailingElse != null)
-        ? builder.else_(trailingElse).endif().buildAsValue()
-        : builder.else_(LITERAL_EMPTY_STRING).endif().buildAsValue();
-
-    chunks.add(ifChunk);
+    jsExprs.add(new JsExpr(jsExprTextSb.toString(), Operator.CONDITIONAL.getPrecedence()));
   }
 
   @Override protected void visitIfCondNode(IfCondNode node) {
@@ -373,9 +391,8 @@ public class GenJsExprsVisitor extends AbstractSoyNodeVisitor<List<CodeChunk.Wit
    * </pre>
    */
   @Override protected void visitCallNode(CallNode node) {
-    CodeChunk.WithValue call =
-        genCallCodeUtils.gen(node, templateAliases, translationContext, errorReporter);
-    chunks.add(call);
+    jsExprs.add(
+        genCallCodeUtils.genCallExpr(node, localVarTranslations, templateAliases, errorReporter));
   }
 
   @Override protected void visitCallParamContentNode(CallParamContentNode node) {

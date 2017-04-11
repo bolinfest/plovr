@@ -38,19 +38,22 @@ import com.google.template.soy.sharedpasses.opti.SimplifyVisitor;
 import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.TemplateRegistry;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.List;
+
 import javax.inject.Inject;
 import javax.inject.Provider;
 
 /**
- * Main entry point for the Incremental DOM JS Src backend (output target).
+ * Main entry point for the Incremental DOM  JS Src backend (output target).
  *
- * <p>Important: Do not use outside of Soy code (treat as superpackage-private).
+ * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  */
 public class IncrementalDomSrcMain {
+
 
   /** The scope object that manages the API call scope. */
   private final GuiceSimpleScope apiCallScope;
@@ -63,6 +66,7 @@ public class IncrementalDomSrcMain {
 
   /** Provider for getting an instance of GenJsCodeVisitor. */
   private final Provider<GenIncrementalDomCodeVisitor> genIncrementalDomCodeVisitorProvider;
+
 
   /**
    * @param apiCallScope The scope object that manages the API call scope.
@@ -83,6 +87,7 @@ public class IncrementalDomSrcMain {
     this.optimizeBidiCodeGenVisitorProvider = optimizeBidiCodeGenVisitorProvider;
     this.genIncrementalDomCodeVisitorProvider = genIncrementalDomCodeVisitorProvider;
   }
+
 
   /**
    * Generates Incremental DOM JS source code given a Soy parse tree, an options object, and an
@@ -111,10 +116,9 @@ public class IncrementalDomSrcMain {
     try (WithScope withScope = apiCallScope.enter()) {
       // Seed the scoped parameters.
       apiCallScope.seed(SoyJsSrcOptions.class, incrementalJSSrcOptions);
-      BidiGlobalDir bidiGlobalDir =
-          SoyBidiUtils.decodeBidiGlobalDirFromJsOptions(
-              incrementalJSSrcOptions.getBidiGlobalDir(),
-              incrementalJSSrcOptions.getUseGoogIsRtlForBidiGlobalDir());
+      BidiGlobalDir bidiGlobalDir = SoyBidiUtils.decodeBidiGlobalDirFromJsOptions(
+          incrementalJSSrcOptions.getBidiGlobalDir(),
+          incrementalJSSrcOptions.getUseGoogIsRtlForBidiGlobalDir());
       ApiCallScopeUtils.seedSharedParams(apiCallScope, null /* msgBundle */, bidiGlobalDir);
 
       // Do the code generation.
@@ -122,6 +126,8 @@ public class IncrementalDomSrcMain {
       simplifyVisitor.simplify(soyTree, registry);
 
       new HtmlTransformVisitor(errorReporter).exec(soyTree);
+      IncrementalDomOutputOptimizers.collapseOpenTags(soyTree);
+      IncrementalDomOutputOptimizers.collapseElements(soyTree);
 
       new UnescapingVisitor().exec(soyTree);
 
@@ -149,24 +155,20 @@ public class IncrementalDomSrcMain {
       SoyJsSrcOptions jsSrcOptions,
       String outputPathFormat,
       ErrorReporter errorReporter)
-      throws IOException {
+      throws SoySyntaxException, IOException {
 
     List<String> jsFileContents = genJsSrc(soyTree, templateRegistry, jsSrcOptions, errorReporter);
 
-    ImmutableList<SoyFileNode> srcsToCompile =
-        ImmutableList.copyOf(
-            Iterables.filter(soyTree.getChildren(), SoyFileNode.MATCH_SRC_FILENODE));
+    ImmutableList<SoyFileNode> srcsToCompile = ImmutableList.copyOf(Iterables.filter(
+        soyTree.getChildren(), SoyFileNode.MATCH_SRC_FILENODE));
 
     if (srcsToCompile.size() != jsFileContents.size()) {
-      throw new AssertionError(
-          String.format(
-              "Expected to generate %d code chunk(s), got %d",
-              srcsToCompile.size(), jsFileContents.size()));
+      throw new AssertionError(String.format("Expected to generate %d code chunk(s), got %d",
+          srcsToCompile.size(), jsFileContents.size()));
     }
 
-    Multimap<String, Integer> outputs =
-        MainEntryPointUtils.mapOutputsToSrcs(
-            null /* locale */, outputPathFormat, "" /* inputPathsPrefix */, srcsToCompile);
+    Multimap<String, Integer> outputs = MainEntryPointUtils.mapOutputsToSrcs(
+        null /* locale */, outputPathFormat, "" /* inputPathsPrefix */, srcsToCompile);
 
     for (String outputFilePath : outputs.keySet()) {
       Writer out = Files.newWriter(new File(outputFilePath), UTF_8);
