@@ -47,7 +47,6 @@ genrule(
     'buildtools/javacc/javacc.jar',
     'java/src/com/google/template/soy/exprparse/ExpressionParser.jj',
     'java/src/com/google/template/soy/soyparse/SoyFileParser.jj',
-    'java/src/com/google/template/soy/types/parse/TypeParser.jj',
   ],
   cmd = '$SRCS $OUT $TMP',
   out = 'parser.src.zip',
@@ -95,7 +94,7 @@ prebuilt_jar(
 
 prebuilt_jar(
   name = 'auto-value',
-  binary_jar = 'java/lib/auto-value-1.0.jar',
+  binary_jar = 'java/lib/auto-value-1.3.jar',
 )
 
 prebuilt_jar(
