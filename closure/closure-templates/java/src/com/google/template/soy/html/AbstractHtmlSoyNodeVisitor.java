@@ -25,32 +25,41 @@ import com.google.template.soy.soytree.SoyNode;
  */
 public abstract class AbstractHtmlSoyNodeVisitor<R> extends AbstractSoyNodeVisitor<R> {
 
-  @Override
-  protected void visit(SoyNode node) {
+  @Override protected void visit(SoyNode node) {
     switch (node.getKind()) {
-      case INCREMENTAL_HTML_ATTRIBUTE:
-        visitIncrementalHtmlAttributeNode((IncrementalHtmlAttributeNode) node);
-        break;
-      case INCREMENTAL_HTML_OPEN_TAG:
-        visitIncrementalHtmlOpenTagNode((IncrementalHtmlOpenTagNode) node);
-        break;
-      case INCREMENTAL_HTML_CLOSE_TAG:
-        visitIncrementalHtmlCloseTagNode((IncrementalHtmlCloseTagNode) node);
-        break;
+      case HTML_ATTRIBUTE: visitHtmlAttributeNode((HtmlAttributeNode) node); break;
+      case HTML_OPEN_TAG: visitHtmlOpenTagNode((HtmlOpenTagNode) node); break;
+      case HTML_OPEN_TAG_START: visitHtmlOpenTagStartNode((HtmlOpenTagStartNode) node); break;
+      case HTML_OPEN_TAG_END: visitHtmlOpenTagEndNode((HtmlOpenTagEndNode) node); break;
+      case HTML_CLOSE_TAG: visitHtmlCloseTagNode((HtmlCloseTagNode) node); break;
+      case HTML_VOID_TAG: visitHtmlVoidTagNode((HtmlVoidTagNode) node); break;
       default:
         super.visit(node);
     }
   }
-
-  protected void visitIncrementalHtmlAttributeNode(IncrementalHtmlAttributeNode node) {
+  
+  protected void visitHtmlAttributeNode(HtmlAttributeNode node) {
     visitSoyNode(node);
   }
 
-  protected void visitIncrementalHtmlOpenTagNode(IncrementalHtmlOpenTagNode node) {
+  protected void visitHtmlOpenTagNode(HtmlOpenTagNode node) {
     visitSoyNode(node);
   }
 
-  protected void visitIncrementalHtmlCloseTagNode(IncrementalHtmlCloseTagNode node) {
+  protected void visitHtmlOpenTagStartNode(HtmlOpenTagStartNode node) {
     visitSoyNode(node);
   }
+
+  protected void visitHtmlOpenTagEndNode(HtmlOpenTagEndNode node) {
+    visitSoyNode(node);
+  }
+
+  protected void visitHtmlCloseTagNode(HtmlCloseTagNode node) {
+    visitSoyNode(node);
+  }
+
+  protected void visitHtmlVoidTagNode(HtmlVoidTagNode node) {
+    visitSoyNode(node);
+  }
+
 }

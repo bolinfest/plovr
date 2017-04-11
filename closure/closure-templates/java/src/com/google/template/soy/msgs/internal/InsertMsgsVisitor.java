@@ -38,7 +38,9 @@ import com.google.template.soy.soytree.SoyNode;
 import com.google.template.soy.soytree.SoyNode.BlockNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 import com.google.template.soy.soytree.SoyNode.StandaloneNode;
+
 import java.util.List;
+
 import javax.annotation.Nullable;
 
 /**
@@ -47,14 +49,14 @@ import javax.annotation.Nullable;
  * exception is plural/select messages. This pass currently does not replace MsgFallbackGroupNodes
  * that contain plural/select messages.
  *
- * <p>Important: Do not use outside of Soy code (treat as superpackage-private).
+ * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
- * <p>If the Soy tree doesn't contain plural/select messages, then after this pass, the Soy tree
+ * <p> If the Soy tree doesn't contain plural/select messages, then after this pass, the Soy tree
  * should no longer contain MsgFallbackGroupNodes, MsgNodes, MsgPlaceholderNodes, or
  * MsgHtmlTagNodes. If the Soy tree contains plural/select messages, then the only messages left in
  * the tree after this pass runs should be the plural/select messages.
  *
- * <p>Note that the Soy tree is usually simplifiable after this pass is run (e.g. it usually
+ * <p> Note that the Soy tree is usually simplifiable after this pass is run (e.g. it usually
  * contains consecutive RawTextNodes). It's usually advisable to run a simplification pass after
  * this pass.
  *
@@ -71,6 +73,7 @@ public final class InsertMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
 
   private IdGenerator nodeIdGen;
 
+
   /** The replacement nodes for the current MsgFallbackGroupNode we're visiting (during a pass). */
   private List<StandaloneNode> currReplacementNodes;
 
@@ -84,8 +87,8 @@ public final class InsertMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
     this.errorReporter = errorReporter;
   }
 
-  @Override
-  public Void exec(SoyNode node) {
+
+  @Override public Void exec(SoyNode node) {
 
     // Retrieve the node id generator from the root of the parse tree.
     nodeIdGen = node.getNearestAncestor(SoyFileSetNode.class).getNodeIdGenerator();
@@ -96,11 +99,12 @@ public final class InsertMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
     return null;
   }
 
+
   // -----------------------------------------------------------------------------------------------
   // Implementations for specific nodes.
 
-  @Override
-  protected void visitMsgFallbackGroupNode(MsgFallbackGroupNode node) {
+
+  @Override protected void visitMsgFallbackGroupNode(MsgFallbackGroupNode node) {
 
     // Check for plural or select message. Either report error or don't replace.
     for (MsgNode msg : node.getChildren()) {
@@ -134,6 +138,7 @@ public final class InsertMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
     parent.addChildren(indexInParent, currReplacementNodes);
     currReplacementNodes = null;
   }
+
 
   /**
    * Private helper for visitMsgFallbackGroupNode() to build the list of replacement nodes for a
@@ -172,6 +177,7 @@ public final class InsertMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
     }
   }
 
+
   /**
    * Private helper for visitMsgFallbackGroupNode() to build the list of replacement nodes for a
    * message from its source.
@@ -203,18 +209,20 @@ public final class InsertMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
     }
   }
 
-  @Override
-  protected void visitMsgHtmlTagNode(MsgHtmlTagNode node) {
+
+  @Override protected void visitMsgHtmlTagNode(MsgHtmlTagNode node) {
     currReplacementNodes.addAll(node.getChildren());
   }
+
 
   // -----------------------------------------------------------------------------------------------
   // Fallback implementation.
 
-  @Override
-  protected void visitSoyNode(SoyNode node) {
+
+  @Override protected void visitSoyNode(SoyNode node) {
     if ((node instanceof ParentSoyNode<?>)) {
       visitChildrenAllowingConcurrentModification((ParentSoyNode<?>) node);
     }
   }
+
 }

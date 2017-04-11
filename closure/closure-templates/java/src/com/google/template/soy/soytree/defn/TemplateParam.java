@@ -17,6 +17,7 @@
 package com.google.template.soy.soytree.defn;
 
 import com.google.template.soy.types.SoyType;
+
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
@@ -28,7 +29,9 @@ import javax.annotation.concurrent.Immutable;
  */
 @Immutable
 public abstract class TemplateParam extends AbstractVarDefn {
-  /** Enum for the location of the declaration. */
+  /**
+   * Enum for the location of the declaration.
+   */
   public static enum DeclLoc {
     // Declaration in template SoyDoc, e.g.
     //     @param foo Blah blah blah.
@@ -48,7 +51,11 @@ public abstract class TemplateParam extends AbstractVarDefn {
   private final String desc;
 
   public TemplateParam(
-      String name, SoyType type, boolean isRequired, boolean isInjected, @Nullable String desc) {
+      String name,
+      SoyType type,
+      boolean isRequired,
+      boolean isInjected,
+      @Nullable String desc) {
     super(name, type);
     this.isRequired = isRequired;
     this.isInjected = isInjected;
@@ -62,8 +69,7 @@ public abstract class TemplateParam extends AbstractVarDefn {
     this.desc = param.desc;
   }
 
-  @Override
-  public Kind kind() {
+  @Override public Kind kind() {
     return Kind.PARAM;
   }
 
@@ -83,11 +89,6 @@ public abstract class TemplateParam extends AbstractVarDefn {
 
   public String desc() {
     return desc;
-  }
-
-  @Override
-  public String toString() {
-    return getClass().getSimpleName() + "{name = " + name() + ", desc = " + desc + "}";
   }
 
   public abstract TemplateParam copyEssential();

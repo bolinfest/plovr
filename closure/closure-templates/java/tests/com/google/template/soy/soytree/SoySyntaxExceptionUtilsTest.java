@@ -16,32 +16,27 @@
 
 package com.google.template.soy.soytree;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
 import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.base.internal.LegacyInternalSyntaxException;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
 
 /**
  * Unit tests for SoySyntaxExceptionUtils.
  *
  */
-@RunWith(JUnit4.class)
-public final class SoySyntaxExceptionUtilsTest {
+public final class SoySyntaxExceptionUtilsTest extends TestCase {
 
-  @Test
+
   public void testCreateWithNode() {
 
     String testFileContent =
-        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n"
-            + "\n"
-            + "/** @param goo */\n"
-            + "{template .foo}\n"
-            + "  {$goo}\n"
-            + "{/template}\n";
+        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
+        "\n" +
+        "/** @param goo */\n" +
+        "{template .foo}\n" +
+        "  {$goo}\n" +
+        "{/template}\n";
 
     SoyFileSetNode soyTree =
         SoyFileSetParserBuilder.forFileContents(testFileContent).parse().fileSet();
@@ -54,7 +49,7 @@ public final class SoySyntaxExceptionUtilsTest {
     assertEquals("no-path", sse.getSourceLocation().getFilePath());
   }
 
-  @Test
+
   public void testAssociateNode() {
 
     String message = "Some error happened.";
@@ -62,12 +57,12 @@ public final class SoySyntaxExceptionUtilsTest {
         LegacyInternalSyntaxException.createWithoutMetaInfo(message);
 
     String testFileContent =
-        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n"
-            + "\n"
-            + "/** @param goo */\n"
-            + "{template .foo}\n"
-            + "  {$goo}\n"
-            + "{/template}\n";
+        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
+        "\n" +
+        "/** @param goo */\n" +
+        "{template .foo}\n" +
+        "  {$goo}\n" +
+        "{/template}\n";
     SoyFileSetNode soyTree =
         SoyFileSetParserBuilder.forFileContents(testFileContent).parse().fileSet();
     PrintNode pn = (PrintNode) soyTree.getChild(0).getChild(0).getChild(0);
@@ -82,4 +77,5 @@ public final class SoySyntaxExceptionUtilsTest {
     assertTrue(sse.getMessage().contains(message));
     assertEquals("no-path", sse.getSourceLocation().getFilePath());
   }
+
 }

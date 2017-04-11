@@ -25,23 +25,20 @@ import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.shared.SharedTestUtils;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.SoyNode;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
 
 /**
  * Unit tests for {@link IsComputableAsJsExprsVisitor}.
  *
  */
-@RunWith(JUnit4.class)
-public final class IsComputableAsJsExprsVisitorTest {
+public final class IsComputableAsJsExprsVisitorTest extends TestCase {
 
-  @Test
   public void testAlwaysTrueNodes() {
 
     runTestHelper("Blah blah.", true);
 
-    runTestHelper("{msg desc=\"\"}Blah{/msg}", true, 1); // GoogMsgRefNode
+    runTestHelper("{msg desc=\"\"}Blah{/msg}", true, 1);  // GoogMsgRefNode
 
     runTestHelper("{@param boo: ?}\n{$boo.foo}", true);
 
@@ -50,10 +47,10 @@ public final class IsComputableAsJsExprsVisitorTest {
     runTestHelper("{css selected-option}", true);
   }
 
-  @Test
+
   public void testAlwaysFalseNodes() {
 
-    runTestHelper("{msg desc=\"\"}Blah{/msg}", false, 0); // GoogMsgDefNode
+    runTestHelper("{msg desc=\"\"}Blah{/msg}", false, 0);  // GoogMsgDefNode
 
     runTestHelper(
         "{@param boo: ?}\n{switch $boo}{case 0}Blah{case 1}Bleh{default}Bluh{/switch}", false);
@@ -63,7 +60,7 @@ public final class IsComputableAsJsExprsVisitorTest {
     runTestHelper("{for $i in range(4)}{$i + 1}{/for}", false);
   }
 
-  @Test
+
   public void testMsgHtmlTagNode() {
 
     runTestHelper(
@@ -86,7 +83,7 @@ public final class IsComputableAsJsExprsVisitorTest {
         "{msg desc=\"\"}<span id=\"{for $i in range(3)}{$i}{/for}\">{/msg}", false, 0, 0, 0, 0);
   }
 
-  @Test
+
   public void testIfNode() {
 
     runTestHelper(
@@ -101,7 +98,7 @@ public final class IsComputableAsJsExprsVisitorTest {
         false);
   }
 
-  @Test
+
   public void testCallNode() {
     runTestHelper("{call .foo data=\"all\" /}", true);
 
@@ -138,14 +135,20 @@ public final class IsComputableAsJsExprsVisitorTest {
     runTestHelper(soyNodeCode, expectedResult, 0);
   }
 
-  /** @param indicesToNode Series of indices for walking down to the node we want to test. */
-  private static void runTestHelper(String soyCode, boolean expectedResult, int... indicesToNode) {
+
+  /**
+   * @param indicesToNode Series of indices for walking down to the node we want to test.
+   */
+  private static void runTestHelper(
+      String soyCode, boolean expectedResult, int... indicesToNode) {
     ErrorReporter boom = ExplodingErrorReporter.get();
     SoyFileSetNode soyTree =
         SoyFileSetParserBuilder.forTemplateContents(soyCode).errorReporter(boom).parse().fileSet();
     // Several tests have msg nodes.
     new ExtractMsgVariablesVisitor().exec(soyTree);
     SoyNode node = SharedTestUtils.getNode(soyTree, indicesToNode);
-    assertThat(new IsComputableAsJsExprsVisitor().exec(node)).isEqualTo(expectedResult);
+    assertThat(new IsComputableAsJsExprsVisitor().exec(node))
+        .isEqualTo(expectedResult);
   }
+
 }

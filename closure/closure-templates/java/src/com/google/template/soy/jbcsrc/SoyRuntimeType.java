@@ -17,16 +17,18 @@
 package com.google.template.soy.jbcsrc;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.template.soy.jbcsrc.BytecodeUtils.SOY_VALUE_TYPE;
 
 import com.google.common.base.Optional;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 import com.google.template.soy.base.SoyBackendKind;
 import com.google.template.soy.data.SanitizedContent;
 import com.google.template.soy.data.restricted.BooleanData;
 import com.google.template.soy.data.restricted.FloatData;
+import com.google.template.soy.data.restricted.NullData;
 import com.google.template.soy.data.restricted.SoyString;
 import com.google.template.soy.types.SoyType;
 import com.google.template.soy.types.SoyType.Kind;
@@ -38,8 +40,8 @@ import com.google.template.soy.types.primitive.IntType;
 import com.google.template.soy.types.primitive.NullType;
 import com.google.template.soy.types.primitive.SanitizedType;
 import com.google.template.soy.types.primitive.StringType;
-import com.google.template.soy.types.proto.SoyProtoEnumType;
-import com.google.template.soy.types.proto.SoyProtoType;
+import com.google.template.soy.types.proto.SoyProtoEnumTypeImpl;
+import com.google.template.soy.types.proto.SoyProtoTypeImpl;
 import javax.annotation.Nullable;
 import org.objectweb.asm.Type;
 
@@ -50,6 +52,16 @@ import org.objectweb.asm.Type;
  * 'unboxed' forms.
  */
 abstract class SoyRuntimeType {
+  // TODO(msamuel): move this variable into Kind.
+  private static final ImmutableSet<Kind> STRING_KINDS =
+      Sets.immutableEnumSet(
+          Kind.STRING,
+          Kind.HTML,
+          Kind.ATTRIBUTES,
+          Kind.JS,
+          Kind.CSS,
+          Kind.URI,
+          Kind.TRUSTED_RESOURCE_URI);
 
   /**
    * Returns the unboxed {@code jbcsrc} representation of the given type, or absent if no such
@@ -69,15 +81,15 @@ abstract class SoyRuntimeType {
     return boxedTypeCache.getUnchecked(soyType);
   }
 
-  // Thse caches should have a relatively fixed size (the universe of SoyTypes).  One potential
-  // source of concern is that in the case of protos, if a user is hot swapping in new class
-  // definitions and adding/removing fields.  We won't modify the SoyType definitions (or
+  // Thse caches should have a relatively fixed size (the universeof SoyTypes).  One potential 
+  // source of concern is that in the case of protos, if a user is hot swapping in new class 
+  // definitions and adding/removing fields.  We won't modify the SoyType definitions (or 
   // SoyRuntimeType) definitions in these caches.  This is a limitation in the design of the proto
   // type definition (because we never try to re-read the proto descriptors).  In theory this could
   // be fixed by flushing the whole type registry between compiles.  This would solve the problem,
-  // but then these caches would start leaking!  Any easy fix would be to give these caches weak
+  // but then these caches would start leaking!  Any easy fix would be to give these caches weak 
   // keys.
-
+  
   private static final LoadingCache<SoyType, Optional<PrimitiveSoyType>> primitiveTypeCache =
       CacheBuilder.newBuilder()
           .build(
@@ -134,7 +146,7 @@ abstract class SoyRuntimeType {
     switch (soyType.getKind()) {
       case NULL:
         return new PrimitiveSoyType(
-            NullType.getInstance(), BytecodeUtils.OBJECT.type(), SOY_VALUE_TYPE);
+            NullType.getInstance(), BytecodeUtils.OBJECT.type(), Type.getType(NullData.class));
       case BOOL:
         return new PrimitiveSoyType(
             BoolType.getInstance(), Type.BOOLEAN_TYPE, Type.getType(BooleanData.class));
@@ -147,8 +159,8 @@ abstract class SoyRuntimeType {
       case FLOAT:
         return new PrimitiveSoyType(
             FloatType.getInstance(), Type.DOUBLE_TYPE, Type.getType(FloatData.class));
-      case PROTO_ENUM:
-        return enumType((SoyProtoEnumType) soyType);
+      case ENUM:
+        return enumType((SoyProtoEnumTypeImpl) soyType);
       case ATTRIBUTES:
       case CSS:
       case URI:
@@ -156,8 +168,8 @@ abstract class SoyRuntimeType {
       case JS:
       case TRUSTED_RESOURCE_URI:
         return sanitizedType((SanitizedType) soyType);
-      case PROTO:
-        return protoType((SoyProtoType) soyType);
+      case OBJECT:
+        return protoType((SoyProtoTypeImpl) soyType);
       case LIST:
         // We have some minor support for unboxed lists
         return new PrimitiveSoyType(soyType, BytecodeUtils.LIST_TYPE, BytecodeUtils.SOY_LIST_TYPE);
@@ -188,12 +200,12 @@ abstract class SoyRuntimeType {
     }
   }
 
-  private static PrimitiveSoyType protoType(SoyProtoType soyType) {
+  private static PrimitiveSoyType protoType(SoyProtoTypeImpl soyType) {
     return new PrimitiveSoyType(
         soyType,
         Type.getType(
             'L' + soyType.getNameForBackend(SoyBackendKind.JBC_SRC).replace('.', '/') + ';'),
-        BytecodeUtils.SOY_PROTO_VALUE_TYPE);
+        BytecodeUtils.PROTO_VALUE_TYPE);
   }
 
   private static PrimitiveSoyType sanitizedType(SanitizedType soyType) {
@@ -201,7 +213,7 @@ abstract class SoyRuntimeType {
         soyType, BytecodeUtils.STRING_TYPE, Type.getType(SanitizedContent.class));
   }
 
-  private static PrimitiveSoyType enumType(SoyProtoEnumType enumType) {
+  private static PrimitiveSoyType enumType(SoyProtoEnumTypeImpl enumType) {
     return new PrimitiveSoyType(enumType, Type.INT_TYPE, BytecodeUtils.INTEGER_DATA_TYPE);
   }
 
@@ -221,23 +233,6 @@ abstract class SoyRuntimeType {
     return runtimeType;
   }
 
-  boolean assignableToNullableInt() {
-    return assignableToNullableType(IntType.getInstance());
-  }
-
-  boolean assignableToNullableFloat() {
-    return assignableToNullableType(FloatType.getInstance());
-  }
-
-  boolean assignableToNullableNumber() {
-    return assignableToNullableType(SoyTypes.NUMBER_TYPE);
-  }
-
-  private boolean assignableToNullableType(SoyType type) {
-    return type.isAssignableFrom(soyType)
-        || (soyType.getKind() == Kind.UNION && type.isAssignableFrom(SoyTypes.removeNull(soyType)));
-  }
-
   /**
    * Returns {@code true} if the expression is known to be a string at compile time.
    *
@@ -253,11 +248,11 @@ abstract class SoyRuntimeType {
 
   boolean isKnownStringOrSanitizedContent() {
     // It 'is' a string if it is unboxed or is one of our string types
-    return soyType.getKind().isKnownStringOrSanitizedContent();
+    return STRING_KINDS.contains(soyType.getKind());
   }
 
   boolean isKnownSanitizedContent() {
-    return soyType.getKind().isKnownSanitizedContent();
+    return soyType.getKind() != Kind.STRING && STRING_KINDS.contains(soyType.getKind());
   }
 
   /**
@@ -268,6 +263,23 @@ abstract class SoyRuntimeType {
    */
   boolean isKnownInt() {
     return soyType.getKind() == Kind.INT;
+  }
+
+  boolean assignableToNullableInt() {
+    return assignableToNullableType(IntType.getInstance());
+  }
+
+  boolean assignableToNullableFloat() {
+    return assignableToNullableType(FloatType.getInstance());
+  }
+
+  boolean assignableToNullableNumber() {
+    return assignableToNullableType(SoyTypes.NUMBER_TYPE);
+  }
+
+  private boolean assignableToNullableType(SoyType type) {
+    return type.isAssignableFrom(soyType)
+        || (soyType.getKind() == Kind.UNION && type.isAssignableFrom(SoyTypes.removeNull(soyType)));
   }
 
   /**
@@ -297,7 +309,7 @@ abstract class SoyRuntimeType {
   }
 
   final boolean isKnownProto() {
-    return soyType.getKind() == Kind.PROTO;
+    return soyType instanceof SoyProtoTypeImpl;
   }
 
   /**

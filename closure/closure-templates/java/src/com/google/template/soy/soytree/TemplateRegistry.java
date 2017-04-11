@@ -28,14 +28,16 @@ import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.SoyErrorKind;
 import com.google.template.soy.shared.internal.DelTemplateSelector;
 import com.google.template.soy.soytree.TemplateDelegateNode.DelTemplateKey;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
  * A registry or index of all templates in a Soy tree.
  *
- * <p>Important: Do not use outside of Soy code (treat as superpackage-private).
+ * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
 public final class TemplateRegistry {
@@ -51,13 +53,11 @@ public final class TemplateRegistry {
 
   /** Map from basic template name to node. */
   private final ImmutableMap<String, TemplateBasicNode> basicTemplatesMap;
-
   private final DelTemplateSelector<TemplateDelegateNode> delTemplateSelector;
   private final ImmutableList<TemplateNode> allTemplates;
 
   /**
    * Constructor.
-   *
    * @param soyTree The Soy tree from which to build a template registry.
    */
   public TemplateRegistry(SoyFileSetNode soyTree, ErrorReporter errorReporter) {
@@ -73,8 +73,8 @@ public final class TemplateRegistry {
         allTemplatesBuilder.add(template);
         if (template instanceof TemplateBasicNode) {
           // Case 1: Basic template.
-          TemplateBasicNode prev =
-              basicTemplates.put(template.getTemplateName(), (TemplateBasicNode) template);
+          TemplateBasicNode prev = basicTemplates.put(
+              template.getTemplateName(), (TemplateBasicNode) template);
           if (prev != null) {
             errorReporter.report(
                 template.getSourceLocation(),
@@ -135,14 +135,17 @@ public final class TemplateRegistry {
     this.allTemplates = allTemplatesBuilder.build();
   }
 
-  /** Returns a map from basic template name to node. */
+
+  /**
+   * Returns a map from basic template name to node.
+   */
   public ImmutableMap<String, TemplateBasicNode> getBasicTemplatesMap() {
     return basicTemplatesMap;
   }
 
+
   /**
    * Retrieves a basic template given the template name.
-   *
    * @param templateName The basic template name to retrieve.
    * @return The corresponding basic template, or null if the template name is not defined.
    */
@@ -151,14 +154,16 @@ public final class TemplateRegistry {
     return basicTemplatesMap.get(templateName);
   }
 
-  /** Returns a multimap from delegate template name to set of keys. */
+  /**
+   * Returns a multimap from delegate template name to set of keys.
+   */
   public DelTemplateSelector<TemplateDelegateNode> getDelTemplateSelector() {
     return delTemplateSelector;
   }
 
   /**
-   * Returns all registered templates ({@link TemplateBasicNode basic} and {@link
-   * TemplateDelegateNode delegate} nodes), in no particular order.
+   * Returns all registered templates ({@link TemplateBasicNode basic} and
+   * {@link TemplateDelegateNode delegate} nodes), in no particular order.
    */
   public ImmutableList<TemplateNode> getAllTemplates() {
     return allTemplates;
@@ -188,7 +193,6 @@ public final class TemplateRegistry {
    * Gets the content kind that a call results in. If used with delegate calls, the delegate
    * templates must use strict autoescaping. This relies on the fact that all delegate calls must
    * have the same kind when using strict autoescaping. This is enforced by CheckDelegatesVisitor.
-   *
    * @param node The {@link CallBasicNode} or {@link CallDelegateNode}.
    * @return The kind of content that the call results in.
    */
@@ -200,8 +204,9 @@ public final class TemplateRegistry {
       templateNode = getBasicTemplate(calleeName);
     } else {
       String calleeName = ((CallDelegateNode) node).getDelCalleeName();
-      ImmutableList<TemplateDelegateNode> templateNodes =
-          getDelTemplateSelector().delTemplateNameToValues().get(calleeName);
+      ImmutableList<TemplateDelegateNode> templateNodes = getDelTemplateSelector()
+          .delTemplateNameToValues()
+          .get(calleeName);
       // For per-file compilation, we may not have any of the delegate templates in the compilation
       // unit.
       if (!templateNodes.isEmpty()) {

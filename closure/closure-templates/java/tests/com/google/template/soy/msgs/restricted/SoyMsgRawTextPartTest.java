@@ -16,20 +16,13 @@
 
 package com.google.template.soy.msgs.restricted;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import junit.framework.TestCase;
 
 /**
  * Unit test for raw text messages, which use a semi complex dynamic encoding.
  *
  */
-@RunWith(JUnit4.class)
-public class SoyMsgRawTextPartTest {
+public class SoyMsgRawTextPartTest extends TestCase {
 
   private static final String LATIN_STRING = "Hello Kitty";
   private static final String LATIN_STRING_2 = "Goodbye Kitty";
@@ -40,7 +33,6 @@ public class SoyMsgRawTextPartTest {
     return msg instanceof SoyMsgRawTextPart.Utf8SoyMsgRawTextPart;
   }
 
-  @Test
   public void testLatin() {
     SoyMsgRawTextPart part = SoyMsgRawTextPart.of(LATIN_STRING);
     assertEquals(LATIN_STRING, part.getRawText());
@@ -51,7 +43,6 @@ public class SoyMsgRawTextPartTest {
     assertTrue("UTF8 is optimal for Latin strings", isUtf8Encoding(part));
   }
 
-  @Test
   public void testChinese() {
     SoyMsgRawTextPart part = SoyMsgRawTextPart.of(CHINESE_STRING);
     assertEquals(CHINESE_STRING, part.getRawText());
@@ -62,14 +53,12 @@ public class SoyMsgRawTextPartTest {
     assertFalse("UTF16 is optimal for Chinese strings", isUtf8Encoding(part));
   }
 
-  @Test
   public void testEmpty() {
     SoyMsgRawTextPart part = SoyMsgRawTextPart.of("");
     assertEquals("", part.getRawText());
     assertFalse("UTF16 is used when there's a tie", isUtf8Encoding(part));
   }
 
-  @Test
   public void testEquals() {
     assertEquals(SoyMsgRawTextPart.of(LATIN_STRING), SoyMsgRawTextPart.of(LATIN_STRING));
     assertEquals(SoyMsgRawTextPart.of(CHINESE_STRING), SoyMsgRawTextPart.of(CHINESE_STRING));
@@ -88,30 +77,23 @@ public class SoyMsgRawTextPartTest {
     assertFalse("Different types", SoyMsgRawTextPart.of(CHINESE_STRING).equals(CHINESE_STRING));
   }
 
-  @Test
   public void testHashCode() {
-    assertEquals(
-        SoyMsgRawTextPart.of(LATIN_STRING).hashCode(),
+    assertEquals(SoyMsgRawTextPart.of(LATIN_STRING).hashCode(),
         SoyMsgRawTextPart.of(LATIN_STRING).hashCode());
-    assertEquals(
-        SoyMsgRawTextPart.of(CHINESE_STRING).hashCode(),
+    assertEquals(SoyMsgRawTextPart.of(CHINESE_STRING).hashCode(),
         SoyMsgRawTextPart.of(CHINESE_STRING).hashCode());
 
-    assertFalse(
-        SoyMsgRawTextPart.of(LATIN_STRING).hashCode()
-            == SoyMsgRawTextPart.of(LATIN_STRING_2).hashCode());
-    assertFalse(
-        SoyMsgRawTextPart.of(CHINESE_STRING).hashCode()
-            == SoyMsgRawTextPart.of(CHINESE_STRING_2).hashCode());
+    assertFalse(SoyMsgRawTextPart.of(LATIN_STRING).hashCode()
+        == SoyMsgRawTextPart.of(LATIN_STRING_2).hashCode());
+    assertFalse(SoyMsgRawTextPart.of(CHINESE_STRING).hashCode()
+        == SoyMsgRawTextPart.of(CHINESE_STRING_2).hashCode());
 
-    assertFalse(
-        SoyMsgRawTextPart.of(LATIN_STRING).hashCode()
-            == SoyMsgRawTextPart.of(CHINESE_STRING).hashCode());
-    assertFalse(
-        SoyMsgRawTextPart.of(CHINESE_STRING).hashCode()
-            == SoyMsgRawTextPart.of(LATIN_STRING).hashCode());
+    assertFalse(SoyMsgRawTextPart.of(LATIN_STRING).hashCode()
+        == SoyMsgRawTextPart.of(CHINESE_STRING).hashCode());
+    assertFalse(SoyMsgRawTextPart.of(CHINESE_STRING).hashCode()
+        == SoyMsgRawTextPart.of(LATIN_STRING).hashCode());
 
-    assertFalse(
-        SoyMsgRawTextPart.of(CHINESE_STRING).hashCode() == SoyMsgRawTextPart.of("").hashCode());
+    assertFalse(SoyMsgRawTextPart.of(CHINESE_STRING).hashCode()
+        == SoyMsgRawTextPart.of("").hashCode());
   }
 }

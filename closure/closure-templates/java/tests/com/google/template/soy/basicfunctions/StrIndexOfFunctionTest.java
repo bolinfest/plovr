@@ -18,7 +18,6 @@ package com.google.template.soy.basicfunctions;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.template.soy.data.UnsafeSanitizedContentOrdainer.ordainAsSafe;
-import static org.junit.Assert.assertEquals;
 
 import com.google.common.collect.ImmutableList;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
@@ -29,18 +28,16 @@ import com.google.template.soy.exprtree.Operator;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.pysrc.restricted.PyExpr;
 import com.google.template.soy.pysrc.restricted.PyStringExpr;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
+
 
 /**
  * Unit tests for {@link com.google.template.soy.basicfunctions.StrIndexOfFunction}.
  *
  */
-@RunWith(JUnit4.class)
-public class StrIndexOfFunctionTest {
+public class StrIndexOfFunctionTest extends TestCase {
 
-  @Test
   public void testComputeForJava_containsString() {
     StrIndexOfFunction strIndexOf = new StrIndexOfFunction();
     SoyValue arg0 = StringData.forValue("foobarfoo");
@@ -48,7 +45,6 @@ public class StrIndexOfFunctionTest {
     assertEquals(IntegerData.forValue(3), strIndexOf.computeForJava(ImmutableList.of(arg0, arg1)));
   }
 
-  @Test
   public void testComputeForJava_containsSanitizedContent() {
     StrIndexOfFunction strIndexOf = new StrIndexOfFunction();
     SoyValue arg0 = ordainAsSafe("foobarfoo", ContentKind.TEXT);
@@ -56,7 +52,6 @@ public class StrIndexOfFunctionTest {
     assertEquals(IntegerData.forValue(3), strIndexOf.computeForJava(ImmutableList.of(arg0, arg1)));
   }
 
-  @Test
   public void testComputeForJava_doesNotContainString() {
     StrIndexOfFunction strIndexOf = new StrIndexOfFunction();
     SoyValue arg0 = StringData.forValue("foobarfoo");
@@ -64,7 +59,6 @@ public class StrIndexOfFunctionTest {
     assertEquals(IntegerData.forValue(-1), strIndexOf.computeForJava(ImmutableList.of(arg0, arg1)));
   }
 
-  @Test
   public void testComputeForJava_doesNotContainSanitizedContent() {
     StrIndexOfFunction strIndexOf = new StrIndexOfFunction();
     SoyValue arg0 = ordainAsSafe("foobarfoo", ContentKind.TEXT);
@@ -72,7 +66,6 @@ public class StrIndexOfFunctionTest {
     assertEquals(IntegerData.forValue(-1), strIndexOf.computeForJava(ImmutableList.of(arg0, arg1)));
   }
 
-  @Test
   public void testComputeForJsSrc_lowPrecedenceArg() {
     StrIndexOfFunction strIndexOf = new StrIndexOfFunction();
     JsExpr arg0 = new JsExpr("'foo' + 'bar'", Operator.PLUS.getPrecedence());
@@ -82,7 +75,6 @@ public class StrIndexOfFunctionTest {
         strIndexOf.computeForJsSrc(ImmutableList.of(arg0, arg1)));
   }
 
-  @Test
   public void testComputeForJsSrc_maxPrecedenceArgs() {
     StrIndexOfFunction strIndexOf = new StrIndexOfFunction();
     JsExpr arg0 = new JsExpr("'foobar'", Integer.MAX_VALUE);
@@ -92,7 +84,6 @@ public class StrIndexOfFunctionTest {
         strIndexOf.computeForJsSrc(ImmutableList.of(arg0, arg1)));
   }
 
-  @Test
   public void testComputeForPySrc_stringInput() {
     StrIndexOfFunction strIndexOf = new StrIndexOfFunction();
     PyExpr base = new PyStringExpr("'foobar'", Integer.MAX_VALUE);
@@ -101,7 +92,6 @@ public class StrIndexOfFunctionTest {
         .isEqualTo(new PyExpr("('foobar').find('bar')", Integer.MAX_VALUE));
   }
 
-  @Test
   public void testComputeForPySrc_nonStringInput() {
     StrIndexOfFunction strIndexOf = new StrIndexOfFunction();
     PyExpr base = new PyExpr("foobar", Integer.MAX_VALUE);

@@ -22,6 +22,7 @@ import static java.lang.annotation.ElementType.PARAMETER;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 import com.google.inject.BindingAnnotation;
+
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
@@ -33,7 +34,9 @@ class PyApiCallScopeBindingAnnotations {
 
   private PyApiCallScopeBindingAnnotations() {}
 
-  /** Annotation for the currentManifest parameter in the ApiCallScope. */
+  /**
+   * Annotation for the currentManifest parameter in the ApiCallScope.
+   */
   @BindingAnnotation
   @Target({FIELD, PARAMETER, METHOD})
   @Retention(RUNTIME)

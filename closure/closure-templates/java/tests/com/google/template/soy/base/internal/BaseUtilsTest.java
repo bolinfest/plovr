@@ -16,25 +16,16 @@
 
 package com.google.template.soy.base.internal;
 
-import static com.google.common.truth.Truth.assertThat;
-import static com.google.template.soy.base.internal.BaseUtils.formatParseExceptionDetails;
-import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import junit.framework.TestCase;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 /**
  * Unit tests for BaseUtils.
  *
  */
-@RunWith(JUnit4.class)
-public final class BaseUtilsTest {
+public final class BaseUtilsTest extends TestCase {
 
-  @Test
+
   public void testIsIdentifier() {
 
     assertTrue(BaseUtils.isIdentifier("boo"));
@@ -51,7 +42,7 @@ public final class BaseUtilsTest {
     assertFalse(BaseUtils.isIdentifier("8boo"));
   }
 
-  @Test
+
   public void testIsIdentifierWithLeadingDot() {
 
     assertTrue(BaseUtils.isIdentifierWithLeadingDot(".boo"));
@@ -65,7 +56,7 @@ public final class BaseUtilsTest {
     assertFalse(BaseUtils.isIdentifierWithLeadingDot(".8boo"));
   }
 
-  @Test
+
   public void testIsDottedIdentifier() {
 
     assertTrue(BaseUtils.isDottedIdentifier("boo"));
@@ -79,7 +70,7 @@ public final class BaseUtilsTest {
     assertFalse(BaseUtils.isDottedIdentifier("_...I._I_.."));
   }
 
-  @Test
+
   public void testConvertToUpperUnderscore() {
 
     assertEquals("BOO_FOO", BaseUtils.convertToUpperUnderscore("booFoo"));
@@ -98,14 +89,5 @@ public final class BaseUtilsTest {
     assertEquals("BOO_8_FOO", BaseUtils.convertToUpperUnderscore("_BOO__8_FOO_"));
   }
 
-  @Test
-  public void testFormatParseExceptionDetails() {
-    assertThat(formatParseExceptionDetails("x", asList("foo")))
-        .isEqualTo("parse error at 'x': expected foo");
-    assertThat(formatParseExceptionDetails("x", asList("foo", "bar", "baz")))
-        .isEqualTo("parse error at 'x': expected foo, bar, or baz");
-    // test the normalization logic
-    assertThat(formatParseExceptionDetails("x", asList("\n", "'", "\"foo\"", "foo")))
-        .isEqualTo("parse error at 'x': expected '\\n', ', or foo");
-  }
+
 }

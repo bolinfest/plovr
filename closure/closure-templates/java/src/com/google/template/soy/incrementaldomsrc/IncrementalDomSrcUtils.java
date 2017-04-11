@@ -24,18 +24,21 @@ import com.google.template.soy.types.primitive.SanitizedType;
 /** Contains helper method to get the right JsType for a given soy type. */
 final class IncrementalDomSrcUtils {
 
-  private IncrementalDomSrcUtils() {}
+  private IncrementalDomSrcUtils() {
+  }
 
   /**
-   * Given a Soy type, return the corresponding jscompiler type name. Only handles types which have
-   * names and have a declared constructor - not arbitrary type expressions.
+   * Given a Soy type, return the corresponding jscompiler type name. Only
+   * handles types which have names and have a declared constructor - not
+   * arbitrary type expressions.
    */
   static String getJsTypeName(SoyType type) {
-    if (type.getKind().isKnownSanitizedContent()) {
+    if (type instanceof SanitizedType) {
       return NodeContentKinds.toIDOMSanitizedContentCtorName(
           ((SanitizedType) type).getContentKind());
     } else {
       return JsSrcUtils.getJsTypeName(type);
     }
   }
+
 }

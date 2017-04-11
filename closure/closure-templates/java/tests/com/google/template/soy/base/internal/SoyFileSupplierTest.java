@@ -18,22 +18,19 @@ package com.google.template.soy.base.internal;
 
 import com.google.common.truth.Truth;
 import com.google.template.soy.error.SoyCompilationException;
+
+import junit.framework.TestCase;
+
 import java.net.URL;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
-@RunWith(JUnit4.class)
-public final class SoyFileSupplierTest {
+public final class SoyFileSupplierTest extends TestCase {
 
-  @Test
   public void testPercentEncodingInFileUrl() throws Exception {
     URL url = new URL("file:///foo/bar%20baz");
     SoyFileSupplier sfs = SoyFileSupplier.Factory.create(url, SoyFileKind.SRC, "/test/path");
     Truth.assertThat(sfs.getFilePath()).isEqualTo("/foo/bar baz");
   }
 
-  @Test
   public void testMalformedFileURL() throws Exception {
     URL url = new URL("file:///foo/bar|baz");
     boolean failedWithSoyCompilationException = false;
@@ -46,4 +43,5 @@ public final class SoyFileSupplierTest {
         .that(failedWithSoyCompilationException)
         .isTrue();
   }
+
 }

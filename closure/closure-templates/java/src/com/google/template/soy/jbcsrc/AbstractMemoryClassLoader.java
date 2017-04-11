@@ -18,13 +18,17 @@ package com.google.template.soy.jbcsrc;
 
 import com.google.common.base.Throwables;
 import com.google.template.soy.jbcsrc.shared.Names;
+
 import java.net.URL;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.security.ProtectionDomain;
+
 import javax.annotation.Nullable;
 
-/** Base class to share code between our custom memory based classloader implementations. */
+/**
+ * Base class to share code between our custom memory based classloader implementations.
+ */
 abstract class AbstractMemoryClassLoader extends ClassLoader {
   private static final ProtectionDomain DEFAULT_PROTECTION_DOMAIN;
 
@@ -78,7 +82,7 @@ abstract class AbstractMemoryClassLoader extends ClassLoader {
     // otherwise use normal parent delegation
     return super.loadClass(name, resolve);
   }
-
+  
   @Override
   protected final Class<?> findClass(String name) throws ClassNotFoundException {
     ClassData classDef = getClassData(name);
@@ -109,3 +113,4 @@ abstract class AbstractMemoryClassLoader extends ClassLoader {
     return classDef.asUrl();
   }
 }
+

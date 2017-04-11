@@ -27,18 +27,17 @@ import com.google.template.soy.data.restricted.StringData;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.pysrc.restricted.PyExpr;
 import com.google.template.soy.pysrc.restricted.PyStringExpr;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
+
 
 /**
  * Unit tests for BidiTextDirFunction.
  *
  */
-@RunWith(JUnit4.class)
-public class BidiTextDirFunctionTest {
+public class BidiTextDirFunctionTest extends TestCase {
 
-  @Test
+
   public void testComputeForJava() {
     BidiTextDirFunction bidiTextDirFunction = new BidiTextDirFunction();
 
@@ -66,7 +65,6 @@ public class BidiTextDirFunctionTest {
         .isEqualTo(IntegerData.ZERO);
   }
 
-  @Test
   public void testComputeForJsSrc() {
     BidiTextDirFunction bidiTextDirFunction = new BidiTextDirFunction();
 
@@ -80,7 +78,6 @@ public class BidiTextDirFunctionTest {
             new JsExpr("soy.$$bidiTextDir(TEXT_JS_CODE, IS_HTML_JS_CODE)", Integer.MAX_VALUE));
   }
 
-  @Test
   public void testComputeForPySrc() {
     BidiTextDirFunction bidiTextDirFunction = new BidiTextDirFunction();
 

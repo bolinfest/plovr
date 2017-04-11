@@ -18,23 +18,18 @@ package com.google.template.soy.jbcsrc.shared;
 
 import static com.google.template.soy.jbcsrc.shared.Names.javaClassNameFromSoyTemplateName;
 import static com.google.template.soy.jbcsrc.shared.Names.soyTemplateNameFromJavaClassName;
-import static org.junit.Assert.assertEquals;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import junit.framework.TestCase;
 
-/** Tests for {@link Names}. */
-@RunWith(JUnit4.class)
-public class NamesTest {
+/**
+ * Tests for {@link Names}.
+ */
+public class NamesTest extends TestCase {
 
-  @Test
   public void testMangleName() {
-    assertEquals(
-        "com.google.template.soy.jbcsrc.gen.foo.bar.Baz",
+    assertEquals("com.google.template.soy.jbcsrc.gen.foo.bar.Baz",
         Names.javaClassNameFromSoyTemplateName("foo.bar.Baz"));
-    assertEquals(
-        "foo.bar.Baz",
+    assertEquals("foo.bar.Baz",
         soyTemplateNameFromJavaClassName(javaClassNameFromSoyTemplateName("foo.bar.Baz")));
   }
 }

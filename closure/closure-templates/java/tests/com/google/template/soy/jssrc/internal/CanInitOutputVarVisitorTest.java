@@ -25,26 +25,23 @@ import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.shared.SharedTestUtils;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.SoyNode;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
 
 /**
  * Unit tests for CanInitOutputVarVisitor.
  *
  */
-@RunWith(JUnit4.class)
-public class CanInitOutputVarVisitorTest {
+public class CanInitOutputVarVisitorTest extends TestCase {
 
-  @Test
   public void testSameValueAsIsComputableAsJsExprsVisitor() {
 
     runTestHelper("Blah blah.", true);
 
-    runTestHelper("{msg desc=\"\"}Blah{/msg}", true, 0); // LetNode
-    runTestHelper("{msg desc=\"\"}Blah{/msg}", true, 0, 0); // MsgFallbackGroupNode
+    runTestHelper("{msg desc=\"\"}Blah{/msg}", true, 0);  // LetNode
+    runTestHelper("{msg desc=\"\"}Blah{/msg}", true, 0, 0);  // MsgFallbackGroupNode
 
-    runTestHelper("{msg desc=\"\"}Blah{/msg}", true, 1); // PrintNode
+    runTestHelper("{msg desc=\"\"}Blah{/msg}", true, 1);  // PrintNode
 
     runTestHelper(
         "{@param url: ? }\n{msg desc=\"\"}<a href=\"{$url}\">Click here</a>{/msg}",
@@ -62,13 +59,8 @@ public class CanInitOutputVarVisitorTest {
         0,
         2); // MsgHtmlTagNode
 
-    runTestHelper(
-        "{msg desc=\"\"}<span id=\"{for $i in range(3)}{$i}{/for}\">{/msg}",
-        true,
-        0,
-        0,
-        0,
-        0); // MsgHtmlTagNode
+    runTestHelper("{msg desc=\"\"}<span id=\"{for $i in range(3)}{$i}{/for}\">{/msg}",
+                  true, 0, 0, 0, 0);  // MsgHtmlTagNode
 
     runTestHelper("{@param boo: ? }\n{$boo.foo}", true);
 
@@ -103,7 +95,7 @@ public class CanInitOutputVarVisitorTest {
     runTestHelper("{@param boo: ?}\n{call .foo data=\"$boo\"}{param goo}Blah{/param}{/call}", true);
   }
 
-  @Test
+
   public void testNotSameValueAsIsComputableAsJsExprsVisitor() {
     runTestHelper(
         Joiner.on('\n')
@@ -116,12 +108,16 @@ public class CanInitOutputVarVisitorTest {
         false);
   }
 
+
   private static void runTestHelper(
       String soyNodeCode, boolean isSameValueAsIsComputableAsJsExprsVisitor) {
     runTestHelper(soyNodeCode, isSameValueAsIsComputableAsJsExprsVisitor, 0);
   }
 
-  /** @param indicesToNode Series of indices for walking down to the node we want to test. */
+
+  /**
+   * @param indicesToNode Series of indices for walking down to the node we want to test.
+   */
   private static void runTestHelper(
       String soyCode, boolean isSameValueAsIsComputableAsJsExprsVisitor, int... indicesToNode) {
     ErrorReporter boom = ExplodingErrorReporter.get();
@@ -132,7 +128,8 @@ public class CanInitOutputVarVisitorTest {
 
     IsComputableAsJsExprsVisitor icajev = new IsComputableAsJsExprsVisitor();
     CanInitOutputVarVisitor ciovv = new CanInitOutputVarVisitor(icajev);
-    assertThat(ciovv.exec(node).equals(icajev.exec(node)))
+    assertThat(ciovv.exec(node) == icajev.exec(node))
         .isEqualTo(isSameValueAsIsComputableAsJsExprsVisitor);
   }
+
 }

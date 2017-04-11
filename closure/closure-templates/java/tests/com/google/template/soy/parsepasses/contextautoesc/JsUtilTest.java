@@ -18,14 +18,10 @@ package com.google.template.soy.parsepasses.contextautoesc;
 
 import static com.google.common.truth.Truth.assertWithMessage;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import junit.framework.TestCase;
 
-@RunWith(JUnit4.class)
-public class JsUtilTest {
-  @Test
-  public void testIsRegexPreceder() {
+public class JsUtilTest extends TestCase {
+  public final void testIsRegexPreceder() {
     // Statement terminators precede regexs.
     assertIsRegexPreceder(";");
     assertIsRegexPreceder("}");
@@ -48,7 +44,7 @@ public class JsUtilTest {
     assertIsDivOpPreceder("++");
     assertIsDivOpPreceder("x--");
     // When we have many dashes or pluses, then they are grouped left to right.
-    assertIsRegexPreceder("x---"); // A postfix -- then a -.
+    assertIsRegexPreceder("x---");  // A postfix -- then a -.
     // return followed by a slash returns the regex literal.
     assertIsRegexPreceder("return");
     // Identifiers can be divided by.
@@ -66,7 +62,6 @@ public class JsUtilTest {
   private static void assertIsRegexPreceder(String jsTokens) {
     assertWithMessage(jsTokens).that(JsUtil.isRegexPreceder(jsTokens)).isTrue();
   }
-
   private static void assertIsDivOpPreceder(String jsTokens) {
     assertWithMessage(jsTokens).that(JsUtil.isRegexPreceder(jsTokens)).isFalse();
   }

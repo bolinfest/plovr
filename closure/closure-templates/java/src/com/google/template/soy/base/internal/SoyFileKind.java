@@ -16,6 +16,7 @@
 
 package com.google.template.soy.base.internal;
 
+
 /**
  * Enum for the kind of an input Soy file.
  *
@@ -24,21 +25,21 @@ public enum SoyFileKind {
   /**
    * Source file.
    *
-   * <p>An output will be generated for this file, if appropriate.
+   * An output will be generated for this file, if appropriate.
    */
   SRC,
 
   /**
    * A direct dependency.
    *
-   * <p>Can be used by sources, and no output will be generated.
+   * Can be used by sources, and no output will be generated.
    */
   DEP,
 
   /**
    * An indirect dependency.
    *
-   * <p>Exist only to satisfy dependencies of direct dependencies, and cannot be used by sources.
+   * Exist only to satisfy dependencies of direct dependencies, and cannot be used by sources.
    */
   INDIRECT_DEP;
 }

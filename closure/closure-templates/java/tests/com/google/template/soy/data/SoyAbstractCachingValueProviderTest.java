@@ -16,25 +16,19 @@
 
 package com.google.template.soy.data;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
 import com.google.template.soy.data.SoyAbstractCachingValueProvider.ValueAssertion;
 import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.jbcsrc.api.RenderResult;
+
+import junit.framework.TestCase;
+
 import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 /**
  * Unit test for SoyAbstractCachingValueProvider.
  *
  */
-@RunWith(JUnit4.class)
-public class SoyAbstractCachingValueProviderTest {
+public class SoyAbstractCachingValueProviderTest extends TestCase {
 
   private static class TestValueProvider extends SoyAbstractCachingValueProvider {
     private boolean computedAlready = false;
@@ -44,8 +38,7 @@ public class SoyAbstractCachingValueProviderTest {
       this.number = number;
     }
 
-    @Override
-    protected SoyValue compute() {
+    @Override protected SoyValue compute() {
       if (computedAlready) {
         throw new IllegalStateException("Caching was expected");
       }
@@ -53,13 +46,11 @@ public class SoyAbstractCachingValueProviderTest {
       return IntegerData.forValue(number);
     }
 
-    @Override
-    public RenderResult status() {
+    @Override public RenderResult status() {
       return RenderResult.done();
     }
   }
 
-  @Test
   public void testRepeatedCalls() {
     TestValueProvider value = new TestValueProvider(1);
     assertFalse(value.isComputed());
@@ -69,19 +60,16 @@ public class SoyAbstractCachingValueProviderTest {
     assertEquals(1, value.resolve().integerValue());
   }
 
-  @Test
   public void testValueAssertions() {
     final AtomicInteger counter = new AtomicInteger();
-    ValueAssertion assertion =
-        new ValueAssertion() {
-          @Override
-          public void check(SoyValue value) {
-            counter.incrementAndGet();
-            if (value.integerValue() < 0) {
-              throw new IllegalStateException("boom");
-            }
-          }
-        };
+    ValueAssertion assertion = new ValueAssertion() {
+      @Override public void check(SoyValue value) {
+        counter.incrementAndGet();
+        if (value.integerValue() < 0) {
+          throw new IllegalStateException("boom");
+        }
+      }
+    };
     TestValueProvider badValue = new TestValueProvider(-1);
     badValue.addValueAssertion(assertion);
     try {
@@ -111,14 +99,11 @@ public class SoyAbstractCachingValueProviderTest {
 
   private static final class SimpleAssertion extends ValueAssertion {
     boolean hasBeenCalled;
-
-    @Override
-    public void check(SoyValue value) {
+    @Override public void check(SoyValue value) {
       hasBeenCalled = true;
     }
   }
 
-  @Test
   public void testValueAssertions_multipleAssertions() {
     SimpleAssertion assertion1 = new SimpleAssertion();
     SimpleAssertion assertion2 = new SimpleAssertion();

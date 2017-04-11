@@ -17,26 +17,20 @@
 package com.google.template.soy.incrementaldomsrc;
 
 import com.google.template.soy.data.SanitizedContent.ContentKind;
-import com.google.template.soy.jssrc.dsl.CodeChunk;
-import com.google.template.soy.jssrc.internal.JsCodeBuilder;
 import com.google.template.soy.jssrc.restricted.JsExpr;
+import com.google.template.soy.jssrc.restricted.JsExprUtils;
+import com.google.template.soy.shared.internal.CodeBuilder;
+
 import java.util.List;
 
-/** Used to generate code by printing {@link JsExpr}s into an output buffer. */
-final class IncrementalDomCodeBuilder extends JsCodeBuilder {
+/**
+ * Used to generate code by printing {@link JsExpr}s into an output buffer.
+ */
+public final class IncrementalDomCodeBuilder extends CodeBuilder<JsExpr> {
 
   /** Used to track what kind of content is currently being processed. */
   private ContentKind contentKind;
-
-  IncrementalDomCodeBuilder() {
-    super();
-  }
-
-  IncrementalDomCodeBuilder(IncrementalDomCodeBuilder parent) {
-    super(parent);
-    this.contentKind = parent.getContentKind();
-  }
-
+  
   /**
    * Performs no action as there is no output variable to initialize.
    */
@@ -44,30 +38,41 @@ final class IncrementalDomCodeBuilder extends JsCodeBuilder {
     // NO-OP
   }
 
-  @Override
-  public IncrementalDomCodeBuilder addChunksToOutputVar(
-      List<? extends CodeChunk.WithValue> codeChunks) {
+  /**
+   * In Incremental DOM, the tags, attributes and print statements correspond to function calls
+   * or arguments. Instead of being concatenated into an output variable, they are just emitted in
+   * the correct location.
+   * @param jsExprs A list of expressions that may correspond to function calls or parameters.
+   */
+  @Override public void addToOutputVar(List<? extends JsExpr> jsExprs) {
     if (getContentKind() == ContentKind.HTML || getContentKind() == ContentKind.ATTRIBUTES) {
-      for (CodeChunk.WithValue chunk : codeChunks) {
-        append(chunk);
+      for (JsExpr jsExpr : jsExprs) {
+        append(jsExpr.getText());
       }
     } else {
-      super.addChunksToOutputVar(codeChunks);
+      appendLine(getOutputVarName(), " += ", JsExprUtils.concatJsExprs(jsExprs).getText(), ";");
     }
-    return this;
+  }
+
+  /**
+   * Emits a series of {@link JsExpr}s at the current location in the generated code.
+   * @param jsExprs A list of expressions that may correspond to function calls or parameters.
+   */
+  protected void addToOutput(List<? extends JsExpr> jsExprs) {
+     append(JsExprUtils.concatJsExprs(jsExprs).getText());
   }
 
   /**
    * @param contentKind The current kind of content being processed.
    */
-  void setContentKind(ContentKind contentKind) {
+  public void setContentKind(ContentKind contentKind) {
     this.contentKind = contentKind;
   }
 
   /**
    * @return The current kind of content being processed.
    */
-  ContentKind getContentKind() {
+  public ContentKind getContentKind() {
     return contentKind;
   }
 }

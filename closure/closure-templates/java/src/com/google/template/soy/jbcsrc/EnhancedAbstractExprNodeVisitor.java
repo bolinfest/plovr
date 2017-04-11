@@ -39,20 +39,18 @@ import com.google.template.soy.soytree.defn.TemplateParam;
  */
 abstract class EnhancedAbstractExprNodeVisitor<T> extends AbstractReturningExprNodeVisitor<T> {
 
-  @Override
-  protected final T visit(ExprNode node) {
+  @Override protected final T visit(ExprNode node) {
     try {
       return super.visit(node);
     } catch (UnexpectedCompilerFailureException e) {
-      e.addLocation(node);
+      e.addLocation(node.getSourceLocation());
       throw e;
     } catch (Throwable t) {
-      throw new UnexpectedCompilerFailureException(node, t);
+      throw new UnexpectedCompilerFailureException(node.getSourceLocation(), t);
     }
   }
 
-  @Override
-  protected final T visitVarRefNode(VarRefNode node) {
+  @Override protected final T visitVarRefNode(VarRefNode node) {
     VarDefn defn = node.getDefnDecl();
     switch (defn.kind()) {
       case LOCAL_VAR:
@@ -80,8 +78,7 @@ abstract class EnhancedAbstractExprNodeVisitor<T> extends AbstractReturningExprN
     }
   }
 
-  @Override
-  protected final T visitFunctionNode(FunctionNode node) {
+  @Override protected final T visitFunctionNode(FunctionNode node) {
     SoyFunction function = node.getSoyFunction();
     if (function instanceof BuiltinFunction) {
       BuiltinFunction nonpluginFn = (BuiltinFunction) function;
@@ -105,7 +102,7 @@ abstract class EnhancedAbstractExprNodeVisitor<T> extends AbstractReturningExprN
               node, foreachLoopIndex(declaringNode), foreachLoopLength(declaringNode));
         case INDEX:
           return visitIndexFunction(node, foreachLoopIndex(declaringNode));
-        case CHECK_NOT_NULL: // handled before the switch above
+        case CHECK_NOT_NULL:  // handled before the switch above
         case QUOTE_KEYS_IF_JS:
         default:
           throw new AssertionError();
@@ -134,7 +131,7 @@ abstract class EnhancedAbstractExprNodeVisitor<T> extends AbstractReturningExprN
     return visitExprNode(varRef);
   }
 
-  T visitIsFirstFunction(FunctionNode node, SyntheticVarName indexVar) {
+  T visitIsFirstFunction(FunctionNode node, SyntheticVarName indexVar)  {
     return visitExprNode(node);
   }
 
@@ -149,7 +146,7 @@ abstract class EnhancedAbstractExprNodeVisitor<T> extends AbstractReturningExprN
   T visitPluginFunction(FunctionNode node) {
     return visitExprNode(node);
   }
-
+  
   T visitCheckNotNullFunction(FunctionNode node) {
     return visitExprNode(node);
   }

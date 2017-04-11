@@ -36,17 +36,18 @@ import com.google.template.soy.types.primitive.AnyType;
 import com.google.template.soy.types.primitive.FloatType;
 import com.google.template.soy.types.primitive.IntType;
 import com.google.template.soy.types.primitive.StringType;
-import java.util.List;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
+
 import org.objectweb.asm.Type;
 
-/** Tests for {@link SoyExpression} */
-@RunWith(JUnit4.class)
-public class SoyExpressionTest {
+import java.util.List;
 
-  @Test
+/**
+ * Tests for {@link SoyExpression}
+ */
+public class SoyExpressionTest extends TestCase {
+
   public void testIntExpressions() {
     SoyExpression expr = SoyExpression.forInt(constant(12L));
     assertThatExpression(expr).evaluatesTo(12L);
@@ -62,7 +63,6 @@ public class SoyExpressionTest {
     assertThatExpression(expr.coerceToString()).evaluatesTo("12");
   }
 
-  @Test
   public void testFloatExpressions() {
     SoyExpression expr = SoyExpression.forFloat(constant(12.34D));
     assertThatExpression(expr).evaluatesTo(12.34D);
@@ -78,10 +78,9 @@ public class SoyExpressionTest {
     assertThatExpression(expr.coerceToString()).evaluatesTo("12.34");
   }
 
-  @Test
   public void testBooleanExpressions() {
     SoyExpression expr = SoyExpression.FALSE;
-    assertThatExpression(expr).evaluatesTo(false); // sanity
+    assertThatExpression(expr).evaluatesTo(false);  // sanity
     assertThatExpression(expr.box()).evaluatesTo(BooleanData.FALSE);
     assertThatExpression(expr.box().coerceToBoolean()).evaluatesTo(false);
     assertThatExpression(expr.coerceToString()).evaluatesTo("false");
@@ -93,7 +92,6 @@ public class SoyExpressionTest {
     assertThatExpression(expr.coerceToString()).evaluatesTo("true");
   }
 
-  @Test
   public void testNullExpression() {
     assertThatExpression(SoyExpression.NULL).evaluatesTo(null);
     assertThatExpression(SoyExpression.NULL.box()).evaluatesTo(null);
@@ -102,7 +100,6 @@ public class SoyExpressionTest {
     assertThatExpression(SoyExpression.NULL.coerceToString()).evaluatesTo("null");
   }
 
-  @Test
   public void testSanitizedExpressions() {
     assertThatExpression(forSanitizedString(constant("foo"), ContentKind.ATTRIBUTES).box())
         .evaluatesTo(UnsafeSanitizedContentOrdainer.ordainAsSafe("foo", ContentKind.ATTRIBUTES));
@@ -111,7 +108,6 @@ public class SoyExpressionTest {
         .evaluatesTo(true);
   }
 
-  @Test
   public void testStringExpression() {
     assertThatExpression(forString(constantNull(STRING_TYPE)).coerceToBoolean()).evaluatesTo(false);
     assertThatExpression(forString(constantNull(STRING_TYPE)).box()).evaluatesTo(null);
@@ -120,7 +116,6 @@ public class SoyExpressionTest {
     assertThatExpression(forString(constant("truthy")).coerceToBoolean()).evaluatesTo(true);
   }
 
-  @Test
   public void testListExpression() {
     ListType list = ListType.of(IntType.getInstance());
     assertThatExpression(forList(list, constantNull(Type.getType(List.class))).coerceToBoolean())
@@ -154,7 +149,6 @@ public class SoyExpressionTest {
   // latter is StringData.  The common supertype of this is Object, so ASM outputs a stack frame
   // that says the top of the stack is an Object instead of StringData.  This means if we happen to
   // invoke a StringData method next we will get a verification error.
-  @Test
   public void testBoxNullable() {
     MethodRef stringDataGetValue = MethodRef.create(StringData.class, "getValue");
     SoyExpression nullableString = SoyExpression.forString(constant("hello").asNullable());
@@ -163,12 +157,10 @@ public class SoyExpressionTest {
   }
 
   // similar to the above, but in the unboxing codepath
-  @Test
   public void testUnboxNullable() {
-    SoyExpression nullableString =
-        SoyExpression.forSoyValue(
+    SoyExpression nullableString = SoyExpression.forSoyValue(
             StringType.getInstance(),
-            MethodRef.STRING_DATA_FOR_VALUE.invoke(constant("hello")).asNullable());
+        MethodRef.STRING_DATA_FOR_VALUE.invoke(constant("hello")).asNullable());
     assertThatExpression(nullableString).evaluatesTo(StringData.forValue("hello"));
     assertThatExpression(nullableString.unboxAs(String.class).invoke(MethodRef.STRING_IS_EMPTY))
         .evaluatesTo(false);

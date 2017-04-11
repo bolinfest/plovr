@@ -18,8 +18,10 @@ package com.google.template.soy.types.aggregate;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.template.soy.base.SoyBackendKind;
 import com.google.template.soy.data.SoyRecord;
 import com.google.template.soy.data.SoyValue;
+import com.google.template.soy.types.SoyObjectType;
 import com.google.template.soy.types.SoyType;
 import java.util.Map;
 import java.util.Objects;
@@ -29,26 +31,30 @@ import java.util.Objects;
  *
  * <p>Important: Do not use outside of Soy code (treat as superpackage-private).
  *
+ * <p>TODO(lukes): this shouldn't implement SoyObjectType
+ *
  */
-public final class RecordType implements SoyType {
+public final class RecordType implements SoyObjectType {
 
   private final ImmutableSortedMap<String, SoyType> members;
+
 
   private RecordType(Map<String, ? extends SoyType> members) {
     this.members = ImmutableSortedMap.copyOf(members);
   }
 
+
   public static RecordType of(Map<String, ? extends SoyType> members) {
     return new RecordType(members);
   }
 
-  @Override
-  public Kind getKind() {
+
+  @Override public Kind getKind() {
     return Kind.RECORD;
   }
 
-  @Override
-  public boolean isAssignableFrom(SoyType srcType) {
+
+  @Override public boolean isAssignableFrom(SoyType srcType) {
     if (srcType.getKind() == Kind.RECORD) {
       RecordType srcRecord = (RecordType) srcType;
       // The source record must have at least all of the members in the dest
@@ -64,26 +70,54 @@ public final class RecordType implements SoyType {
     return false;
   }
 
-  @Override
-  public boolean isInstance(SoyValue value) {
+
+  @Override public boolean isInstance(SoyValue value) {
     return value instanceof SoyRecord;
   }
+
+  @Override public String getName() {
+    return "Record";
+  }
+
 
   /** Return the members of this record type. */
   public ImmutableSortedMap<String, SoyType> getMembers() {
     return members;
   }
 
-  public SoyType getFieldType(String fieldName) {
+
+  @Override public String getNameForBackend(SoyBackendKind backend) {
+    return "Object";
+  }
+
+
+  @Override public SoyType getFieldType(String fieldName) {
     return members.get(fieldName);
   }
 
-  public ImmutableSet<String> getFieldNames() {
+  @Override public ImmutableSet<String> getFieldNames() {
     return members.keySet();
   }
 
-  @Override
-  public String toString() {
+  @Override public String getFieldAccessExpr(
+      String fieldContainerExpr, String fieldName, SoyBackendKind backendKind) {
+    if (backendKind == SoyBackendKind.JS_SRC) {
+      // TODO(msamuel): if fieldName is a reserved word, should we use bracket lookup
+      // to be compatible with strict mode?
+      return fieldContainerExpr + "." + fieldName;
+    } else {
+      throw new UnsupportedOperationException();
+    }
+  }
+
+
+  @Override public ImmutableSet<String> getFieldAccessImports(
+      String fieldName, SoyBackendKind backend) {
+    return ImmutableSet.of();
+  }
+
+
+  @Override public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("[");
     boolean first = true;
@@ -101,15 +135,15 @@ public final class RecordType implements SoyType {
     return sb.toString();
   }
 
-  @Override
-  public boolean equals(Object other) {
+
+  @Override public boolean equals(Object other) {
     return other != null
         && other.getClass() == this.getClass()
         && ((RecordType) other).members.equals(members);
   }
 
-  @Override
-  public int hashCode() {
+
+  @Override public int hashCode() {
     return Objects.hash(this.getClass(), members);
   }
 }

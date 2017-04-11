@@ -16,19 +16,25 @@
 
 package com.google.template.soy.msgs;
 
+
 /**
  * Exception for errors related to messages/translation.
  *
  */
 public class SoyMsgException extends RuntimeException {
 
+
   /** The name of the file or resource associated with this error. */
   private String fileOrResourceName = null;
 
-  /** @param message A detailed description of the error. */
+
+  /**
+   * @param message A detailed description of the error.
+   */
   public SoyMsgException(String message) {
     super(message);
   }
+
 
   /**
    * @param message A detailed description of the error.
@@ -38,26 +44,30 @@ public class SoyMsgException extends RuntimeException {
     super(message, cause);
   }
 
-  /** @param cause The underlying cause. */
+
+  /**
+   * @param cause The underlying cause.
+   */
   public SoyMsgException(Throwable cause) {
     super(cause);
   }
 
+
   /**
    * Sets the name of the file or resource associated with this error.
-   *
    * @param fileOrResourceName The file or resource name to set.
    */
   public void setFileOrResourceName(String fileOrResourceName) {
     this.fileOrResourceName = fileOrResourceName;
   }
 
-  @Override
-  public String getMessage() {
+
+  @Override public String getMessage() {
     if (fileOrResourceName != null) {
       return "While processing \"" + fileOrResourceName + "\": " + super.getMessage();
     } else {
       return super.getMessage();
     }
   }
+
 }

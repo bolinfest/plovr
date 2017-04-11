@@ -17,6 +17,7 @@
 package com.google.template.soy.pysrc;
 
 import com.google.common.collect.ImmutableMap;
+
 import java.util.Map;
 
 /**
@@ -42,12 +43,8 @@ public final class SoyPySrcOptions implements Cloneable {
   /** Whether a namespace manifest should be generated. */
   private final boolean outputNamespaceManifest;
 
-  public SoyPySrcOptions(
-      String runtimePath,
-      String environmentModulePath,
-      String bidiIsRtlFn,
-      String translationClass,
-      ImmutableMap<String, String> namespaceManifest,
+  public SoyPySrcOptions(String runtimePath, String environmentModulePath, String bidiIsRtlFn,
+      String translationClass, ImmutableMap<String, String> namespaceManifest,
       boolean outputNamespaceManifest) {
     this.runtimePath = runtimePath;
     this.environmentModulePath = environmentModulePath;
@@ -90,8 +87,8 @@ public final class SoyPySrcOptions implements Cloneable {
     return outputNamespaceManifest;
   }
 
-  @Override
-  public final SoyPySrcOptions clone() {
+  @Override public final SoyPySrcOptions clone() {
     return new SoyPySrcOptions(this);
   }
+
 }

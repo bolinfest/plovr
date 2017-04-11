@@ -17,24 +17,22 @@
 package com.google.template.soy.html.passes;
 
 import static com.google.common.truth.Truth.assertThat;
-
 import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.FormattingErrorReporter;
 import com.google.template.soy.shared.AutoEscapingType;
 import com.google.template.soy.soytree.SoyFileSetNode;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
-/** Unit tests for {@link VoidElementVerifyingVisitor}. */
-@RunWith(JUnit4.class)
-public final class VoidElementVerifyingVisitorTest {
-  private static final String ERROR_MSG =
-      "Closing tag for a void HTML Element was not "
-          + "immediately preceeded by an open tag for the same element. Void HTML Elements are not "
-          + "allowed to have any content. See: "
-          + "http://www.w3.org/TR/html-markup/syntax.html#void-element";
+import junit.framework.TestCase;
+
+/**
+ * Unit tests for {@link VoidElementVerifyingVisitor}.
+ */
+public final class VoidElementVerifyingVisitorTest extends TestCase {
+  private static final String ERROR_MSG = "Closing tag for a void HTML Element was not "
+      + "immediately preceeded by an open tag for the same element. Void HTML Elements are not "
+      + "allowed to have any content. See: "
+      + "http://www.w3.org/TR/html-markup/syntax.html#void-element";
 
   private static SoyFileSetNode performVisitor(String templateBody, ErrorReporter er) {
     SoyFileSetNode sfsn =
@@ -48,7 +46,6 @@ public final class VoidElementVerifyingVisitorTest {
     return sfsn;
   }
 
-  @Test
   public void testNonVoidElement() {
     String templateBody = "{@param foo : ?}\n" + "<span></span>{if $foo}<div>{/if}</div>";
 
@@ -58,7 +55,6 @@ public final class VoidElementVerifyingVisitorTest {
     assertThat(fer.getErrorMessages()).isEmpty();
   }
 
-  @Test
   public void testNoClosingTag() {
     String templateBody = "<input><div></div>";
 
@@ -68,7 +64,6 @@ public final class VoidElementVerifyingVisitorTest {
     assertThat(fer.getErrorMessages()).isEmpty();
   }
 
-  @Test
   public void testClosingTagWithNoContent() {
     String templateBody = "<input></input>";
 
@@ -78,7 +73,6 @@ public final class VoidElementVerifyingVisitorTest {
     assertThat(fer.getErrorMessages()).isEmpty();
   }
 
-  @Test
   public void testAtStartOfBlock() {
     String templateBody = "{@param foo : ?}\n<input>{if $foo}</input>{/if}";
 
@@ -88,7 +82,6 @@ public final class VoidElementVerifyingVisitorTest {
     assertThat(fer.getErrorMessages()).contains(ERROR_MSG);
   }
 
-  @Test
   public void testVoidElementWithContent() {
     String templateBody = "<input>Not valid</input>";
 
@@ -98,7 +91,6 @@ public final class VoidElementVerifyingVisitorTest {
     assertThat(fer.getErrorMessages()).containsExactly(ERROR_MSG);
   }
 
-  @Test
   public void testMultipleErrors() {
     String templateBody = "<input>Not valid</input></input>";
 

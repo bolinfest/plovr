@@ -24,16 +24,16 @@ import com.google.template.soy.exprparse.ExpressionParser;
 import com.google.template.soy.exprparse.SoyParsingContext;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
 import com.google.template.soy.exprtree.OperatorNodes.PlusOpNode;
+
+import junit.framework.TestCase;
+
 import java.util.List;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
-/** Tests for {@link ExprEquivalence}. */
-@RunWith(JUnit4.class)
-public final class ExprEquivalenceTest {
+/**
+ * Tests for {@link ExprEquivalence}.
+ */
+public final class ExprEquivalenceTest extends TestCase {
 
-  @Test
   public void testReflexive() {
     assertReflexive("1");
     assertReflexive("'a'");
@@ -41,7 +41,6 @@ public final class ExprEquivalenceTest {
     assertReflexive("$list[1][2]");
   }
 
-  @Test
   public void testSubExpressions() {
     PlusOpNode node = (PlusOpNode) parse("$foo.a.b + $foo.a.b");
     assertEquivalent(node.getChild(0), node.getChild(1));
@@ -54,9 +53,11 @@ public final class ExprEquivalenceTest {
     assertEquivalent(parse(expr), parse(expr));
   }
 
-  private static ExprNode parse(String input) {
-    return new ExpressionParser(input, SourceLocation.UNKNOWN, SoyParsingContext.exploding())
-        .parseExpression();
+  private ExprNode parse(String input) {
+    return new ExpressionParser(
+        input,
+        SourceLocation.UNKNOWN, 
+        SoyParsingContext.exploding()).parseExpression();
   }
 
   private void assertEquivalent(ExprNode left, ExprNode right) {
@@ -65,9 +66,9 @@ public final class ExprEquivalenceTest {
     assertThat(wrappedLeft).isEqualTo(wrappedRight);
     // Test symmetry
     assertThat(wrappedRight).isEqualTo(wrappedLeft);
-
+    
     assertThat(wrappedLeft.hashCode()).isEqualTo(wrappedRight.hashCode());
-
+    
     // If two expressions are equal, then all subexpressions must also be equal
     if (left instanceof ParentExprNode) {
       List<ExprNode> leftChildren = ((ParentExprNode) left).getChildren();
@@ -78,9 +79,11 @@ public final class ExprEquivalenceTest {
     }
   }
 
-  private static void assertNotEquivalent(ExprNode left, ExprNode right) {
+  private void assertNotEquivalent(ExprNode left, ExprNode right) {
     // test symmetry
-    assertThat(ExprEquivalence.get().wrap(left)).isNotEqualTo(ExprEquivalence.get().wrap(right));
-    assertThat(ExprEquivalence.get().wrap(right)).isNotEqualTo(ExprEquivalence.get().wrap(left));
+    assertThat(ExprEquivalence.get().wrap(left))
+        .isNotEqualTo(ExprEquivalence.get().wrap(right));
+    assertThat(ExprEquivalence.get().wrap(right))
+        .isNotEqualTo(ExprEquivalence.get().wrap(left));
   }
 }

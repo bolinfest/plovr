@@ -18,12 +18,13 @@ package com.google.template.soy.basetree;
 
 import javax.annotation.Nullable;
 
+
 /**
  * Value class representing a known upper bound for the syntax version of a node.
- *
- * <p>Important: Do not use outside of Soy code (treat as superpackage-private).
+ * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  */
 public final class SyntaxVersionUpperBound {
+
 
   /**
    * Returns the lower of the two given bounds. If they are the same syntax version, then returns
@@ -38,11 +39,13 @@ public final class SyntaxVersionUpperBound {
     }
   }
 
+
   /** The syntax version upper bound (exclusive!). */
   public final SyntaxVersion syntaxVersion;
 
   /** A user-friendly explanation of the reason for the bound. */
   public final String reasonStr;
+
 
   /**
    * @param syntaxVersion The syntax version upper bound (exclusive!).
@@ -52,4 +55,5 @@ public final class SyntaxVersionUpperBound {
     this.syntaxVersion = syntaxVersion;
     this.reasonStr = reasonStr;
   }
+
 }

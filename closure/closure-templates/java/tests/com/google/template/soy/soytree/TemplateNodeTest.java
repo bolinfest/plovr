@@ -17,59 +17,62 @@
 package com.google.template.soy.soytree;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static com.google.template.soy.types.SoyTypes.makeNullable;
 
-import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.google.template.soy.SoyFileSetParserBuilder;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.error.FormattingErrorReporter;
+import com.google.template.soy.exprparse.SoyParsingContext;
 import com.google.template.soy.exprtree.BooleanNode;
 import com.google.template.soy.exprtree.GlobalNode;
 import com.google.template.soy.exprtree.IntegerNode;
 import com.google.template.soy.exprtree.StringNode;
+import com.google.template.soy.soytree.TemplateNode.SoyFileHeaderInfo;
+import com.google.template.soy.soytree.TemplateNodeBuilder.DeclInfo;
+import com.google.template.soy.soytree.TemplateNodeBuilder.DeclInfo.OptionalStatus;
+import com.google.template.soy.soytree.TemplateNodeBuilder.DeclInfo.Type;
+import com.google.template.soy.soytree.defn.HeaderParam;
 import com.google.template.soy.soytree.defn.SoyDocParam;
 import com.google.template.soy.soytree.defn.TemplateParam;
 import com.google.template.soy.soytree.defn.TemplateParam.DeclLoc;
+import com.google.template.soy.types.SoyTypeRegistry;
+import com.google.template.soy.types.aggregate.ListType;
+import com.google.template.soy.types.primitive.IntType;
+import com.google.template.soy.types.primitive.StringType;
+
+import junit.framework.TestCase;
+
 import java.util.List;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 /**
  * Unit tests for TemplateNode.
  *
  */
-@RunWith(JUnit4.class)
-public class TemplateNodeTest {
+public class TemplateNodeTest extends TestCase {
 
-  @Test
+  private static final SoyFileHeaderInfo SIMPLE_FILE_HEADER_INFO = new SoyFileHeaderInfo("testNs");
+  private static final SoyTypeRegistry TYPE_REGISTRY = new SoyTypeRegistry();
+  private static final ErrorReporter FAIL = ExplodingErrorReporter.get();
+
   public void testParseSoyDoc() {
-    String soyDoc =
-        ""
-            + "/**\n"
-            + " * Test template.\n"
-            + " *\n"
-            + " * @param foo Foo to print.\n"
-            + " * @param? goo\n"
-            + " *     Goo to print.\n"
-            + " */";
-    TemplateNode tn =
-        parse(
-            "{namespace ns}\n"
-                + "/**\n"
-                + " * Test template.\n"
-                + " *\n"
-                + " * @param foo Foo to print.\n"
-                + " * @param? goo\n"
-                + " *     Goo to print.\n"
-                + " */"
-                + "{template .boo}{$foo}{$goo}{/template}");
+    String soyDoc = "" +
+        "/**\n" +
+        " * Test template.\n" +
+        " *\n" +
+        " * @param foo Foo to print.\n" +
+        " * @param? goo\n" +
+        " *     Goo to print.\n" +
+        " */";
+    TemplateNode tn = new TemplateBasicNodeBuilder(
+        SIMPLE_FILE_HEADER_INFO, SourceLocation.UNKNOWN, FAIL)
+        .setId(0)
+        .setCmdText(".boo")
+        .setSoyDoc(soyDoc)
+        .build();
 
     assertEquals(soyDoc, tn.getSoyDoc());
     assertEquals("Test template.", tn.getSoyDocDesc());
@@ -87,181 +90,306 @@ public class TemplateNodeTest {
     assertEquals("Goo to print.", soyDocParam1.desc());
   }
 
-  @Test
   public void testEscapeSoyDoc() {
-    TemplateNode tn =
-        parse("{namespace ns}\n" + "/**@deprecated */\n" + "{template .boo}{/template}");
+    String soyDoc =
+        "/**\n" +
+        " * @deprecated\n" +
+        " */";
+    TemplateNode tn = new TemplateBasicNodeBuilder(
+        SIMPLE_FILE_HEADER_INFO, SourceLocation.UNKNOWN, FAIL)
+        .setId(0)
+        .setCmdText(".boo")
+        .setSoyDoc(soyDoc)
+        .build();
 
     assertEquals("&#64;deprecated", tn.getSoyDocDesc());
   }
 
-  @Test
   public void testParseHeaderDecls() {
-    TemplateNode tn =
-        parse("{namespace ns}\n" + "/**@param foo */\n" + "{template .boo}{$foo}{/template}");
+    TemplateNode tn = templateBasicNode()
+        .setId(0)
+        .setCmdText(".boo")
+        .setSoyDoc("/** @param foo */")
+        .setHeaderDecls(
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "goo", "list<int>",
+                null /* soyDoc */,
+                SourceLocation.UNKNOWN),
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "moo", "string",
+                "Something milky.",
+                SourceLocation.UNKNOWN),
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.OPTIONAL,
+                "boo", "string",
+                "Something scary.",
+                SourceLocation.UNKNOWN),
+            new DeclInfo(
+                Type.INJECTED_PARAM,
+                OptionalStatus.REQUIRED,
+                "zoo", "string",
+                "Something else.",
+                SourceLocation.UNKNOWN))
+        .build();
+
     List<TemplateParam> params = tn.getParams();
-    assertThat(params).hasSize(1);
+    assertEquals(4, params.size());
 
     SoyDocParam soyDocParam0 = (SoyDocParam) params.get(0);
     assertEquals("foo", soyDocParam0.name());
 
-    assertThat(ImmutableList.copyOf(tn.getAllParams())).hasSize(1);
+    HeaderParam headerParam1 = (HeaderParam) params.get(1);
+    assertEquals("goo", headerParam1.name());
+    assertEquals("list<int>", headerParam1.typeSrc());
+    assertEquals(ListType.of(IntType.getInstance()), headerParam1.type());
+    assertTrue(headerParam1.isRequired());
+    assertFalse(headerParam1.isInjected());
+    assertEquals(null, headerParam1.desc());
+
+    HeaderParam headerParam2 = (HeaderParam) params.get(2);
+    assertEquals("moo", headerParam2.name());
+    assertEquals("string", headerParam2.typeSrc());
+    assertEquals(StringType.getInstance(), headerParam2.type());
+    assertTrue(headerParam2.isRequired());
+    assertFalse(headerParam2.isInjected());
+    assertEquals("Something milky.", headerParam2.desc());
+
+    HeaderParam headerParam3 = (HeaderParam) params.get(3);
+    assertEquals("boo", headerParam3.name());
+    assertEquals("string", headerParam3.typeSrc());
+    assertEquals(makeNullable(StringType.getInstance()), headerParam3.type());
+    assertFalse(headerParam3.isRequired());
+    assertFalse(headerParam3.isInjected());
+    assertEquals("Something scary.", headerParam3.desc());
+
+    params = tn.getInjectedParams();
+    assertEquals(1, params.size());
+
+    HeaderParam injectedParam = (HeaderParam) params.get(0);
+    assertEquals("zoo", injectedParam.name());
+    assertEquals("string", injectedParam.typeSrc());
+    assertEquals(StringType.getInstance(), injectedParam.type());
+    assertTrue(injectedParam.isRequired());
+    assertTrue(injectedParam.isInjected());
+    assertEquals("Something else.", injectedParam.desc());
+
+    assertEquals(5, ImmutableList.copyOf(tn.getAllParams()).size());
   }
 
-  @Test
   public void testInvalidParamNames() {
     FormattingErrorReporter errorReporter = new FormattingErrorReporter();
-    parse("{namespace ns}\n" + "/**@param ij */\n" + "{template .boo}{/template}", errorReporter);
-    assertThat(errorReporter.getErrorMessages())
-        .containsExactly("Invalid param name 'ij' ('ij' is for injected data).");
 
     errorReporter = new FormattingErrorReporter();
-    parse(
-        "{namespace ns}\n" + "{template .boo}\n" + "{@param ij : int}\n" + "{/template}",
-        errorReporter);
-    assertThat(errorReporter.getErrorMessages())
-        .containsExactly("Invalid param name 'ij' ('ij' is for injected data).");
+    templateBasicNode(errorReporter)
+        .setId(0).setCmdText(".boo")
+        .setSoyDoc("/** @param ij */")
+        .build();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains(
+        "Invalid param name 'ij' ('ij' is for injected data).");
+
+    errorReporter = new FormattingErrorReporter();
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".boo")
+        .setHeaderDecls(
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "ij", "int",
+                null /* soyDoc */,
+                SourceLocation.UNKNOWN))
+        .build();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains(
+        "Invalid param name 'ij' ('ij' is for injected data).");
   }
 
-  @Test
+
   public void testParamsAlreadyDeclared() {
     FormattingErrorReporter errorReporter = new FormattingErrorReporter();
-    parse(
-        "{namespace ns}\n"
-            + "/**@param foo @param goo @param? foo */\n"
-            + "{template .boo}{/template}",
-        errorReporter);
-    assertThat(errorReporter.getErrorMessages()).containsExactly("Param 'foo' already declared");
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".boo")
+        .setSoyDoc("/** @param foo @param goo @param? foo */")
+        .build();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains("Param 'foo' already declared");
 
     errorReporter = new FormattingErrorReporter();
-    parse(
-        "{namespace ns}\n"
-            + "{template .boo}\n"
-            + "{@param goo : null}{@param foo:string}{@param foo : int}\n"
-            + "{/template}",
-        errorReporter);
-    assertThat(errorReporter.getErrorMessages()).containsExactly("Param 'foo' already declared");
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".boo")
+        .setHeaderDecls(
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "goo", "null",
+                "Something slimy.",
+                SourceLocation.UNKNOWN),
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "foo", "string",
+                "Something random.",
+                SourceLocation.UNKNOWN),
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "foo", "int",
+                null /* soyDoc */,
+                SourceLocation.UNKNOWN))
+        .build();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains("Param 'foo' already declared");
 
     errorReporter = new FormattingErrorReporter();
-    parse(
-        "{namespace ns}\n"
-            + "/** @param foo a soydoc param */\n"
-            + "{template .boo}\n"
-            + "{@param foo : string}\n"
-            + "{/template}",
-        errorReporter);
-    assertThat(errorReporter.getErrorMessages()).containsExactly("Param 'foo' already declared");
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".boo")
+        .setSoyDoc("/** @param? foo Something. */")
+        .setHeaderDecls(
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "foo", "string",
+                "Something else.",
+                SourceLocation.UNKNOWN))
+        .build();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains("Param 'foo' already declared");
   }
 
-  @Test
   public void testCommandTextErrors() {
     FormattingErrorReporter errorReporter = new FormattingErrorReporter();
-    parse("{namespace ns}\n{template autoescape=\"strict\"}{/template}", errorReporter);
-    assertThat(errorReporter.getErrorMessages())
-        .containsExactly(
-            "Soy V2 template names must be relative to the file namespace, i.e. a dot followed by "
-                + "an identifier.  Templates with fully qualified names are only allowed in legacy "
-                + "templates marked with the deprecatedV1=\"true\" attribute.",
-            "parse error at '=': expected }, identifier, or .");
+    new TemplateBasicNodeBuilder(
+            SIMPLE_FILE_HEADER_INFO, SourceLocation.UNKNOWN, errorReporter, TYPE_REGISTRY)
+        .setId(0)
+        .setCmdText("autoescape=\"deprecated-noncontextual\"")
+        .setSoyDoc("/***/")
+        .build();
+    assertThat(errorReporter.getErrorMessages()).containsExactly("Missing template name.");
 
     errorReporter = new FormattingErrorReporter();
-    parse("{namespace ns}\n{template .foo autoescape=\"}{/template}", errorReporter);
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".foo autoescape=\"strict")
+        .setSoyDoc("/***/")
+        .build();
     assertThat(errorReporter.getErrorMessages())
-        .containsExactly(
-            "Unexpected end of file.  Did you forget to close an attribute value or a comment?");
+        .containsExactly("Malformed attributes in 'template' command text (autoescape=\"strict).");
+
     errorReporter = new FormattingErrorReporter();
-    parse("{namespace ns}\n{template .foo autoescape=\"false\"}{/template}", errorReporter);
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".foo autoescape=\"false\"")
+        .setSoyDoc("/***/")
+        .build();
     assertThat(errorReporter.getErrorMessages())
         .containsExactly(
-            "Invalid attribute value, expected one of [deprecated-contextual, "
-                + "deprecated-noncontextual, strict].");
+            "Invalid value for attribute 'autoescape' in 'template' command text "
+                + "(autoescape=\"false\"). Valid values are "
+                + "[deprecated-noncontextual, deprecated-contextual, strict].");
 
     // assertion inside no-arg templateBasicNode() is that there is no exception.
-    parse("{namespace ns}\n{template .foo autoescape=\n\t\r \"strict\"}{/template}");
+    templateBasicNode()
+        .setId(0)
+        .setCmdText(".foo autoescape =\n\t\r \"strict\"")
+        .setSoyDoc("/***/")
+        .build();
   }
 
-  @Test
   public void testValidStrictTemplates() {
     TemplateNode node;
 
-    node =
-        parse(
-            "{namespace ns autoescape=\"deprecated-noncontextual\"}\n"
-                + "{template .boo kind=\"text\" autoescape=\"strict\"}{/template}");
+    node = templateBasicNode()
+        .setId(0)
+        .setCmdText(".boo kind=\"text\" autoescape=\"strict\"")
+        .setSoyDoc("/** Strict template. */").build();
     assertEquals(AutoescapeMode.STRICT, node.getAutoescapeMode());
     assertEquals(ContentKind.TEXT, node.getContentKind());
 
-    node =
-        parse(
-            "{namespace ns autoescape=\"deprecated-noncontextual\"}\n"
-                + "{template .boo kind=\"html\" autoescape=\"strict\"}{/template}");
+    node = templateBasicNode()
+        .setId(0)
+        .setCmdText(".boo autoescape=\"strict\" kind=\"html\"")
+        .setSoyDoc("/** Strict template. */").build();
     assertEquals(AutoescapeMode.STRICT, node.getAutoescapeMode());
     assertEquals(ContentKind.HTML, node.getContentKind());
 
     // "kind" is optional, defaults to HTML
-    node =
-        parse(
-            "{namespace ns autoescape=\"deprecated-noncontextual\"}\n"
-                + "{template .boo autoescape=\"strict\"}{/template}");
+    node = templateBasicNode()
+        .setId(0)
+        .setCmdText(".boo autoescape=\"strict\"").setSoyDoc("/** Strict template. */")
+        .build();
     assertEquals(AutoescapeMode.STRICT, node.getAutoescapeMode());
     assertEquals(ContentKind.HTML, node.getContentKind());
   }
 
-  @Test
   public void testInvalidStrictTemplates() {
     FormattingErrorReporter errorReporter = new FormattingErrorReporter();
-    parse(
-        "{namespace ns autoescape=\"deprecated-noncontextual\"}\n"
-            + "{template .boo kind=\"text\"}{/template}",
-        errorReporter);
-    assertThat(errorReporter.getErrorMessages())
-        .containsExactly("kind=\"...\" attribute is only valid with autoescape=\"strict\".");
+      templateBasicNode(errorReporter)
+          .setId(0)
+          .setCmdText(".boo kind=\"text\"")
+          .setSoyDoc("/** Strict template. */")
+          .build();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains(
+        "kind=\"...\" attribute is only valid with autoescape=\"strict\".");
   }
 
-  @Test
   public void testValidRequiredCss() {
     TemplateNode node;
 
-    node = parse("{namespace ns}\n{template .boo requirecss=\"foo.boo\"}{/template}");
+    node = templateBasicNode()
+        .setId(0)
+        .setCmdText(".boo requirecss=\"foo.boo\"")
+        .setSoyDoc("/** Boo. */")
+        .build();
     assertEquals(ImmutableList.<String>of("foo.boo"), node.getRequiredCssNamespaces());
 
-    node = parse("{namespace ns}\n{template .boo requirecss=\"foo, bar\"}{/template}");
+    node = templateBasicNode()
+        .setId(0)
+        .setCmdText(".boo requirecss=\"foo, bar\"")
+        .setSoyDoc("/** Boo. */")
+        .build();
     assertEquals(ImmutableList.<String>of("foo", "bar"), node.getRequiredCssNamespaces());
 
-    node = parse("{namespace ns}\n{template .boo requirecss=\"foo.boo, foo.moo\"}{/template}");
+    node = templateBasicNode()
+        .setId(0)
+        .setCmdText(".boo requirecss=\"foo.boo, foo.moo\"")
+        .setSoyDoc("/** Boo. */").build();
     assertEquals(ImmutableList.<String>of("foo.boo", "foo.moo"), node.getRequiredCssNamespaces());
 
     // Now for deltemplates.
-    node =
-        parse(
-            "{namespace ns}\n"
-                + "{deltemplate namespace.boo requirecss=\"foo.boo, moo.hoo\"}{/deltemplate}");
+    node = templateDelegateNode()
+        .setId(0)
+        .setCmdText("namespace.boo requirecss=\"foo.boo , moo.hoo\"")
+        .setSoyDoc("/** Boo. */").build();
     assertEquals(ImmutableList.<String>of("foo.boo", "moo.hoo"), node.getRequiredCssNamespaces());
   }
 
-  @Test
   public void testValidVariant() {
     // Variant is a string literal: There's no expression and the value is already resolved.
-
     TemplateDelegateNode node =
-        (TemplateDelegateNode)
-            parse(
-                join(
-                    "{namespace ns}",
-                    "{deltemplate namespace.boo variant=\"'abc'\"}",
-                    "{/deltemplate}"));
+        templateDelegateNode()
+            .setId(0)
+            .setCmdText("namespace.boo variant=\"'abc'\"")
+            .setSoyDoc("/** Boo. */").build();
     assertEquals("namespace.boo", node.getDelTemplateName());
     assertEquals("abc", node.getDelTemplateVariant());
     assertEquals("abc", node.getDelTemplateKey().variant());
 
     // Variant is a global, that was not yet resolved.
-    node =
-        (TemplateDelegateNode)
-            parse(
-                join(
-                    "{namespace ns}",
-                    "{deltemplate namespace.boo variant=\"test.GLOBAL_CONSTANT\"}",
-                    "{/deltemplate}"));
+    node = templateDelegateNode()
+        .setId(0)
+        .setCmdText("namespace.boo variant=\"test.GLOBAL_CONSTANT\"")
+        .setSoyDoc("/** Boo. */")
+        .build();
     assertEquals("namespace.boo", node.getDelTemplateName());
     assertEquals("test.GLOBAL_CONSTANT", node.getDelTemplateVariant());
     assertEquals("test.GLOBAL_CONSTANT", node.getDelTemplateKey().variant());
@@ -273,21 +401,19 @@ public class TemplateNodeTest {
     assertEquals(1, exprUnion.getExpr().numChildren());
     assertTrue(exprUnion.getExpr().getRoot() instanceof GlobalNode);
     // Substitute the global expression.
-    exprUnion
-        .getExpr()
-        .replaceChild(0, new IntegerNode(123, exprUnion.getExpr().getRoot().getSourceLocation()));
+    exprUnion.getExpr().replaceChild(
+        0,
+        new IntegerNode(123, exprUnion.getExpr().getRoot().getSourceLocation()));
     // Check the new values.
     assertEquals("123", node.getDelTemplateVariant());
     assertEquals("123", node.getDelTemplateKey().variant());
 
     // Resolve a global to a string.
-    node =
-        (TemplateDelegateNode)
-            parse(
-                join(
-                    "{namespace ns}",
-                    "{deltemplate namespace.boo variant=\"test.GLOBAL_CONSTANT\"}",
-                    "{/deltemplate}"));
+    node = templateDelegateNode()
+        .setId(0)
+        .setCmdText("namespace.boo variant=\"test.GLOBAL_CONSTANT\"")
+        .setSoyDoc("/** Boo. */")
+        .build();
     node.getAllExprUnions()
         .get(0)
         .getExpr()
@@ -296,16 +422,14 @@ public class TemplateNodeTest {
     assertEquals("variant", node.getDelTemplateKey().variant());
   }
 
-  @Test
   public void testInvalidVariant() {
     // Try to resolve a global to an invalid type.
     TemplateDelegateNode node =
-        (TemplateDelegateNode)
-            parse(
-                join(
-                    "{namespace ns}",
-                    "{deltemplate namespace.boo variant=\"test.GLOBAL_CONSTANT\"}",
-                    "{/deltemplate}"));
+        templateDelegateNode()
+            .setId(0)
+            .setCmdText("namespace.boo variant=\"test.GLOBAL_CONSTANT\"")
+            .setSoyDoc("/** Boo. */")
+            .build();
     node.getAllExprUnions()
         .get(0)
         .getExpr()
@@ -318,13 +442,11 @@ public class TemplateNodeTest {
     }
 
     // Try to resolve a global to an invalid string
-    node =
-        (TemplateDelegateNode)
-            parse(
-                join(
-                    "{namespace ns}",
-                    "{deltemplate namespace.boo variant=\"test.GLOBAL_CONSTANT\"}",
-                    "{/deltemplate}"));
+    node = templateDelegateNode()
+        .setId(0)
+        .setCmdText("namespace.boo variant=\"test.GLOBAL_CONSTANT\"")
+        .setSoyDoc("/** Boo. */")
+        .build();
     node.getAllExprUnions()
         .get(0)
         .getExpr()
@@ -337,95 +459,140 @@ public class TemplateNodeTest {
     }
   }
 
-  @Test
   public void testInvalidRequiredCss() {
-    FormattingErrorReporter errorReporter = new FormattingErrorReporter();
-    parse("{namespace ns}\n{template .boo requirecss=\"\"}{/template}", errorReporter);
-    assertThat(errorReporter.getErrorMessages())
-        .containsExactly("Invalid required CSS namespace name '', expected an identifier.");
+    try {
+      templateBasicNode()
+          .setId(0)
+          .setCmdText(".boo requirecss=\"\"")
+          .setSoyDoc("/** Boo. */")
+          .build();
+      fail("Should be a syntax error");
+    } catch (SoySyntaxException sse) {
+      assertTrue(sse.getMessage(),
+          sse.getMessage().contains("Invalid required CSS namespace name \"\"."));
+    }
 
-    errorReporter = new FormattingErrorReporter();
-    parse("{namespace ns}\n{template .boo requirecss=\"foo boo\"}{/template}", errorReporter);
-    assertThat(errorReporter.getErrorMessages())
-        .containsExactly("Invalid required CSS namespace name 'foo boo', expected an identifier.");
+    try {
+      templateBasicNode()
+          .setId(0)
+          .setCmdText(".boo requirecss=\"foo boo\"")
+          .setSoyDoc("/** Boo. */")
+          .build();
+      fail("Should be a syntax error");
+    } catch (SoySyntaxException sse) {
+      assertTrue(sse.getMessage(),
+          sse.getMessage().contains("Invalid required CSS namespace name \"foo boo\"."));
+    }
 
-    errorReporter = new FormattingErrorReporter();
-    parse("{namespace ns}\n{template .boo requirecss=\"9vol\"}{/template}", errorReporter);
-    assertThat(errorReporter.getErrorMessages())
-        .containsExactly("Invalid required CSS namespace name '9vol', expected an identifier.");
+    try {
+      templateBasicNode()
+          .setId(0)
+          .setCmdText(".boo requirecss=\"9vol\"")
+          .setSoyDoc("/** Boo. */")
+          .build();
+      fail("Should be a syntax error");
+    } catch (SoySyntaxException sse) {
+      assertTrue(sse.getMessage(),
+          sse.getMessage().contains("Invalid required CSS namespace name \"9vol\"."));
+    }
 
-    errorReporter = new FormattingErrorReporter();
-    parse("{namespace ns}\n{deltemplate foo.boo requirecss=\"5ham\"}{/deltemplate}", errorReporter);
-    assertThat(errorReporter.getErrorMessages())
-        .containsExactly("Invalid required CSS namespace name '5ham', expected an identifier.");
+    // Now for deltemplates.
+    try {
+      templateDelegateNode()
+          .setId(0)
+          .setCmdText("namespace.boo requirecss=\"5ham\"")
+          .setSoyDoc("/** Boo. */")
+          .build();
+      fail("Should be a syntax error");
+    } catch (SoySyntaxException sse) {
+      assertTrue(sse.getMessage(),
+          sse.getMessage().contains("Invalid required CSS namespace name \"5ham\"."));
+    }
   }
 
-  @Test
+
   public void testNamespaceRelativeTemplateNameButNoNamespaceDecl() {
-    FormattingErrorReporter errorReporter = new FormattingErrorReporter();
-    parse("{template .foo}{/template}", errorReporter);
-    assertThat(errorReporter.getErrorMessages())
-        .contains("Template has namespace-relative name, but file has no namespace declaration.");
+    try {
+      new TemplateBasicNodeBuilder(
+          new SoyFileHeaderInfo(null /* namespace */),
+          SourceLocation.UNKNOWN,
+          FAIL,
+          TYPE_REGISTRY)
+          .setId(0)
+          .setCmdText(".foo")
+          .build();
+      fail();
+    } catch (SoySyntaxException e) {
+      assertThat(e).hasMessage(
+          "Template has namespace-relative name, but file has no namespace declaration.");
+    }
   }
 
-  @Test
   public void testToSourceString() {
-    TemplateNode tn =
-        parse(
-            join(
-                "{namespace ns}",
-                "/**",
-                " * Test template.",
-                " *",
-                " * @param foo Foo to print.",
-                " * @param goo",
-                " *     Goo to print.",
-                " */",
-                "{template .boo}",
-                "  /** Something milky. */",
-                "  {@param moo : bool}",
-                "  {@param? too : string}",
-                "{sp}{sp}{$foo}{$goo}{$moo ? 'moo' : ''}{$too}\n",
-                "{/template}"));
-    assertEquals(
-        ""
-            + "/**\n"
-            + " * Test template.\n"
-            + " *\n"
-            + " * @param foo Foo to print.\n"
-            + " * @param goo\n"
-            + " *     Goo to print.\n"
-            + " */\n"
-            + "{template .boo}\n"
-            + "  {@param moo: bool}  /** Something milky. */\n"
-            + "  {@param? too: null|string}\n"
-            + "{sp} {$foo}{$goo}{$moo ? 'moo' : ''}{$too}\n"
-            + "{/template}\n",
+    SoyParsingContext boom = SoyParsingContext.exploding();
+    TemplateNode tn = templateBasicNode()
+        .setId(0)
+        .setCmdText(".boo")
+        .setSoyDoc("" +
+            "/**\n" +
+            " * Test template.\n" +
+            " *\n" +
+            " * @param foo Foo to print.\n" +
+            " * @param goo\n" +
+            " *     Goo to print.\n" +
+            " */")
+        .setHeaderDecls(
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "moo", "bool",
+                "Something milky.",
+                SourceLocation.UNKNOWN),
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "too", "string|null",
+                null /* soyDoc */,
+                SourceLocation.UNKNOWN))
+        .build();
+    tn.addChild(new RawTextNode(0, "  ", SourceLocation.UNKNOWN));  // 2 spaces
+    tn.addChild(
+        new PrintNode.Builder(0, true /* isImplicit */, SourceLocation.UNKNOWN)
+            .exprText("$foo")
+            .build(boom));
+    tn.addChild(
+        new PrintNode.Builder(0, true /* isImplicit */, SourceLocation.UNKNOWN)
+            .exprText("$goo")
+            .build(boom));
+    tn.addChild(new RawTextNode(0, "  ", SourceLocation.UNKNOWN));  // 2 spaces
+
+    assertEquals("" +
+            "/**\n" +
+            " * Test template.\n" +
+            " *\n" +
+            " * @param foo Foo to print.\n" +
+            " * @param goo\n" +
+            " *     Goo to print.\n" +
+            " */\n" +
+            "{template .boo}\n" +
+            "  {@param moo: bool}  /** Something milky. */\n" +
+            "  {@param? too: string|null}\n" +
+            "{sp} {$foo}{$goo} {sp}\n" +
+            "{/template}\n",
         tn.toSourceString());
   }
 
-  private static String join(String... lines) {
-    return Joiner.on("\n").join(lines);
+  private static TemplateBasicNodeBuilder templateBasicNode() {
+    return templateBasicNode(FAIL);
   }
 
-  private static TemplateNode parse(String file) {
-    return parse(file, ExplodingErrorReporter.get());
+  private static TemplateBasicNodeBuilder templateBasicNode(ErrorReporter errorReporter) {
+    return new TemplateBasicNodeBuilder(
+        SIMPLE_FILE_HEADER_INFO, SourceLocation.UNKNOWN, errorReporter, TYPE_REGISTRY);
   }
 
-  private static TemplateNode parse(String file, ErrorReporter errorReporter) {
-    SoyFileSetNode node =
-        SoyFileSetParserBuilder.forFileContents(file)
-            .errorReporter(errorReporter)
-            .allowUnboundGlobals(true) // for the delvariant tests
-            .parse()
-            .fileSet();
-    // if parsing fails, templates/files will be missing.  just return null in that case.
-    if (node.numChildren() > 0) {
-      SoyFileNode filenode = node.getChild(0);
-      if (filenode.numChildren() > 0) {
-        return filenode.getChild(0);
-      }
-    }
-    return null;
+  private static TemplateDelegateNodeBuilder templateDelegateNode() {
+    return new TemplateDelegateNodeBuilder(
+        SIMPLE_FILE_HEADER_INFO, SourceLocation.UNKNOWN, FAIL, TYPE_REGISTRY);
   }
 }

@@ -19,6 +19,7 @@ package com.google.template.soy.data;
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 
+
 /**
  * A map containing key-to-value mappings referred to as items. Each key is a SoyValue (must be
  * already resolved) and each value is a SoyValue (can be unresolved).
@@ -30,44 +31,45 @@ import javax.annotation.ParametersAreNonnullByDefault;
 @ParametersAreNonnullByDefault
 public interface SoyMap extends SoyValue {
 
+
   /**
    * Gets the number of items in this SoyMap.
-   *
    * @return The number of items.
    */
   public int getItemCnt();
 
+
   /**
    * Gets an iterable over all item keys in this SoyMap.
    *
-   * <p>Important: Iteration order is undefined.
+   * Important: Iteration order is undefined.
    *
    * @return An iterable over all item keys.
    */
-  @Nonnull
-  public Iterable<? extends SoyValue> getItemKeys();
+  @Nonnull public Iterable<? extends SoyValue> getItemKeys();
+
 
   /**
    * Checks whether this SoyMap has an item with the given key.
-   *
    * @param key The item key to check.
    * @return Whether this SoyMap has an item with the given key.
    */
   public boolean hasItem(SoyValue key);
 
+
   /**
    * Gets an item value of this SoyMap.
-   *
    * @param key The item key to get.
    * @return The item value for the given item key, or null if no such item key.
    */
   public SoyValue getItem(SoyValue key);
 
+
   /**
    * Gets a provider of an item value of this SoyMap.
-   *
    * @param key The item key to get.
    * @return A provider of the item value for the given item key, or null if no such item key.
    */
   public SoyValueProvider getItemProvider(SoyValue key);
+
 }

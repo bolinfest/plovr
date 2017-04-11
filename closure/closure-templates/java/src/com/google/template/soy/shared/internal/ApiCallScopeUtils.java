@@ -22,12 +22,14 @@ import com.google.inject.Key;
 import com.google.template.soy.internal.i18n.BidiGlobalDir;
 import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.shared.restricted.ApiCallScopeBindingAnnotations.LocaleString;
+
 import javax.annotation.Nullable;
+
 
 /**
  * Shared utilities for working with the ApiCallScope.
  *
- * <p>Important: Do not use outside of Soy code (treat as superpackage-private).
+ * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
 public class ApiCallScopeUtils {
@@ -36,16 +38,18 @@ public class ApiCallScopeUtils {
 
   private ApiCallScopeUtils() {}
 
+
   /**
    * Helper utility to seed params shared by multiple backends.
    *
    * @param apiCallScope The scope object that manages the API call scope.
    * @param msgBundle The bundle of translated messages, or null to use the messages from the Soy
    */
-  public static void seedSharedParams(
-      GuiceSimpleScope apiCallScope, @Nullable SoyMsgBundle msgBundle) {
+  public static void seedSharedParams(GuiceSimpleScope apiCallScope,
+      @Nullable SoyMsgBundle msgBundle) {
     seedSharedParams(apiCallScope, msgBundle, null);
   }
+
 
   /**
    * Helper utility to seed params shared by multiple backends.
@@ -56,13 +60,12 @@ public class ApiCallScopeUtils {
    *     locale, if any, otherwise ltr.
    */
   public static void seedSharedParams(
-      GuiceSimpleScope apiCallScope,
-      @Nullable SoyMsgBundle msgBundle,
+      GuiceSimpleScope apiCallScope, @Nullable SoyMsgBundle msgBundle,
       @Nullable BidiGlobalDir bidiGlobalDir) {
 
     String localeString = (msgBundle != null) ? msgBundle.getLocaleString() : null;
     if (bidiGlobalDir == null) {
-      bidiGlobalDir = BidiGlobalDir.forStaticLocale(localeString);
+        bidiGlobalDir = BidiGlobalDir.forStaticLocale(localeString);
     }
 
     seedSharedParams(apiCallScope, bidiGlobalDir, localeString);

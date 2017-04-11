@@ -18,17 +18,19 @@ package com.google.template.soy.msgs.restricted;
 
 import java.util.List;
 
+
 /**
  * Utilities for dealing with msg parts.
  *
  */
 public class MsgPartUtils {
 
+
   private MsgPartUtils() {}
+
 
   /**
    * Checks whether a given list of msg parts has any plural or select parts.
-   *
    * @param msgParts The msg parts to check.
    * @return Whether there are any plural or select parts.
    */
@@ -40,4 +42,5 @@ public class MsgPartUtils {
     }
     return false;
   }
+
 }

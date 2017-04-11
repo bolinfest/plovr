@@ -39,7 +39,6 @@ import com.google.template.soy.soytree.CallBasicNode;
 import com.google.template.soy.soytree.CallNode;
 import com.google.template.soy.soytree.CallParamContentNode;
 import com.google.template.soy.soytree.CallParamNode;
-import com.google.template.soy.soytree.DebuggerNode;
 import com.google.template.soy.soytree.ExprUnion;
 import com.google.template.soy.soytree.ForNode;
 import com.google.template.soy.soytree.ForeachIfemptyNode;
@@ -50,31 +49,31 @@ import com.google.template.soy.soytree.IfElseNode;
 import com.google.template.soy.soytree.IfNode;
 import com.google.template.soy.soytree.LetContentNode;
 import com.google.template.soy.soytree.LetValueNode;
-import com.google.template.soy.soytree.LogNode;
 import com.google.template.soy.soytree.PrintNode;
 import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.SoyNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
-import com.google.template.soy.soytree.SoyTreeUtils;
 import com.google.template.soy.soytree.SwitchCaseNode;
 import com.google.template.soy.soytree.SwitchDefaultNode;
 import com.google.template.soy.soytree.SwitchNode;
 import com.google.template.soy.soytree.TemplateDelegateNode;
 import com.google.template.soy.soytree.TemplateNode;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
+
 import javax.inject.Inject;
 
 /**
  * Visitor for generating full Python code (i.e. statements) for parse tree nodes.
  *
- * <p>{@link #gen} should be called on a full parse tree. Python source code will be generated for
- * all the Soy files. The return value is a list of strings, each string being the content of one
- * generated Python file (corresponding to one Soy file).
+ * <p> {@link #gen} should be called on a full parse tree. Python source code will be generated
+ * for all the Soy files. The return value is a list of strings, each string being the content of
+ * one generated Python file (corresponding to one Soy file).
  *
  */
 final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
@@ -88,6 +87,7 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
   /** The namespace manifest for all current and dependent sources. */
   private final ImmutableMap<String, String> namespaceManifest;
 
+
   @VisibleForTesting protected PyCodeBuilder pyCodeBuilder;
 
   private final IsComputableAsPyExprVisitor isComputableAsPyExprVisitor;
@@ -98,7 +98,9 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
 
   private final GenPyCallExprVisitor genPyCallExprVisitor;
 
-  /** @see LocalVariableStack */
+  /**
+   * @see LocalVariableStack
+   */
   @VisibleForTesting protected LocalVariableStack localVarExprs;
 
   @Inject
@@ -113,11 +115,9 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
     this.genPyExprsVisitorFactory = genPyExprsVisitorFactory;
     this.genPyCallExprVisitor = genPyCallExprVisitor;
 
-    this.namespaceManifest =
-        new ImmutableMap.Builder<String, String>()
-            .putAll(pySrcOptions.getNamespaceManifest())
-            .putAll(currentManifest)
-            .build();
+    this.namespaceManifest = new ImmutableMap.Builder<String, String>()
+        .putAll(pySrcOptions.getNamespaceManifest())
+        .putAll(currentManifest).build();
   }
 
   public List<String> gen(SoyFileSetNode node, ErrorReporter errorReporter) {
@@ -132,6 +132,7 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
   void visitForTesting(SoyNode node, ErrorReporter errorReporter) {
     new Impl(errorReporter).exec(node);
   }
+
 
   private final class Impl extends AbstractSoyNodeVisitor<List<String>> {
     /** The contents of the generated Python files. */
@@ -186,6 +187,7 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
       }
     }
 
+
     // ---------------------------------------------------------------------------------------------
     // Implementations for specific nodes.
 
@@ -206,7 +208,6 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
      * <p>Template generation is deferred to other visitors.
      *
      * <p>Example Output:
-     *
      * <pre>
      * # coding=utf-8
      * """ This file was automatically generated from my-templates.soy.
@@ -247,9 +248,6 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
       addCodeToRequireGeneralDeps();
       addCodeToRequireSoyNamespaces(node);
       addCodeToFixUnicodeStrings();
-      if (SoyTreeUtils.hasNodesOfType(node, DebuggerNode.class)) {
-        pyCodeBuilder.appendLine("import pdb");
-      }
 
       // Add code for each template.
       for (TemplateNode template : node.getChildren()) {
@@ -265,7 +263,6 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
      * Visit a TemplateNode and generate a corresponding function.
      *
      * <p>Example:
-     *
      * <pre>
      * def myfunc(data, ijData):
      *   output = ''
@@ -299,7 +296,6 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
      * registration.
      *
      * <p>Example:
-     *
      * <pre>
      * def myfunc(data=None, ijData=None):
      *   ...
@@ -338,15 +334,12 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
      * expression if all the children are computable as expressions.
      *
      * <p>Example:
-     *
      * <pre>
      *   {if $boo > 0}
      *     ...
      *   {/if}
      * </pre>
-     *
      * might generate
-     *
      * <pre>
      *   if data.get('boo') > 0:
      *     ...
@@ -394,7 +387,6 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
      * conditionals (which prevents expression inlining).
      *
      * <p>Example:
-     *
      * <pre>
      *   {switch $boo}
      *     {case 0}
@@ -405,9 +397,7 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
      *       ...
      *   {/switch}
      * </pre>
-     *
      * might generate
-     *
      * <pre>
      *   switchValue = data.get('boo')
      *   if switchValue == 0:
@@ -480,15 +470,12 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
      * Visits a ForNode and generates a for loop over a given range.
      *
      * <p>Example:
-     *
      * <pre>
      *   {for $i in range(1, $boo)}
      *     ...
      *   {/for}
      * </pre>
-     *
      * might generate
-     *
      * <pre>
      *   for i4 in xrange(1, data.get('boo')):
      *     ...
@@ -532,7 +519,6 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
      * is wrapped in an if statement which checks for data in the list before iterating.
      *
      * <p>Example:
-     *
      * <pre>
      *   {foreach $foo in $boo}
      *     ...
@@ -540,9 +526,7 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
      *     ...
      *   {/foreach}
      * </pre>
-     *
      * might generate
-     *
      * <pre>
      *   fooList2 = data.get('boo')
      *   if fooList2:
@@ -588,21 +572,19 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
       }
     }
 
+
     /**
      * The ForeachNonemptyNode performs the actual looping. We use a standard {@code for} loop,
      * except that instead of looping directly over the list, we loop over an enumeration to have
      * easy access to the index along with the data.
      *
      * <p>Example:
-     *
      * <pre>
      *   {foreach $foo in $boo}
      *     ...
      *   {/foreach}
      * </pre>
-     *
      * might generate
-     *
      * <pre>
      *   fooList2 = data.get('boo')
      *   for fooIndex2, fooData2 in enumerate(fooList2):
@@ -654,13 +636,10 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
      * variable name is stored in the LocalVariableStack for use by any subsequent code.
      *
      * <p>Example:
-     *
      * <pre>
      *   {let $boo: $foo[$moo] /}
      * </pre>
-     *
      * might generate
-     *
      * <pre>
      *   boo3 = data.get('foo')['moo']
      * </pre>
@@ -687,15 +666,12 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
      * such, all LetContentNodes must have a contentKind specified.
      *
      * <p>Example:
-     *
      * <pre>
      *   {let $boo kind="html"}
      *     Hello {$name}
      *   {/let}
      * </pre>
-     *
      * might generate
-     *
      * <pre>
      *   boo3 = sanitize.SanitizedHtml(''.join(['Hello ', sanitize.escape_html(data.get('name'))])
      * </pre>
@@ -767,20 +743,6 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
       pyCodeBuilder.popOutputVar();
     }
 
-    @Override
-    protected void visitDebuggerNode(DebuggerNode node) {
-      pyCodeBuilder.appendLine("pdb.set_trace()");
-    }
-
-    @Override
-    protected void visitLogNode(LogNode node) {
-      String outputVarName = "logger_" + node.getId();
-      pyCodeBuilder.pushOutputVar(outputVarName);
-      pyCodeBuilder.initOutputVarIfNecessary();
-      visitChildren(node);
-      pyCodeBuilder.popOutputVar();
-      pyCodeBuilder.appendLine("print " + outputVarName);
-    }
 
     // ---------------------------------------------------------------------------------------------
     // Fallback implementation.
@@ -796,10 +758,13 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
       }
     }
 
+
     // ---------------------------------------------------------------------------------------------
     // Utility methods.
 
-    /** Helper for visitSoyFileNode(SoyFileNode) to add code to require general dependencies. */
+    /**
+     * Helper for visitSoyFileNode(SoyFileNode) to add code to require general dependencies.
+     */
     private void addCodeToRequireGeneralDeps() {
       pyCodeBuilder.appendLine("from __future__ import unicode_literals");
 
@@ -845,7 +810,6 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
 
     /**
      * Helper for visitSoyFileNode(SoyFileNode) to add code to require Soy namespaces.
-     *
      * @param soyFile The node we're visiting.
      */
     private void addCodeToRequireSoyNamespaces(SoyFileNode soyFile) {
@@ -856,12 +820,12 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
         if (lastDotIndex == -1) {
           errorReporter.report(node.getSourceLocation(), NON_NAMESPACED_TEMPLATE);
           continue;
-        }
+          }
         String calleeModule = calleeNotInFile.substring(0, lastDotIndex);
         if (!calleeModule.isEmpty()) {
           calleeModules.add(calleeModule);
         }
-      }
+        }
 
       for (String calleeModule : calleeModules) {
         Pair<String, String> nameSpaceAndName = namespaceAndNameFromModule(calleeModule);
@@ -896,7 +860,8 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
       pyCodeBuilder.decreaseIndentTwice();
       pyCodeBuilder.appendLine("}");
       pyCodeBuilder.appendLine();
-    }
+      }
+
 
     /**
      * Helper for visitSoyFileNode(SoyFileNode) to add code to turn byte strings into unicode
@@ -914,7 +879,9 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
       pyCodeBuilder.appendLine();
     }
 
-    /** Helper for visitTemplateNode which generates the function body. */
+    /**
+     * Helper for visitTemplateNode which generates the function body.
+     */
     private void generateFunctionBody(TemplateNode node) {
       // Add a new frame for local variable translations.
       localVarExprs.pushFrame();
@@ -941,7 +908,6 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
 
   /**
    * Helper to retrieve the namespace and name from a module name.
-   *
    * @param moduleName Python module name in dot notation format.
    */
   private static Pair<String, String> namespaceAndNameFromModule(String moduleName) {

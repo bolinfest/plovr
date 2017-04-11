@@ -16,16 +16,15 @@
 
 package com.google.template.soy.error;
 
-import com.google.common.base.MoreObjects;
-import com.google.errorprone.annotations.ForOverride;
+import com.google.template.soy.error.ErrorReporter.Checkpoint;
 
 /**
- * Abstract ErrorReporter implementation that implements {@link #checkpoint()} and {@link
- * #errorsSince(Checkpoint)} in terms of a template method {@link #getCurrentNumberOfErrors()}.
+ * Abstract ErrorReporter implementation that implements {@link #checkpoint()} and
+ * {@link #errorsSince(Checkpoint)} in terms of a template method
+ * {@link #getCurrentNumberOfErrors()}.
  */
 public abstract class AbstractErrorReporter implements ErrorReporter {
 
-  @ForOverride
   protected abstract int getCurrentNumberOfErrors();
 
   @Override
@@ -42,13 +41,6 @@ public abstract class AbstractErrorReporter implements ErrorReporter {
               + "reporter");
     }
     return getCurrentNumberOfErrors() > impl.errorsSoFar;
-  }
-  
-  @Override
-  public String toString() {
-    return MoreObjects.toStringHelper(this)
-        .add("errorCount", getCurrentNumberOfErrors())
-        .toString();
   }
 
   private static final class CheckpointImpl implements Checkpoint {

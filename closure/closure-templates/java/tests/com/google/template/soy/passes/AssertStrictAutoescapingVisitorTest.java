@@ -19,19 +19,17 @@ package com.google.template.soy.passes;
 import com.google.common.collect.ImmutableList;
 import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.error.FormattingErrorReporter;
+import com.google.template.soy.passes.AssertStrictAutoescapingVisitor;
 import com.google.template.soy.soytree.SoyFileSetNode;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
 
 /**
  * Unit tests for AssertStrictAutoescapingVisitor.
  *
  */
-@RunWith(JUnit4.class)
-public final class AssertStrictAutoescapingVisitorTest {
+public final class AssertStrictAutoescapingVisitorTest extends TestCase {
 
-  @Test
   public void testStrictTemplate() {
     String soyCode =
         "{namespace foo.bar autoescape=\"strict\"}\n"
@@ -50,7 +48,6 @@ public final class AssertStrictAutoescapingVisitorTest {
     doesntCauseStrictException(soyCode);
   }
 
-  @Test
   public void testNonStrictNamespace() {
     String soyCode =
         "{namespace foo.bar autoescape=\"deprecated-contextual\"}\n"
@@ -61,7 +58,6 @@ public final class AssertStrictAutoescapingVisitorTest {
     causesStrictException(soyCode);
   }
 
-  @Test
   public void testNonStrictTemplate() {
     String soyCode =
         "{namespace foo.bar autoescape=\"strict\"}\n"
@@ -72,7 +68,6 @@ public final class AssertStrictAutoescapingVisitorTest {
     causesStrictException(soyCode);
   }
 
-  @Test
   public void testNonDeclaredTemplate() {
     String soyCode =
         "{namespace foo.bar autoescape=\"deprecated-noncontextual\"}\n"

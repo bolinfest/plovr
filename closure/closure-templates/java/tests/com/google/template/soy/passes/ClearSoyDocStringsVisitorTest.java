@@ -21,34 +21,33 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ExplodingErrorReporter;
+import com.google.template.soy.passes.ClearSoyDocStringsVisitor;
 import com.google.template.soy.shared.SharedTestUtils;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.TemplateNode;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
 
 /**
  * Unit tests for ClearSoyDocStringsVisitor.
  *
  */
-@RunWith(JUnit4.class)
-public final class ClearSoyDocStringsVisitorTest {
+public final class ClearSoyDocStringsVisitorTest extends TestCase {
 
-  @Test
+
   public void testClearSoyDocStrings() {
 
     String testFileContent =
-        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n"
-            + "\n"
-            + "/**\n"
-            + " * blah blah blah\n"
-            + " *\n"
-            + " * @param goo blah blah\n"
-            + " */\n"
-            + "{template .foo}\n"
-            + "  {$goo}\n"
-            + "{/template}\n";
+        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
+        "\n" +
+        "/**\n" +
+        " * blah blah blah\n" +
+        " *\n" +
+        " * @param goo blah blah\n" +
+        " */\n" +
+        "{template .foo}\n" +
+        "  {$goo}\n" +
+        "{/template}\n";
 
     ErrorReporter boom = ExplodingErrorReporter.get();
     SoyFileSetNode soyTree =
@@ -68,4 +67,5 @@ public final class ClearSoyDocStringsVisitorTest {
     assertThat(template.getSoyDocDesc()).isNull();
     assertThat(template.getParams().get(0).desc()).isNull();
   }
+
 }

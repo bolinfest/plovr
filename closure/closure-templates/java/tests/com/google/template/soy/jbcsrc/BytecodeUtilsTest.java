@@ -24,18 +24,19 @@ import static com.google.template.soy.jbcsrc.BytecodeUtils.logicalOr;
 import static com.google.template.soy.jbcsrc.ExpressionTester.assertThatExpression;
 
 import com.google.common.collect.ImmutableList;
-import java.util.List;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
+
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
-/** Tests for {@link BytecodeUtils} */
-@RunWith(JUnit4.class)
-public class BytecodeUtilsTest {
+import java.util.List;
 
-  @Test
+/**
+ * Tests for {@link BytecodeUtils}
+ */
+public class BytecodeUtilsTest extends TestCase {
+
   public void testConstantExpressions() {
     // there are special cases for variously sized integers, test them all.
     assertThatExpression(constant(0)).evaluatesTo(0);
@@ -57,13 +58,11 @@ public class BytecodeUtilsTest {
     assertThatExpression(constant("hello world")).evaluatesTo("hello world");
   }
 
-  @Test
   public void testLogicalNot() {
     assertThatExpression(logicalNot(constant(false))).evaluatesTo(true);
     assertThatExpression(logicalNot(constant(true))).evaluatesTo(false);
   }
 
-  @Test
   public void testCompareLongs() {
     Expression one = constant(1L);
     Expression two = constant(2L);
@@ -78,7 +77,6 @@ public class BytecodeUtilsTest {
     assertThatExpression(compare(Opcodes.IFGE, two, two)).evaluatesTo(true);
   }
 
-  @Test
   public void testCompareDoubles() {
     Expression one = constant(1D);
     Expression two = constant(2D);
@@ -114,7 +112,6 @@ public class BytecodeUtilsTest {
     assertThatExpression(compare(Opcodes.IFGT, two, nan)).evaluatesTo(false);
   }
 
-  @Test
   public void testShortCircuitingLogicalOperators_basic() {
     assertThatExpression(logicalOr(constant(false))).evaluatesTo(false);
     assertThatExpression(logicalOr(constant(true))).evaluatesTo(true);
@@ -122,18 +119,25 @@ public class BytecodeUtilsTest {
     assertThatExpression(logicalAnd(constant(false))).evaluatesTo(false);
     assertThatExpression(logicalAnd(constant(true))).evaluatesTo(true);
 
-    assertThatExpression(logicalOr(constant(false), constant(false))).evaluatesTo(false);
-    assertThatExpression(logicalOr(constant(false), constant(true))).evaluatesTo(true);
-    assertThatExpression(logicalOr(constant(true), constant(false))).evaluatesTo(true);
-    assertThatExpression(logicalOr(constant(true), constant(true))).evaluatesTo(true);
+    assertThatExpression(logicalOr(constant(false), constant(false)))
+        .evaluatesTo(false);
+    assertThatExpression(logicalOr(constant(false), constant(true)))
+        .evaluatesTo(true);
+    assertThatExpression(logicalOr(constant(true), constant(false)))
+        .evaluatesTo(true);
+    assertThatExpression(logicalOr(constant(true), constant(true)))
+        .evaluatesTo(true);
 
-    assertThatExpression(logicalAnd(constant(false), constant(false))).evaluatesTo(false);
-    assertThatExpression(logicalAnd(constant(false), constant(true))).evaluatesTo(false);
-    assertThatExpression(logicalAnd(constant(true), constant(false))).evaluatesTo(false);
-    assertThatExpression(logicalAnd(constant(true), constant(true))).evaluatesTo(true);
+    assertThatExpression(logicalAnd(constant(false), constant(false)))
+        .evaluatesTo(false);
+    assertThatExpression(logicalAnd(constant(false), constant(true)))
+        .evaluatesTo(false);
+    assertThatExpression(logicalAnd(constant(true), constant(false)))
+        .evaluatesTo(false);
+    assertThatExpression(logicalAnd(constant(true), constant(true)))
+        .evaluatesTo(true);
   }
 
-  @Test
   public void testShortCircuitingLogicalOperators_compatibleWithJavaOperators() {
     ImmutableList<Boolean> bools = ImmutableList.of(true, false);
     for (boolean a : bools) {
@@ -151,9 +155,9 @@ public class BytecodeUtilsTest {
   }
 
   // Use an expression that only ever throws for branches that are supposed to be skipped.
-  @Test
   public void testShortCircuitingLogicalOperators_shortCircuits() {
-    assertThatExpression(throwingBoolExpression()).throwsException(IllegalStateException.class);
+    assertThatExpression(throwingBoolExpression())
+        .throwsException(IllegalStateException.class);
 
     assertThatExpression(logicalOr(ImmutableList.of(constant(true), throwingBoolExpression())))
         .evaluatesTo(true);
@@ -163,11 +167,10 @@ public class BytecodeUtilsTest {
 
   private static Expression throwingBoolExpression() {
     return new Expression(Type.BOOLEAN_TYPE) {
-      @Override
-      void doGen(CodeBuilder adapter) {
-        adapter.throwException(
-            Type.getType(IllegalStateException.class), "shouldn't have called me");
-      }
+       @Override void doGen(CodeBuilder adapter) {
+         adapter.throwException(Type.getType(IllegalStateException.class),
+             "shouldn't have called me");
+       }
     };
   }
 }

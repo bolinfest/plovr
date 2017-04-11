@@ -18,7 +18,6 @@ package com.google.template.soy.basicfunctions;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.template.soy.data.UnsafeSanitizedContentOrdainer.ordainAsSafe;
-import static org.junit.Assert.assertEquals;
 
 import com.google.common.collect.ImmutableList;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
@@ -29,32 +28,29 @@ import com.google.template.soy.exprtree.Operator;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.pysrc.restricted.PyExpr;
 import com.google.template.soy.pysrc.restricted.PyStringExpr;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+
+import junit.framework.TestCase;
+
 
 /**
  * Unit tests for {@link StrLenFunction}.
  *
  */
-@RunWith(JUnit4.class)
-public class StrLenFunctionTest {
+public class StrLenFunctionTest extends TestCase {
 
-  @Test
+
   public void testComputeForJava_containsString() {
     StrLenFunction strLen = new StrLenFunction();
     SoyValue arg0 = StringData.forValue("foobarfoo");
     assertEquals(IntegerData.forValue(9), strLen.computeForJava(ImmutableList.of(arg0)));
   }
 
-  @Test
   public void testComputeForJava_containsSanitizedContent() {
     StrLenFunction strLen = new StrLenFunction();
     SoyValue arg0 = ordainAsSafe("foobarfoo", ContentKind.TEXT);
     assertEquals(IntegerData.forValue(9), strLen.computeForJava(ImmutableList.of(arg0)));
   }
 
-  @Test
   public void testComputeForJsSrc() {
     StrLenFunction strLen = new StrLenFunction();
     JsExpr arg0 = new JsExpr("'foo' + 'bar'", Operator.PLUS.getPrecedence());
@@ -63,7 +59,6 @@ public class StrLenFunctionTest {
         strLen.computeForJsSrc(ImmutableList.of(arg0)));
   }
 
-  @Test
   public void testComputeForPySrc() {
     StrLenFunction strLen = new StrLenFunction();
 

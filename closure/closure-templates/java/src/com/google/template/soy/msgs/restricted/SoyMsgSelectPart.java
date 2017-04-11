@@ -17,7 +17,9 @@
 package com.google.template.soy.msgs.restricted;
 
 import com.google.common.collect.ImmutableList;
+
 import java.util.Objects;
+
 import javax.annotation.Nullable;
 
 /**
@@ -25,6 +27,7 @@ import javax.annotation.Nullable;
  *
  */
 public final class SoyMsgSelectPart extends SoyMsgPart {
+
 
   /** The select variable name. */
   private final String selectVarName;
@@ -40,6 +43,7 @@ public final class SoyMsgSelectPart extends SoyMsgPart {
     this.selectVarName = selectVarName;
     this.cases = ImmutableList.copyOf(cases);
   }
+
 
   /** Returns the select variable name. */
   public String getSelectVarName() {
@@ -71,17 +75,18 @@ public final class SoyMsgSelectPart extends SoyMsgPart {
     return caseParts;
   }
 
-  @Override
-  public boolean equals(Object other) {
+
+  @Override public boolean equals(Object other) {
     if (!(other instanceof SoyMsgSelectPart)) {
       return false;
     }
     SoyMsgSelectPart otherSelect = (SoyMsgSelectPart) other;
-    return selectVarName.equals(otherSelect.selectVarName) && cases.equals(otherSelect.cases);
+    return selectVarName.equals(otherSelect.selectVarName)
+        && cases.equals(otherSelect.cases);
   }
 
-  @Override
-  public int hashCode() {
+
+  @Override public int hashCode() {
     return Objects.hash(SoyMsgSelectPart.class, selectVarName, cases);
   }
 }

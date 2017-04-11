@@ -16,24 +16,16 @@
 
 package com.google.template.soy.internal.i18n;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import junit.framework.TestCase;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 /**
  * Unit tests for SoyBidiUtils.
  *
  */
-@RunWith(JUnit4.class)
-public class SoyBidiUtilsTest {
+public class SoyBidiUtilsTest extends TestCase {
 
-  @Test
+
   public void testGetBidiGlobalDir() {
     assertEquals(BidiGlobalDir.LTR, SoyBidiUtils.getBidiGlobalDir(null));
     assertEquals(BidiGlobalDir.LTR, SoyBidiUtils.getBidiGlobalDir("en"));
@@ -59,7 +51,7 @@ public class SoyBidiUtilsTest {
     assertEquals(BidiGlobalDir.RTL, SoyBidiUtils.getBidiGlobalDir("az-Arab-IR"));
   }
 
-  @Test
+
   public void testGetBidiFormatter() {
     assertEquals(1, SoyBidiUtils.getBidiFormatter(1).getContextDir().ord);
     assertEquals(-1, SoyBidiUtils.getBidiFormatter(-1).getContextDir().ord);
@@ -68,7 +60,7 @@ public class SoyBidiUtilsTest {
     assertTrue(SoyBidiUtils.getBidiFormatter(-1) != SoyBidiUtils.getBidiFormatter(1));
   }
 
-  @Test
+
   public void testDecodeBidiGlobalDirFromJsOptions() {
     assertNull(SoyBidiUtils.decodeBidiGlobalDirFromJsOptions(0, false));
 
@@ -87,7 +79,6 @@ public class SoyBidiUtilsTest {
     assertEquals(bidiGlobalDir.getCodeSnippet(), "soy.$$IS_LOCALE_RTL?-1:1");
   }
 
-  @Test
   public void testDecodeBidiGlobalDirFromPyOptions() {
     assertNull(SoyBidiUtils.decodeBidiGlobalDirFromPyOptions(null));
     assertNull(SoyBidiUtils.decodeBidiGlobalDirFromPyOptions(""));
@@ -103,7 +94,6 @@ public class SoyBidiUtilsTest {
     assertEquals(bidiGlobalDir.getCodeSnippet(), "-1 if external_bidi.is_rtl() else 1");
   }
 
-  @Test
   public void testInvalidDecodeBidiGlobalDirFromPyOptions() {
     try {
       SoyBidiUtils.decodeBidiGlobalDirFromPyOptions("is_rtl");
