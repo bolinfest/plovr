@@ -202,6 +202,9 @@ public final class PseudoTranslator {
       write("<" + qName);
       for (int i = 0; i < attributes.getLength(); i++) {
         String name = attributes.getLocalName(i);
+        if (name.isEmpty()) {
+          name = attributes.getQName(i);
+        }
         String value = attributes.getValue(i);
         write(" " + name + "=\"" + value + "\"");
       }

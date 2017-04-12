@@ -30,17 +30,17 @@ public class PseudoTranslatorTest {
   public void testTranslateXlf() throws IOException,
       ParserConfigurationException, SAXException {
     String xlf = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
-    		"<xliff version=\"1.2\" xmlns=\"urn:oasis:names:tc:xliff:document:1.2\">\n" +
-    		"  <file original=\"SoyMsgBundle\" datatype=\"x-soy-msg-bundle\" xml:space=\"preserve\" source-language=\"en\">\n" +
-    		"    <body>\n" +
-    		"      <trans-unit id=\"8148892645275058473\" datatype=\"html\">\n" +
-    		"        <source>Personal Settings</source>\n" +
-    		"        <note priority=\"1\" from=\"description\">name/email settings page</note>\n" +
-    		"        <note priority=\"1\" from=\"meaning\">heading</note>\n" +
-    		"      </trans-unit>\n" +
-    		"    </body>\n" +
-    		"  </file>\n" +
-    		"</xliff>";
+        "<xliff version=\"1.2\" xmlns=\"urn:oasis:names:tc:xliff:document:1.2\">\n" +
+        "  <file original=\"SoyMsgBundle\" datatype=\"x-soy-msg-bundle\" xml:space=\"preserve\" source-language=\"en\">\n" +
+        "    <body>\n" +
+        "      <trans-unit id=\"8148892645275058473\" datatype=\"html\">\n" +
+        "        <source>Personal Settings</source>\n" +
+        "        <note priority=\"1\" from=\"description\">name/email settings page</note>\n" +
+        "        <note priority=\"1\" from=\"meaning\">heading</note>\n" +
+        "      </trans-unit>\n" +
+        "    </body>\n" +
+        "  </file>\n" +
+        "</xliff>";
     InputStream input = new ByteArrayInputStream(xlf.getBytes("UTF-8"));
     Writer writer = new StringWriter();
     PseudoTranslator.translateXlf(input, writer);
