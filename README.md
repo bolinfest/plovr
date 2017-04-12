@@ -26,32 +26,40 @@ and for your operating system. If you have trouble installing Buck
 To test:
 
 ```
+buck fetch ...
 buck test
 ```
 
 To build:
 
 ```
+buck fetch ...
 buck build plovr
 ```
 
 The output of the build will be in `buck-out/gen/plovr.jar`.
 
-### To Upgrade Closure Dependencies
+### To Upgrade Closure Library
 
 To upgrade one of Closure Library, Compiler, or Templates, go to the official repo and find the SHA digest
 of the commit you want to sync to. Then run.
 
 ```
-scripts/update-repository.sh closure-compiler sha-digest
+scripts/update-repository.sh closure-library sha-digest
 ```
 
 Sometimes this doesn't work because `git subtree` is buggy. If nothing updates, try running:
 
 ```
-scripts/update-repository.sh closure-compiler master
+scripts/update-repository.sh closure-library master
 git reset --hard origin/master
-scripts/update-repository.sh closure-compiler sha-digest
+scripts/update-repository.sh closure-library sha-digest
 ```
 
 This will bully `git subtree` into shape.
+
+### To Upgrade Closure Compiler or Closure Templates
+
+The Closure Compiler and Template depenencies are managed with Maven.
+
+Follow the instructions in [third-party/README.md](third-party/README.md).

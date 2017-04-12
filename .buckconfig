@@ -1,7 +1,7 @@
 [alias]
-  closure-compiler = //closure/closure-compiler:closure-compiler
   closure-stylesheets = //closure/closure-stylesheets:closure-stylesheets
-  closure-templates = //closure/closure-templates:closure-templates
   plovr = //:plovr
 [java]
   src_roots = src, test
+[download]
+  maven_repo = https://repo1.maven.org/maven2

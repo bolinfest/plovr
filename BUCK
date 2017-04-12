@@ -17,45 +17,27 @@ java_library(
   source = '7',
   target = '7',
   deps = [
-    '//closure/closure-compiler:args4j',
-    '//closure/closure-compiler:closure-compiler',
-    '//closure/closure-compiler:gson',
-    '//closure/closure-compiler:guava',
-    '//closure/closure-compiler:jsr305',
-    '//closure/closure-compiler:protobuf',
+    ':third-party-support-libs',
+    '//third-party:COMPILE',
     '//closure/closure-library:closure-library',
     '//closure/closure-stylesheets:closure-stylesheets',
-    '//closure/closure-templates:closure-templates',
-    '//closure/closure-templates:guice',
-    '//closure/closure-templates:guice-assistedinject',
-    '//closure/closure-templates:guice-multibindings',
-    ':selenium',
   ],
 )
+
+java_library(
+  name = 'third-party-support-libs',
+  srcs = [],
+  resources = ['//third-party/javascript:soyutils_usegoog.js'],
+  resources_root = './third-party')
 
 java_test(
   name = 'test',
   srcs = glob(['test/**/*.java']),
   resources = glob(['test/**/*.js']),
   deps = [
-    '//closure/closure-compiler:closure-compiler',
-    '//closure/closure-compiler:jsr305',
-    '//closure/closure-compiler:junit',
-    '//closure/closure-stylesheets:closure-stylesheets',
-    '//closure/closure-templates:closure-templates',
-    '//closure/closure-templates:guava',
-    ':mockito',
     ':plovr-lib',
-    '//closure/closure-compiler:gson',
+    '//third-party:COMPILE',
+    '//third-party:TEST',
+    '//closure/closure-stylesheets:closure-stylesheets',
   ],
-)
-
-prebuilt_jar(
-  name = 'mockito',
-  binary_jar = 'lib/mockito-core-1.10.19.jar',
-)
-
-prebuilt_jar(
-  name = 'selenium',
-  binary_jar = 'lib/selenium-java-2.21.0.jar',
 )

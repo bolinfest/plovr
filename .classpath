@@ -4,27 +4,7 @@
 	<classpathentry kind="src" path="closure/closure-library"/>
 	<classpathentry kind="src" path="closure/closure-stylesheets/build/genfiles/java"/>
 	<classpathentry kind="src" path="closure/closure-stylesheets/src"/>
-	<classpathentry kind="src" path="closure/closure-templates/build/genfiles"/>
-	<classpathentry kind="src" path="closure/closure-compiler/gen"/>
-	<classpathentry kind="src" path="closure/closure-templates/java/src"/>
-	<classpathentry excluding="com/google/javascript/jscomp/ant/*" kind="src" path="closure/closure-compiler/src"/>
 	<classpathentry kind="src" path="test"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
-	<classpathentry kind="lib" path="closure/closure-compiler/build/lib/rhino.jar"/>
-	<classpathentry kind="lib" path="closure/closure-compiler/lib/ant.jar"/>
-	<classpathentry kind="lib" path="closure/closure-compiler/lib/args4j.jar"/>
-	<classpathentry kind="lib" path="closure/closure-compiler/lib/guava.jar"/>
-	<classpathentry kind="lib" path="closure/closure-compiler/lib/json.jar"/>
-	<classpathentry kind="lib" path="closure/closure-compiler/lib/jsr305.jar"/>
-	<classpathentry kind="lib" path="closure/closure-compiler/lib/protobuf-java.jar"/>
-	<classpathentry kind="lib" path="closure/closure-templates/java/lib/aopalliance.jar"/>
-	<classpathentry kind="lib" path="closure/closure-templates/java/lib/guice-3.0.jar"/>
-	<classpathentry kind="lib" path="closure/closure-templates/java/lib/guice-assistedinject-3.0.jar"/>
-	<classpathentry kind="lib" path="closure/closure-templates/java/lib/guice-multibindings-3.0.jar"/>
-	<classpathentry kind="lib" path="closure/closure-templates/java/lib/icu4j-51_1.jar"/>
-	<classpathentry kind="lib" path="closure/closure-templates/java/lib/javax.inject.jar"/>
-	<classpathentry kind="lib" path="lib/gson-2.2.2.jar"/>
-	<classpathentry kind="lib" path="lib/junit-4.8.2.jar"/>
-	<classpathentry kind="lib" path="lib/selenium-java-2.21.0.jar"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>
