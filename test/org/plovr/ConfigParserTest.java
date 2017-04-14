@@ -171,7 +171,7 @@ public class ConfigParserTest {
             "/closure/goog/soy/data.js",
             "/closure/goog/soy/soy.js",
             "/closure/goog/string/stringbuffer.js",
-            "../../closure/closure-templates/javascript/soyutils_usegoog.js",
+            "../../third-party/javascript/soyutils_usegoog.js",
             "custom/foo/bar.soy",
             "main/foo/bar.soy",
             "main.js"),

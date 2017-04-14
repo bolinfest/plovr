@@ -3,7 +3,7 @@
   "paths": [
     "main",
     "custom",
-    "../../closure/closure-templates/javascript/soyutils_usegoog.js"
+    "../../third-party/javascript/soyutils_usegoog.js"
   ],
   "inputs": "main.js",
 
@@ -11,5 +11,5 @@
   // Closure resources are pre-packaged.
   "closure-library": "../../closure/closure-library/closure/goog/",
   "custom-externs-only": true,
-  "externs": "../../closure/closure-compiler/externs/"
+  "externs": "../../third-party/externs/"
 }
