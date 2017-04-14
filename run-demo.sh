@@ -3,6 +3,7 @@
 # ant clean jar
 
 # This will run the plovr demo.
+buck fetch ...
 buck build plovr
 java -classpath buck-out/gen/plovr.jar org.plovr.cli.Main serve www/demo/demo-config.js testdata/modules/plovr-config.js
 
