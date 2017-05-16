@@ -121,6 +121,8 @@ public final class Config implements Comparable<Config> {
 
   private final boolean printInputDelimiter;
 
+  private final boolean enableAggressiveRawCaching;
+
   private final File outputFile;
 
   private final String outputWrapper;
@@ -225,6 +227,7 @@ public final class Config implements Comparable<Config> {
       boolean debug,
       boolean prettyPrint,
       boolean printInputDelimiter,
+      boolean enableAggressiveRawCaching,
       @Nullable File outputFile,
       @Nullable String outputWrapper,
       Charset outputCharset,
@@ -282,6 +285,7 @@ public final class Config implements Comparable<Config> {
     this.debug = debug;
     this.prettyPrint = prettyPrint;
     this.printInputDelimiter = printInputDelimiter;
+    this.enableAggressiveRawCaching = enableAggressiveRawCaching;
     this.outputFile = outputFile;
     this.outputWrapper = outputWrapper;
     this.outputCharset = outputCharset;
@@ -383,6 +387,10 @@ public final class Config implements Comparable<Config> {
 
   public WarningLevel getWarningLevel() {
     return warningLevel;
+  }
+
+  public boolean getEnableAggressiveRawCaching() {
+    return enableAggressiveRawCaching;
   }
 
   public File getOutputFile() {
@@ -1092,6 +1100,8 @@ public final class Config implements Comparable<Config> {
 
     private boolean printInputDelimiter = false;
 
+    private boolean enableAggressiveRawCaching = false;
+
     private File outputFile = null;
 
     private File cacheOutputFile = null;
@@ -1221,6 +1231,7 @@ public final class Config implements Comparable<Config> {
       this.debug = config.debug;
       this.prettyPrint = config.prettyPrint;
       this.printInputDelimiter = config.printInputDelimiter;
+      this.enableAggressiveRawCaching = config.enableAggressiveRawCaching;
       this.outputFile = config.outputFile;
       this.outputWrapper = config.outputWrapper;
       this.outputCharset = config.outputCharset;
@@ -1502,6 +1513,10 @@ public final class Config implements Comparable<Config> {
 
     public void setPrintInputDelimiter(boolean printInputDelimiter) {
       this.printInputDelimiter = printInputDelimiter;
+    }
+
+    public void setEnableAggressiveRawCaching(boolean enableAggressiveRawCaching) {
+      this.enableAggressiveRawCaching = enableAggressiveRawCaching;
     }
 
     public void setOutputFile(File outputFile) {
@@ -1801,6 +1816,7 @@ public final class Config implements Comparable<Config> {
           debug,
           prettyPrint,
           printInputDelimiter,
+          enableAggressiveRawCaching,
           outputFile,
           outputWrapper,
           outputCharset,

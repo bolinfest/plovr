@@ -105,14 +105,25 @@ abstract class AbstractGetHandler implements HttpHandler {
   }
 
   /**
+   * Formats a date for an HTTP header.
+   */
+  protected static String formatDate(Date date) {
+    DateFormat format = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz");
+    format.setTimeZone(TimeZone.getTimeZone("GMT"));
+    return format.format(date);
+  }
+
+  protected void setDateHeader(Headers headers) {
+    headers.set("Date", formatDate(new Date()));
+  }
+
+  /**
    * Sets the cache headers to disable caching of resources.
    * See http://code.google.com/p/doctype/wiki/ArticleHttpCaching
    */
   protected void setCacheHeaders(Headers headers) {
-    DateFormat format = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz");
-    format.setTimeZone(TimeZone.getTimeZone("GMT"));
+    setDateHeader(headers);
 
-    headers.set("Date", format.format(new Date()));
     headers.set("Expires", "Fri, 01 Jan 1990 00:00:00 GMT");
     headers.set("Pragma", "no-cache");
     headers.set("Cache-control", "no-cache, must-revalidate");

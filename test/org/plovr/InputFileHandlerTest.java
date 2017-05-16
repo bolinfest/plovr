@@ -21,9 +21,9 @@ public class InputFileHandlerTest {
     String moduleUriBase = "http://plovr.org:9988/";
     String configId = "inputNameTest";
     Function<JsInput,String> converter = InputFileHandler.
-        createInputNameToUriConverter(moduleUriBase, configId);
+        createInputNameToUriConverter(moduleUriBase, configId, false);
 
-    JsInput input = createDummyJsInput("../../bar/foo.js");
+    JsInput input = createDummyJsInput("../../bar/foo.js", null);
     String uri = converter.apply(input);
     assertEquals(
         "../ should be replaced with $$/",
@@ -31,7 +31,22 @@ public class InputFileHandlerTest {
         uri);
   }
 
-  private static JsInput createDummyJsInput(String name) {
-    return new DummyJsInput(name, "alert('ok');", null, null);
+  @Test
+  public void testInputNameToUriConverterWithEtag() {
+    String moduleUriBase = "http://plovr.org:9988/";
+    String configId = "aggressiveCacheTest";
+    Function<JsInput,String> converter = InputFileHandler.
+        createInputNameToUriConverter(moduleUriBase, configId, true);
+
+    JsInput input = createDummyJsInput("bar/foo.js", "\"abcdef\"");
+    String uri = converter.apply(input);
+    assertEquals(
+        "_tag should be appended",
+        "http://plovr.org:9988/input/aggressiveCacheTest/bar/foo.js?_tag=abcdef",
+        uri);
+  }
+
+  private static JsInput createDummyJsInput(String name, String etag) {
+    return new DummyJsInput(name, "alert('ok');", etag);
   }
 }
