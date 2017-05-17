@@ -208,13 +208,6 @@ public enum ConfigOption {
     }
   }),
 
-  ENABLE_AGGRESSIVE_RAW_CACHING("enable-aggressive-raw-caching", new ConfigUpdater() {
-    @Override
-    public void apply(boolean enableAggressiveRawCaching, Config.Builder builder) {
-      builder.setEnableAggressiveRawCaching(enableAggressiveRawCaching);
-    }
-  }),
-
   SOURCE_MAP_BASE_URL("source-map-base-url", new ConfigUpdater() {
     @Override
     public void apply(String sourceMapBaseUrl, Config.Builder builder) {
@@ -562,6 +555,17 @@ public enum ConfigOption {
     public boolean reset(Config.Builder builder) {
       builder.resetExperimentalCompilerOptions();
       return true;
+    }
+  }),
+
+  /**
+   * Set long Expires and Cache-Control: max-age headers on files served in RAW
+   * mode.
+   */
+  ENABLE_AGGRESSIVE_RAW_CACHING("enable-aggressive-raw-caching", new ConfigUpdater() {
+    @Override
+    public void apply(boolean enableAggressiveRawCaching, Config.Builder builder) {
+      builder.setEnableAggressiveRawCaching(enableAggressiveRawCaching);
     }
   }),
 
