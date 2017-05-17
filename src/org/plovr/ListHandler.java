@@ -63,7 +63,7 @@ public final class ListHandler extends AbstractGetHandler {
 
     // Build up the list of hyperlinks.
     Function<JsInput, String> converter = InputFileHandler
-        .createInputNameToUriConverter(server, exchange, configId);
+        .createInputNameToUriConverter(server, exchange, configId, false);
     SoyListData inputData = new SoyListData();
     for (JsInput input : inputs) {
       SoyMapData inputDatum = new SoyMapData();

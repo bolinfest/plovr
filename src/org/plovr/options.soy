@@ -451,6 +451,12 @@ window.console.log(z.c());
     "id-generators": ["goog.events.getUniqueId"],
     </pre>
     See p.444 of <a href="{BOOK_URL}">Closure: The Definitive Guide</a> for details.
+  {case 'enable-aggressive-raw-caching'}
+    When <code>RAW</code> is used, Plovr will set long-lived <code>Expires</code>
+    and <code>Cache-Control</code> headers on served files, and will append a
+    hash of file contents to script URL's. The combination enables browsers to not
+    bother to re-request script files that have not changed since they were isLast
+    requested.
   {case 'custom-passes'}
     You can add custom behavior to the Closure Compiler by adding your own
     compiler pass. The standard way to do this is to create a Java class that

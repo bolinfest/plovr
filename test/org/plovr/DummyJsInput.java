@@ -15,6 +15,7 @@ public class DummyJsInput implements JsInput {
 
   private String name;
   private String code;
+  private String etag;
   private List<String> provides;
   private List<String> requires;
   private boolean soyFile;
@@ -22,18 +23,28 @@ public class DummyJsInput implements JsInput {
   long lastModified = 0L;
 
   public DummyJsInput(String name, String code) {
-    this(name, code, null, null, false, null);
+    this(name, code, null, null, false, null, null);
+  }
+
+  public DummyJsInput(String name, String code, String etag) {
+    this(name, code, null, null, false, null, etag);
   }
 
   public DummyJsInput(String name, String code, List<String> provides,
       List<String> requires) {
-    this(name, code, provides, requires, false, null);
+    this(name, code, provides, requires, false, null, null);
   }
 
   public DummyJsInput(String name, String code, List<String> provides,
       List<String> requires, boolean soyFile, String templateCode) {
+    this(name, code, provides, requires, soyFile, templateCode, null);
+  }
+
+  public DummyJsInput(String name, String code, List<String> provides,
+      List<String> requires, boolean soyFile, String templateCode, String etag) {
     this.name = name;
     this.code = code;
+    this.etag = etag;
     if (provides != null) {
       this.provides = ImmutableList.copyOf(provides);
     } else {
@@ -84,12 +95,16 @@ public class DummyJsInput implements JsInput {
 
   @Override
   public boolean supportsEtags() {
-    return false;
+    return this.etag != null;
   }
 
   @Override
   public CodeWithEtag getCodeWithEtag() {
-    throw new UnsupportedOperationException();
+    if (this.etag == null) {
+      throw new UnsupportedOperationException();
+    }
+
+    return new CodeWithEtag(this.getCode(), this.etag);
   }
 
   @Override

@@ -21,6 +21,7 @@ import org.plovr.util.HttpExchangeUtil;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -68,7 +69,12 @@ public class InputFileHandler extends AbstractGetHandler {
     // loaded.
    Function<JsInput,JsonPrimitive> inputToUri = Functions.compose(
        GsonUtil.STRING_TO_JSON_PRIMITIVE,
-       createInputNameToUriConverter(server, exchange, config.getId()));
+       createInputNameToUriConverter(
+           server,
+           exchange,
+           config.getId(),
+           (config.getCompilationMode() == CompilationMode.RAW &&
+            config.getEnableAggressiveRawCaching())));
 
     String moduleInfo;
     String moduleUris;
@@ -190,6 +196,11 @@ public class InputFileHandler extends AbstractGetHandler {
         String eTag = codeWithEtag.eTag;
         String ifNoneMatch = exchange.getRequestHeaders().getFirst(
             "If-None-Match");
+        Headers headers = exchange.getResponseHeaders();
+
+        if (data.getParam(ETAG_QUERY_PARAM) != null) {
+          setAggressiveCacheHeaders(headers);
+        }
 
         // Don't send etags on old version of Chrome, because of a weird Java
         // HttpServer bug that it reacted badly to. See:
@@ -199,7 +210,6 @@ public class InputFileHandler extends AbstractGetHandler {
           Responses.notModified(exchange);
           return;
         } else {
-          Headers headers = exchange.getResponseHeaders();
           headers.set("ETag", eTag);
           code = prefix + codeWithEtag.code;
         }
@@ -261,15 +271,29 @@ public class InputFileHandler extends AbstractGetHandler {
   @Override
   protected void setCacheHeaders(Headers headers) {}
 
+  private void setAggressiveCacheHeaders(Headers headers) {
+    setDateHeader(headers);
+
+    Calendar cal = Calendar.getInstance();
+    cal.add(Calendar.SECOND, 31536000);
+
+    headers.set("Expires", formatDate(cal.getTime()));
+    headers.set("Cache-control", "max-age=31536000");
+  }
+
+  private static final String ETAG_QUERY_PARAM = "_tag";
+  private static final Pattern ETAG_PATTERN = Pattern.compile("^W?\"([^\"]+)\"$");
+
   static Function<JsInput, String> createInputNameToUriConverter(
-      CompilationServer server, HttpExchange exchange, final String configId) {
+      CompilationServer server, HttpExchange exchange, final String configId,
+      final boolean includeEtag) {
     String moduleUriBase = server.getServerForExchange(exchange);
-    return createInputNameToUriConverter(moduleUriBase, configId);
+    return createInputNameToUriConverter(moduleUriBase, configId, includeEtag);
   }
 
   @VisibleForTesting
   static Function<JsInput, String> createInputNameToUriConverter(
-      final String moduleUriBase, final String configId) {
+      final String moduleUriBase, final String configId, final boolean includeEtag) {
     return new Function<JsInput, String>() {
       @Override
       public String apply(JsInput input) {
@@ -291,10 +315,18 @@ public class InputFileHandler extends AbstractGetHandler {
         // path information).
         name = escapeRelativePath.apply(name);
 
-        return String.format("%sinput/%s%s",
+        String uri = String.format("%sinput/%s%s",
             moduleUriBase,
             QueryData.encode(configId),
             name);
+
+        if (includeEtag && input.supportsEtags()) {
+            String eTag = input.getCodeWithEtag().eTag;
+            String tag = ETAG_PATTERN.matcher(eTag).replaceAll("$1");
+            uri = String.format("%s?%s=%s", uri, ETAG_QUERY_PARAM, tag);
+        }
+
+        return uri;
       }
     };
   }

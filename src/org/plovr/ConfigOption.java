@@ -558,6 +558,17 @@ public enum ConfigOption {
     }
   }),
 
+  /**
+   * Set long Expires and Cache-Control: max-age headers on files served in RAW
+   * mode.
+   */
+  ENABLE_AGGRESSIVE_RAW_CACHING("enable-aggressive-raw-caching", new ConfigUpdater() {
+    @Override
+    public void apply(boolean enableAggressiveRawCaching, Config.Builder builder) {
+      builder.setEnableAggressiveRawCaching(enableAggressiveRawCaching);
+    }
+  }),
+
   CUSTOM_PASSES("custom-passes", new ConfigUpdater() {
     @Override
     public void apply(JsonArray value, Config.Builder builder) {
