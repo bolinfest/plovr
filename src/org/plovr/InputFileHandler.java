@@ -275,10 +275,10 @@ public class InputFileHandler extends AbstractGetHandler {
     setDateHeader(headers);
 
     Calendar cal = Calendar.getInstance();
-    cal.add(Calendar.SECOND, 315360000);
+    cal.add(Calendar.SECOND, 31536000);
 
     headers.set("Expires", formatDate(cal.getTime()));
-    headers.set("Cache-control", "max-age=315360000");
+    headers.set("Cache-control", "max-age=31536000");
   }
 
   private static final String ETAG_QUERY_PARAM = "_tag";
