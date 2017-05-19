@@ -27,7 +27,7 @@ public final class VersionUtil {
       build();
 
   private static final String readRevisionFromJar(String projectName) {
-    String resourceName = "/revisions/rev-" + projectName + ".txt";
+    String resourceName = "/tools/imports/rev-" + projectName + ".txt";
     URL url = Resources.getResource(VersionUtil.class, resourceName);
     try {
       return Resources.toString(url, Charsets.US_ASCII).trim();
