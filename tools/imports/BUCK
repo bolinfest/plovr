@@ -1,0 +1,11 @@
+genrule(
+  name = 'rev-plovr',
+  srcs = [],
+  out = 'rev-plovr.txt',
+  cmd = 'git rev-parse HEAD > $OUT')
+
+java_library(
+  name = 'revs',
+  srcs = [],
+  visibility = ['PUBLIC'],
+  resources = [':rev-plovr'] + glob(['*.txt']))

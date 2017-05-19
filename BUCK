@@ -17,6 +17,7 @@ java_library(
   source = '7',
   target = '7',
   deps = [
+    '//tools/imports:revs',
     ':third-party-support-libs',
     '//third-party:COMPILE',
     '//closure/closure-library:closure-library',
