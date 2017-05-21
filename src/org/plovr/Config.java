@@ -687,6 +687,7 @@ public final class Config implements Comparable<Config> {
 
   public PlovrCompilerOptions getCompilerOptions(
       PlovrClosureCompiler compiler) {
+    Preconditions.checkNotNull(compiler);
     Preconditions.checkArgument(compilationMode != CompilationMode.RAW,
         "Cannot compile using RAW mode");
     CompilationLevel level = compilationMode.getCompilationLevel();
@@ -746,40 +747,38 @@ public final class Config implements Comparable<Config> {
       options.addWarningsGuard(factory.createWarningsGuard());
     }
 
-    if (compiler != null) {
-      // Instantiate the custom compiler passes and register any DiagnosticGroups
-      // from those passes.
-      PlovrDiagnosticGroups groups = compiler.getDiagnosticGroups();
-      Multimap<CustomPassExecutionTime, CompilerPass> passes = getCustomPasses(options);
-      for (Map.Entry<CustomPassExecutionTime, Collection<CompilerPassFactory>> entry :
-          customPasses.asMap().entrySet()) {
-        CustomPassExecutionTime executionTime = entry.getKey();
-        Collection<CompilerPassFactory> factories = entry.getValue();
-        for (CompilerPassFactory factory : factories) {
-          CompilerPass compilerPass = factory.createCompilerPass(compiler, this);
-          passes.put(executionTime, compilerPass);
-          if (compilerPass instanceof DiagnosticGroupRegistrar) {
-            DiagnosticGroupRegistrar registrar = (DiagnosticGroupRegistrar)compilerPass;
-            registrar.registerDiagnosticGroupsWith(groups);
-          }
+    // Instantiate the custom compiler passes and register any DiagnosticGroups
+    // from those passes.
+    PlovrDiagnosticGroups groups = compiler.getDiagnosticGroups();
+    Multimap<CustomPassExecutionTime, CompilerPass> passes = getCustomPasses(options);
+    for (Map.Entry<CustomPassExecutionTime, Collection<CompilerPassFactory>> entry :
+             customPasses.asMap().entrySet()) {
+      CustomPassExecutionTime executionTime = entry.getKey();
+      Collection<CompilerPassFactory> factories = entry.getValue();
+      for (CompilerPassFactory factory : factories) {
+        CompilerPass compilerPass = factory.createCompilerPass(compiler, this);
+        passes.put(executionTime, compilerPass);
+        if (compilerPass instanceof DiagnosticGroupRegistrar) {
+          DiagnosticGroupRegistrar registrar = (DiagnosticGroupRegistrar)compilerPass;
+          registrar.registerDiagnosticGroupsWith(groups);
         }
       }
+    }
 
-      // Now that custom passes have registered with the PlovrDiagnosticGroups,
-      // warning levels as specified in the "checks" config option should be
-      // applied.
-      if (checkLevelsForDiagnosticGroups != null) {
-        for (Map.Entry<String, CheckLevel> entry :
-            checkLevelsForDiagnosticGroups.entrySet()) {
-          DiagnosticGroup group = groups.forName(entry.getKey());
-          if (group == null) {
-            System.err.printf("WARNING: UNRECOGNIZED CHECK \"%s\" in your " +
-                              "plovr config. Ignoring.\n", entry.getKey());
-            continue;
-          }
-          CheckLevel checkLevel = entry.getValue();
-          options.setWarningLevel(group, checkLevel);
+    // Now that custom passes have registered with the PlovrDiagnosticGroups,
+    // warning levels as specified in the "checks" config option should be
+    // applied.
+    if (checkLevelsForDiagnosticGroups != null) {
+      for (Map.Entry<String, CheckLevel> entry :
+               checkLevelsForDiagnosticGroups.entrySet()) {
+        DiagnosticGroup group = groups.forName(entry.getKey());
+        if (group == null) {
+          System.err.printf("WARNING: UNRECOGNIZED CHECK \"%s\" in your " +
+                            "plovr config. Ignoring.\n", entry.getKey());
+          continue;
         }
+        CheckLevel checkLevel = entry.getValue();
+        options.setWarningLevel(group, checkLevel);
       }
     }
 

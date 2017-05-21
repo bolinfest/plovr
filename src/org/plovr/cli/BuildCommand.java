@@ -57,7 +57,8 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       Config config = builder.build();
       Compilation compilation;
       try {
-        compilation = Compilation.createAndCompile(config);
+        compilation = Compilation.create(config);
+        compilation.compile();
       } catch (CompilationException e) {
         e.print(System.err);
         return 1;

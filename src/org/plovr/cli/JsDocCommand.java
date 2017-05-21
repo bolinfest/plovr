@@ -65,7 +65,7 @@ public class JsDocCommand extends AbstractCommandRunner<JsDocCommandOptions> {
 
     Config config = builder.build();
     try {
-      Compilation.createAndCompile(config);
+      Compilation.create(config).compile();
     } catch (CompilationException e) {
       e.print(System.err);
       return 1;
