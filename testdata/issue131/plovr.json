@@ -1,0 +1,10 @@
+{
+    "id": "es6-bug",
+    "mode": "ADVANCED",
+    "level": "VERBOSE",
+    "language": "en",
+    "language-in": "ECMASCRIPT6",
+    "language-out": "ECMASCRIPT5",
+    "inputs": ["bug.soy", "bug.js"],
+    "output-file": "out.js"
+}

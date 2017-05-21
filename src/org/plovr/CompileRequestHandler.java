@@ -100,7 +100,8 @@ public class CompileRequestHandler extends AbstractGetHandler {
   private void compile(
       Config config, Function<String, String> moduleNameToUri, Report report, Appendable appendable)
       throws IOException, CompilationException {
-    Compilation compilation = Compilation.createAndCompile(config);
+    Compilation compilation = Compilation.create(config);
+    compilation.compile();
     server.recordCompilation(config, compilation);
     Result result = compilation.getResult();
 

@@ -30,6 +30,9 @@ import com.google.gson.JsonPrimitive;
 import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.Compiler;
 import com.google.javascript.jscomp.ErrorManager;
+import com.google.javascript.jscomp.GoogleJsMessageIdGenerator;
+import com.google.javascript.jscomp.JsMessage;
+import com.google.javascript.jscomp.JsMessageExtractor;
 import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.JSModule;
 import com.google.javascript.jscomp.PlovrCompilerOptions;
@@ -49,12 +52,13 @@ public final class Compilation {
 
   private static final Logger logger = Logger.getLogger("org.plovr.Compilation");
 
+  private Config config;
+
   private final List<SourceFile> externs;
   private final List<SourceFile> inputs;
   private final List<JSModule> modules;
   private final Map<String, JSModule> nameToModule;
 
-  private Config config;
   private Compiler compiler;
   private Result result;
 
@@ -64,8 +68,9 @@ public final class Compilation {
    */
   private String inputJsConcatenatedInOrder;
 
-  private Compilation(List<SourceFile> externs,
+  private Compilation(Config config, List<SourceFile> externs,
       List<SourceFile> inputs, List<JSModule> modules) {
+    this.config = config;
     this.externs = ImmutableList.copyOf(externs);
     this.inputs = inputs == null ? null : ImmutableList.copyOf(inputs);
     this.modules = modules == null ? null : ImmutableList.copyOf(modules);
@@ -85,15 +90,21 @@ public final class Compilation {
 
   public static Compilation create(List<SourceFile> externs,
       List<SourceFile> inputs) {
-    return new Compilation(externs, inputs, null);
+    return new Compilation(null, externs, inputs, null);
   }
 
   public static Compilation createForModules(List<SourceFile> externs,
       List<JSModule> modules) {
-    return new Compilation(externs, null, modules);
+    return new Compilation(null, externs, null, modules);
   }
 
-  public static Compilation createAndCompile(Config config) throws CompilationException {
+  /**
+   * Creates an object for managing a compilation
+   *
+   * We need to be able to parse all the JS files to find all the dependencies,
+   * so if we can't parse them, we will throw a compilation exception
+   */
+  public static Compilation create(Config config) throws CompilationException {
     // Generate all the code upfront, and track any syntax errors in individual
     // generated files.
     Set<JsInput> allDependencies = config.getManifest().getAllDependencies();
@@ -114,9 +125,7 @@ public final class Compilation {
       PlovrClosureCompiler dummyCompiler = new PlovrClosureCompiler(config.getErrorStream());
       Compilation compilation = config.getManifest().getCompilerArguments(
           config.getModuleConfig(), config.getCompilerOptions(dummyCompiler));
-      logger.info("Compiling " + allDependencies.size()
-                  + " dependencies using mode: " + config.getCompilationMode());
-      compilation.compile(config);
+      compilation.setConfig(config);
       return compilation;
     } catch (Throwable e) {
       throw toCheckedException(e);
@@ -132,18 +141,57 @@ public final class Compilation {
     throw Throwables.propagate(e);
   }
 
-  public void compile(Config config) throws CompilationException {
-    this.config = config;
+  /**
+   * Sets the config for the compilation.
+   *
+   * This method is intended only for legacy callers.
+   * Most callers should use Compilation.create(), which will take care of this
+   *
+   * Over time, the compiler has moved towards auto-discovery of inputs from the config,
+   * rather than setting the inputs first and the config later.
+   */
+  void setConfig(Config c) {
+    Preconditions.checkState(config == null, "Config already initialized");
+    config = c;
+  }
 
-    if (config.getCompilationMode() == CompilationMode.RAW) {
-      compileRaw(config);
-    } else {
-      PlovrClosureCompiler compiler = new PlovrClosureCompiler(config.getErrorStream());
-      compile(config, compiler, config.getCompilerOptions(compiler));
+  /**
+   * Extracts the i18n messages from this compilation job.
+   * You do not need to run a full compile to get the messages.
+   */
+  public Iterable<JsMessage> extractMessages() throws CompilationException {
+    PlovrClosureCompiler compiler = new PlovrClosureCompiler(config.getErrorStream());
+    JsMessageExtractor extractor =
+        new JsMessageExtractor(
+            new GoogleJsMessageIdGenerator(null),
+            JsMessage.Style.CLOSURE,
+            config.getCompilerOptions(compiler),
+            false
+        );
+
+    return extractor.extractMessages(inputs);
+  }
+
+  public void compile(Config c) throws CompilationException {
+    setConfig(c);
+    compile();
+  }
+
+  public void compile() throws CompilationException {
+    Preconditions.checkNotNull(config, "Config not initialized. Please use the compile(Config) method");
+    try {
+      if (config.getCompilationMode() == CompilationMode.RAW) {
+        compileRaw();
+      } else {
+        PlovrClosureCompiler compiler = new PlovrClosureCompiler(config.getErrorStream());
+        compile(compiler, config.getCompilerOptions(compiler));
+      }
+    } catch (Throwable t) {
+      throw toCheckedException(t);
     }
   }
 
-  private void compileRaw(Config config) {
+  private void compileRaw() {
     Preconditions.checkArgument(
         config.getCompilationMode() == CompilationMode.RAW,
         "Config must be in RAW mode");
@@ -168,7 +216,7 @@ public final class Compilation {
    * For now, this method is private so that the client does not get access to
    * the Compiler that was used.
    */
-  private void compile(Config config, Compiler compiler,
+  private void compile(Compiler compiler,
       PlovrCompilerOptions options) {
     Preconditions.checkState(!hasResult(), "Compilation already occurred");
     this.compiler = compiler;

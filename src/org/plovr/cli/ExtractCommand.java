@@ -7,6 +7,7 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.util.List;
 
+import org.plovr.Compilation;
 import org.plovr.CompilationException;
 import org.plovr.Config;
 import org.plovr.ConfigParser;
@@ -25,9 +26,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.escape.Escaper;
 import com.google.common.xml.XmlEscapers;
-import com.google.javascript.jscomp.GoogleJsMessageIdGenerator;
 import com.google.javascript.jscomp.JsMessage;
-import com.google.javascript.jscomp.JsMessageExtractor;
 import com.google.javascript.jscomp.SourceFile;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.msgs.SoyMsgBundle;
@@ -62,32 +61,17 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
       return 1;
     }
 
-    // Use the config file to get the list of inputs, in order.
     String configFile = arguments.get(0);
     Config config = ConfigParser.parseFile(new File(configFile));
-    Manifest manifest = config.getManifest();
-    List<JsInput> inputs;
+    Iterable<JsMessage> messages = null;
     try {
-      inputs = manifest.getInputsInCompilationOrder();
+      Compilation compilation = Compilation.create(config);
+      messages = compilation.extractMessages();
     } catch (CompilationException e) {
       e.print(System.err);
       return 1;
     }
 
-    JsMessageExtractor extractor =
-        new JsMessageExtractor(
-            new GoogleJsMessageIdGenerator(null),
-            JsMessage.Style.CLOSURE,
-            config.getCompilerOptions(null),
-            false
-        );
-
-    Iterable<JsMessage> messages = extractor.extractMessages(
-        Iterables.transform(inputs, new Function<JsInput, SourceFile>() {
-          @Override public SourceFile apply(JsInput input) {
-            return SourceFile.fromGenerator(input.getName(), input);
-          }
-        }));
 
     if (options.getFormat() == Format.XTB) {
       System.out.println(
