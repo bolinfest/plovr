@@ -76,7 +76,11 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
 
     JsMessageExtractor extractor =
         new JsMessageExtractor(
-            new GoogleJsMessageIdGenerator(null), JsMessage.Style.CLOSURE);
+            new GoogleJsMessageIdGenerator(null),
+            JsMessage.Style.CLOSURE,
+            config.getCompilerOptions(null),
+            false
+        );
 
     Iterable<JsMessage> messages = extractor.extractMessages(
         Iterables.transform(inputs, new Function<JsInput, SourceFile>() {

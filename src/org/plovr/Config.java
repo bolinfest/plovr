@@ -746,20 +746,39 @@ public final class Config implements Comparable<Config> {
       options.addWarningsGuard(factory.createWarningsGuard());
     }
 
-    // Instantiate the custom compiler passes and register any DiagnosticGroups
-    // from those passes.
-    PlovrDiagnosticGroups groups = compiler.getDiagnosticGroups();
-    Multimap<CustomPassExecutionTime, CompilerPass> passes = getCustomPasses(options);
-    for (Map.Entry<CustomPassExecutionTime, Collection<CompilerPassFactory>> entry :
-        customPasses.asMap().entrySet()) {
-      CustomPassExecutionTime executionTime = entry.getKey();
-      Collection<CompilerPassFactory> factories = entry.getValue();
-      for (CompilerPassFactory factory : factories) {
-        CompilerPass compilerPass = factory.createCompilerPass(compiler, this);
-        passes.put(executionTime, compilerPass);
-        if (compilerPass instanceof DiagnosticGroupRegistrar) {
-          DiagnosticGroupRegistrar registrar = (DiagnosticGroupRegistrar)compilerPass;
-          registrar.registerDiagnosticGroupsWith(groups);
+    if (compiler != null) {
+      // Instantiate the custom compiler passes and register any DiagnosticGroups
+      // from those passes.
+      PlovrDiagnosticGroups groups = compiler.getDiagnosticGroups();
+      Multimap<CustomPassExecutionTime, CompilerPass> passes = getCustomPasses(options);
+      for (Map.Entry<CustomPassExecutionTime, Collection<CompilerPassFactory>> entry :
+          customPasses.asMap().entrySet()) {
+        CustomPassExecutionTime executionTime = entry.getKey();
+        Collection<CompilerPassFactory> factories = entry.getValue();
+        for (CompilerPassFactory factory : factories) {
+          CompilerPass compilerPass = factory.createCompilerPass(compiler, this);
+          passes.put(executionTime, compilerPass);
+          if (compilerPass instanceof DiagnosticGroupRegistrar) {
+            DiagnosticGroupRegistrar registrar = (DiagnosticGroupRegistrar)compilerPass;
+            registrar.registerDiagnosticGroupsWith(groups);
+          }
+        }
+      }
+
+      // Now that custom passes have registered with the PlovrDiagnosticGroups,
+      // warning levels as specified in the "checks" config option should be
+      // applied.
+      if (checkLevelsForDiagnosticGroups != null) {
+        for (Map.Entry<String, CheckLevel> entry :
+            checkLevelsForDiagnosticGroups.entrySet()) {
+          DiagnosticGroup group = groups.forName(entry.getKey());
+          if (group == null) {
+            System.err.printf("WARNING: UNRECOGNIZED CHECK \"%s\" in your " +
+                              "plovr config. Ignoring.\n", entry.getKey());
+            continue;
+          }
+          CheckLevel checkLevel = entry.getValue();
+          options.setWarningLevel(group, checkLevel);
         }
       }
     }
@@ -777,23 +796,6 @@ public final class Config implements Comparable<Config> {
           "with a fairly larger final output, even though we just go " +
           "and re-anonymize the functions a few steps later.");
       options.renamePrefixNamespace = GLOBAL_SCOPE_NAME;
-    }
-
-    // Now that custom passes have registered with the PlovrDiagnosticGroups,
-    // warning levels as specified in the "checks" config option should be
-    // applied.
-    if (checkLevelsForDiagnosticGroups != null) {
-      for (Map.Entry<String, CheckLevel> entry :
-          checkLevelsForDiagnosticGroups.entrySet()) {
-        DiagnosticGroup group = groups.forName(entry.getKey());
-        if (group == null) {
-          System.err.printf("WARNING: UNRECOGNIZED CHECK \"%s\" in your " +
-                            "plovr config. Ignoring.\n", entry.getKey());
-          continue;
-        }
-        CheckLevel checkLevel = entry.getValue();
-        options.setWarningLevel(group, checkLevel);
-      }
     }
 
     if (variableMapInputFile != null) {
