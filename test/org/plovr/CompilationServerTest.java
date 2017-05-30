@@ -25,6 +25,7 @@ public class CompilationServerTest {
                  server.getServerForExchange(createExchange("standard.dev:2345", "https://standard.local:4567")));
     assertEquals("http://standard.local:1234/",
                  server.getServerForExchange(createExchange(null, "http://standard.local:4567")));
+    assertEquals("http://standard.dev/", server.getServerForExchange(createExchange("standard.dev", null)));
   }
 
   private HttpExchange createExchange(String host, String referer) {

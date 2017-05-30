@@ -217,6 +217,11 @@ public final class CompilationServer implements Runnable {
       host = referrer.getHost();
     }
 
+    // If the Host header doesn't include a port, getHost() gives us -1.                        
+    if (port == -1) {                                                                    
+      return String.format("%s://%s/", scheme, host);                                    
+    } 
+
     return String.format("%s://%s:%d/", scheme, host, port);
   }
 }
