@@ -291,7 +291,7 @@ public enum ConfigOption {
     @Override
     public void apply(String mode, Config.Builder builder) {
       try {
-        builder.setLanguageIn(LanguageMode.valueOf(mode));
+        builder.setLanguageIn(LanguageMode.fromString(mode));
       } catch (IllegalArgumentException e) {
         throw Throwables.propagate(e);
       }
@@ -302,7 +302,7 @@ public enum ConfigOption {
     @Override
     public void apply(String mode, Config.Builder builder) {
       try {
-        builder.setLanguageOut(LanguageMode.valueOf(mode));
+        builder.setLanguageOut(LanguageMode.fromString(mode));
       } catch (IllegalArgumentException e) {
         throw Throwables.propagate(e);
       }
@@ -917,6 +917,17 @@ public enum ConfigOption {
     public boolean update(String mode, Config.Builder builder) {
       apply(mode, builder);
       return true;
+    }
+  }),
+
+  STRICT_MODE_INPUT("strict-mode-input", new ConfigUpdater() {
+    @Override
+    public void apply(boolean isStrictModeInput, Config.Builder builder) {
+      try {
+        builder.setStrictModeInput(isStrictModeInput);
+      } catch (IllegalArgumentException e) {
+        throw Throwables.propagate(e);
+      }
     }
   }),
 

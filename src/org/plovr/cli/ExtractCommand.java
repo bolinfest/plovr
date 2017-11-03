@@ -89,7 +89,7 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
       OutputFileOptions soyOutputFileOptions = new OutputFileOptions();
       soyOutputFileOptions.setSourceLocaleString(config.getLanguage());
       CharSequence output = new XliffMsgPlugin().generateExtractedMsgsFile(
-          convertToBundle(messages), soyOutputFileOptions);
+          convertToBundle(messages, config.getLanguage()), soyOutputFileOptions);
       System.out.print(output);
     } else {
       System.err.println("Unknown format: " + options.getFormat());
@@ -126,7 +126,7 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
     return out.toString();
   }
 
-  private SoyMsgBundle convertToBundle(Iterable<JsMessage> messages) {
+  private SoyMsgBundle convertToBundle(Iterable<JsMessage> messages, String language) {
     List<SoyMsg> soyMsgs = Lists.newArrayList();
     for (JsMessage msg : messages) {
       List<SoyMsgPart> parts = Lists.newArrayList();
@@ -140,19 +140,23 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
         }
       }
 
+      SoyMsg.Builder builder = SoyMsg.builder().setId(Long.valueOf(msg.getId()));
+      if (msg.getMeaning() != null) {
+        builder.setMeaning(msg.getMeaning());
+      }
+      if (language != null) {
+        builder.setLocaleString(language);
+      }
       soyMsgs.add(
-          new SoyMsg(
-              Long.valueOf(msg.getId()),
-              null /* localeString */,
-              msg.getMeaning(),
-              msg.getDesc(),
-              msg.isHidden(),
-              null /* contentType */,
-              new SourceLocation(msg.getSourceName()),
-              parts));
+          builder
+            .setDesc(msg.getDesc())
+            .setIsHidden(msg.isHidden())
+            .setSourceLocation(new SourceLocation(msg.getSourceName()))
+            .setParts(parts)
+            .build());
     }
 
-    return new SoyMsgBundleImpl(null, soyMsgs);
+    return new SoyMsgBundleImpl(language, soyMsgs);
   }
 
   static enum Format {

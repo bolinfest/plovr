@@ -18,9 +18,9 @@
 <table cellspacing="0">
 {foreach $line in $lines}
 <tr id="{index($line) + 1}"
-    class="{if index($line) % 2 == 0}{css odd-line}{else}{css even-line}{/if}">
-  <td class="{css line-number}">{index($line) + 1}</td>
-  <td class="{css line-of-code}">{$line}</td>
+    class="{if index($line) % 2 == 0}{css('odd-line')}{else}{css('even-line')}{/if}">
+  <td class="{css('line-number')}">{index($line) + 1}</td>
+  <td class="{css('line-of-code')}">{$line}</td>
 </tr>
 {/foreach}
 </table>
