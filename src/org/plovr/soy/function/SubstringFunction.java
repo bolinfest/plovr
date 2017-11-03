@@ -1,7 +1,5 @@
 package org.plovr.soy.function;
 
-import static com.google.template.soy.shared.restricted.SoyJavaRuntimeFunctionUtils.toSoyData;
-
 import java.util.List;
 import java.util.Set;
 
@@ -60,10 +58,10 @@ public class SubstringFunction implements SoyJsSrcFunction, SoyJavaFunction {
     IntegerData start = (IntegerData) args.get(1);
 
     if (args.size() == 2) {
-      return toSoyData(str.getValue().substring(start.integerValue()));
+      return StringData.forValue(str.getValue().substring(start.integerValue()));
     } else {
       IntegerData end = (IntegerData) args.get(2);
-      return toSoyData(str.getValue().substring(start.integerValue(), end.integerValue()));
+      return StringData.forValue(str.getValue().substring(start.integerValue(), end.integerValue()));
     }
   }
 }

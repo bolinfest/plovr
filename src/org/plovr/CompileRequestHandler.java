@@ -11,7 +11,9 @@ import com.google.gson.GsonBuilder;
 import com.google.javascript.jscomp.Result;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.data.SanitizedContent;
 import com.google.template.soy.data.SoyMapData;
+import com.google.template.soy.data.UnsafeSanitizedContentOrdainer;
 import com.google.template.soy.tofu.SoyTofu;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -121,7 +123,10 @@ public class CompileRequestHandler extends AbstractGetHandler {
               moduleNameToUri);
 
           String src = moduleNameToUri.apply(moduleConfig.getRootModule());
-          SoyMapData mapData = new SoyMapData("src", src);
+          SanitizedContent.ContentKind scHtml = SanitizedContent.ContentKind.HTML;
+          SoyMapData mapData = new SoyMapData("src",
+                  src == null ? null : UnsafeSanitizedContentOrdainer
+                                         .ordainAsSafe(src, scHtml));
           String js = TOFU.newRenderer("org.plovr.loadRootModule").setData(
               mapData).render();
           appendable.append(js);

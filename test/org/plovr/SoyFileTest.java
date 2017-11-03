@@ -36,8 +36,13 @@ public class SoyFileTest {
         }
 
         @Override public SoyMsg getMsg(long msgId) {
-          return new SoyMsg(msgId, "translated message", false,
-                            ImmutableList.<SoyMsgPart>of(SoyMsgRawTextPart.of("translated part")));
+          SoyMsg.Builder builder = SoyMsg.builder();
+          return builder
+              .setId(msgId)
+              .setDesc("translated message")
+              .setIsHidden(false)
+              .setParts(ImmutableList.<SoyMsgPart>of(SoyMsgRawTextPart.of("translated part")))
+              .build();
         }
 
         @Override public int getNumMsgs() {
