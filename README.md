@@ -41,7 +41,7 @@ The output of the build will be in `buck-out/gen/plovr.jar`.
 
 ### To Upgrade Closure Library
 
-To upgrade one of Closure Library, Compiler, or Templates, go to the official repo and find the SHA digest
+To upgrade one of Closure Library, go to the official repo and find the SHA digest
 of the commit you want to sync to. Then run.
 
 ```
@@ -58,8 +58,8 @@ scripts/update-repository.sh closure-library sha-digest
 
 This will bully `git subtree` into shape.
 
-### To Upgrade Closure Compiler or Closure Templates
+### To Upgrade Closure Compiler, Closure Templates, or Closure Spreadsheets
 
-The Closure Compiler and Template depenencies are managed with Maven.
+The Closure Compiler, Template, and Spreadsheets depenencies are managed with Maven.
 
 Follow the instructions in [third-party/README.md](third-party/README.md).
