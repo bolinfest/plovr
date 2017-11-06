@@ -9,6 +9,11 @@
     <packaging>jar</packaging>
     <dependencies>
         <dependency>
+            <groupId>com.google.closure-stylesheets</groupId>
+            <artifactId>closure-stylesheets</artifactId>
+            <version>1.5.0</version>
+        </dependency>
+        <dependency>
             <groupId>com.google.template</groupId>
             <artifactId>soy</artifactId>
             <version>2017-02-01</version>
