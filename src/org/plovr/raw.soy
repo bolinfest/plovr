@@ -1,27 +1,25 @@
-{namespace org.plovr autoescape="deprecated-noncontextual"}
+{namespace org.plovr}
 
-/**
- * @param? moduleInfo
- * @param? moduleUris
- * @param filesAsJsonArray
- * @param path
- */
+
 {template .raw}
+ {@param? moduleInfo: html}
+ {@param? moduleUris: html}
+ {@param filesAsJsonArray: html}
+ {@param path: html}
 CLOSURE_NO_DEPS = true;
 {if $moduleInfo}
-PLOVR_MODULE_INFO={$moduleInfo|noAutoescape};
+PLOVR_MODULE_INFO={$moduleInfo};
 {/if}
 {if $moduleUris}
-PLOVR_MODULE_URIS={$moduleUris|noAutoescape};
+PLOVR_MODULE_URIS={$moduleUris};
 {/if}
 PLOVR_MODULE_USE_DEBUG_MODE=true;
 (function() {lb}
-{sp}{sp}var files = {$filesAsJsonArray|noAutoescape};{\n}
-{sp}{sp}var path = '{$path|noAutoescape}';{\n}
+{sp}{sp}var files = {$filesAsJsonArray};{\n}
+{sp}{sp}var path = '{$path}';{\n}
 {literal}
   var scriptEl;
-  var doc = document;
-  var scripts = doc.getElementsByTagName('script');
+  var scripts = document.getElementsByTagName('script');
   for (var i = scripts.length - 1; i >= 0; --i) {
     var candidateScriptEl = scripts[i];
     var src = candidateScriptEl.src;
@@ -35,16 +33,19 @@ PLOVR_MODULE_USE_DEBUG_MODE=true;
     return;
   }
 
-  for (var i = 0; i < files.length; i++) {
-    doc.write('<script type="text/javascript" src="' + files[i] + '"><\/script>');
-  }
+  var scriptElements = '';
+  do {
+    scriptElements +='<script type="text/javascript" src="' + files.shift() + '"></script>\n';
+  } while (files.length > 0);
+  document.write(scriptElements);
+
 })();
 {/literal}
 {/template}
 
-/**
- * @param src
- */
+
 {template .loadRootModule}
-document.write('<script type="text/javascript" src="{$src|noAutoescape}"><\/script>');
+{@param src: html}
+document.write('<script type="text/javascript" src="{$src}"></script>');
 {/template}
+

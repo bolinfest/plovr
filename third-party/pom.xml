@@ -16,12 +16,12 @@
         <dependency>
             <groupId>com.google.template</groupId>
             <artifactId>soy</artifactId>
-            <version>2017-02-01</version>
+            <version>2017-08-08</version>
         </dependency>
         <dependency>
             <groupId>com.google.javascript</groupId>
             <artifactId>closure-compiler</artifactId>
-            <version>v20160822</version>
+            <version>v20171023</version>
         </dependency>
         <dependency>
             <groupId>org.seleniumhq.selenium</groupId>

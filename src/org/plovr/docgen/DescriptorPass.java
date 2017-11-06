@@ -66,7 +66,7 @@ public class DescriptorPass implements CompilerPass {
   @Override
   public void process(Node externs, Node root) {
     DescriptorPassCallback callback = new DescriptorPassCallback(compiler);
-    NodeTraversal.traverse(compiler, root, callback);
+    NodeTraversal.traverseEs6(compiler, root, callback);
 
     try {
       ImmutableMap.Builder<String, ClassDescriptor> classMapBuilder =
@@ -103,14 +103,14 @@ public class DescriptorPass implements CompilerPass {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
       case CALL:
         // When encountering a function call, see if it is a call to
         // goog.provide().
         Node left = n.getFirstChild();
-        if (left.getType() == Token.GETPROP) {
+        if (left.getToken() == Token.GETPROP) {
           Node name = left.getFirstChild();
-          if (name.getType() == Token.NAME && GOOG.equals(name.getString())) {
+          if (name.getToken() == Token.NAME && GOOG.equals(name.getString())) {
             String googMethodName = name.getNext().getString();
             if ("provide".equals(googMethodName)) {
               Node arg = left.getNext();
@@ -122,7 +122,7 @@ public class DescriptorPass implements CompilerPass {
         }
         break;
       case ASSIGN:
-        if (n.getFirstChild().getType() == Token.GETPROP) {
+        if (n.getFirstChild().getToken() == Token.GETPROP) {
           processAssign(n);
         }
         break;
@@ -130,7 +130,7 @@ public class DescriptorPass implements CompilerPass {
     }
 
     /**
-     * @param n n.getType() returns Token.ASSIGN.
+     * @param n n.getToken() returns Token.ASSIGN.
      */
     private void processAssign(Node n) {
       Node left = n.getFirstChild();
@@ -145,7 +145,7 @@ public class DescriptorPass implements CompilerPass {
         // it contains) or goog.net.XmlHttp (a library defined as one function
         // with additional functions defined as properties that are not methods).
         provides.remove(name);
-        if (left.getNext().getType() == Token.FUNCTION) {
+        if (left.getNext().getToken() == Token.FUNCTION) {
           JSDocInfo info = NodeUtil.getBestJSDocInfo(left.getNext());
           if (info.isConstructor()) {
             ClassDescriptor.Builder builder = ClassDescriptor.builder();
@@ -166,7 +166,7 @@ public class DescriptorPass implements CompilerPass {
             // (1) one function: goog.dispose()
             // (2) one function with other functions as properties: goog.net.XmlHttp()
           }
-        } else if (left.getNext().getType() == Token.OBJECTLIT) {
+        } else if (left.getNext().getToken() == Token.OBJECTLIT) {
           JSDocInfo info = n.getJSDocInfo();
           // This appears to be an enum.
           if (info != null && info.hasEnumParameterType()) {
@@ -183,11 +183,11 @@ public class DescriptorPass implements CompilerPass {
         // TODO(bolinfest): This heuristic is incomplete: in addition to
         // goog.abstractMethod, other valid values include
         // goog.partial(someFunc, someArg), goog.functions.TRUE, etc.
-        if (assigneeValue.getType() == Token.FUNCTION ||
-            (assigneeValue.getType() == Token.GETPROP &&
+        if (assigneeValue.getToken() == Token.FUNCTION ||
+            (assigneeValue.getToken() == Token.GETPROP &&
             ("goog.abstractMethod".equals(assigneeValue.getQualifiedName()) ||
             "goog.nullFunction".equals(assigneeValue.getQualifiedName())))) {
-          boolean hasFunctionInfo = assigneeValue.getType() == Token.FUNCTION;
+          boolean hasFunctionInfo = assigneeValue.getToken() == Token.FUNCTION;
 
           // Instance method
           String[] parts = name.split("\\.prototype\\.");
@@ -228,7 +228,7 @@ public class DescriptorPass implements CompilerPass {
           if (isStaticClassMember) {
             ClassDescriptor.Builder builder = classes.get(base);
             // Add the static method to the ClassDescriptor.
-            if (left.getNext().getType() == Token.FUNCTION) {
+            if (left.getNext().getToken() == Token.FUNCTION) {
               JSDocInfo info = NodeUtil.getBestJSDocInfo(left.getNext());
               String methodName = name.substring(index + 1);
               String className = base;
@@ -246,7 +246,7 @@ public class DescriptorPass implements CompilerPass {
               builder.setName(base);
               libraries.put(base, builder);
             }
-            if (left.getNext().getType() == Token.FUNCTION) {
+            if (left.getNext().getToken() == Token.FUNCTION) {
               JSDocInfo info = NodeUtil.getBestJSDocInfo(left.getNext());
               String methodName = name.substring(index + 1);
               MethodDescriptor method = createMethod(methodName, info);

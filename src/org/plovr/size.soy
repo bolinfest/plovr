@@ -19,25 +19,25 @@
 
 <table cellspacing="0">
 <tr>
-  <th class="{css name-header}">Name</th>
+  <th class="{css('name-header')}">Name</th>
   <th>Original Size</th>
-  <th class="{css compiled-header}">Compiled Size</th>
-  <th class="{css percentage-header}">%</th>
+  <th class="{css('compiled-header')}">Compiled Size</th>
+  <th class="{css('percentage-header')}">%</th>
 </tr>
 {foreach $record in $compilationData}
 <tr id="{$record.name}"
-  class="{if index($record) % 2 == 0}{css odd-line}{else}{css even-line}{/if}">
+  class="{if index($record) % 2 == 0}{css('odd-line')}{else}{css('even-line')}{/if}">
   <td>{$record.name}</td>
-  <td class="{css measurement}">{$record.originalSize}</td>
-  <td class="{css measurement}">{$record.compiledSize}</td>
-  <td class="{css measurement}">{round(100 * $record.compiledSize / $record.originalSize, 2)}%</td>
+  <td class="{css('measurement')}">{$record.originalSize}</td>
+  <td class="{css('measurement')}">{$record.compiledSize}</td>
+  <td class="{css('measurement')}">{round(100 * $record.compiledSize / $record.originalSize, 2)}%</td>
 </tr>
 {/foreach}
-<tr class="{css totals}">
+<tr class="{css('totals')}">
   <td>TOTAL</td>
-  <td class="{css measurement}">{$originalSize}</td>
-  <td class="{css measurement}">{$compiledSize}</td>
-  <td class="{css measurement}">{round(100 * $compiledSize / $originalSize, 2)}%</td>
+  <td class="{css('measurement')}">{$originalSize}</td>
+  <td class="{css('measurement')}">{$compiledSize}</td>
+  <td class="{css('measurement')}">{round(100 * $compiledSize / $originalSize, 2)}%</td>
 </tr>
 </table>
 

@@ -123,7 +123,6 @@ public class ConfigParserTest {
         ImmutableList.of(
             "/closure/goog/base.js",
             "/closure/goog/deps.js",
-            "/closure/goog/i18n/bidi.js",
             "/closure/goog/debug/error.js",
             "/closure/goog/dom/nodetype.js",
             "/closure/goog/string/string.js",
@@ -138,6 +137,7 @@ public class ConfigParserTest {
             "/closure/goog/html/safestyle.js",
             "/closure/goog/html/safestylesheet.js",
             "/closure/goog/fs/url.js",
+            "/closure/goog/i18n/bidi.js",
             "/closure/goog/html/trustedresourceurl.js",
             "/closure/goog/html/safeurl.js",
             "/closure/goog/labs/useragent/util.js",
