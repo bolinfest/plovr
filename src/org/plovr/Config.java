@@ -205,6 +205,8 @@ public final class Config implements Comparable<Config> {
 
   private final List<LocationMapping> locationMappings;
 
+  private final boolean strictModeInput;
+
   /**
    * @param id Unique identifier for the configuration. This is used as an
    *        argument to the &lt;script> tag that loads the compiled code.
@@ -267,7 +269,8 @@ public final class Config implements Comparable<Config> {
       PrintStream errorStream,
       List<LocationMapping> locationMappings,
       File translationsDirectory,
-      String language) {
+      String language,
+      boolean strictModeInput) {
     Preconditions.checkNotNull(defines);
 
     this.id = id;
@@ -328,6 +331,7 @@ public final class Config implements Comparable<Config> {
     this.locationMappings = locationMappings;
     this.translationsDirectory = translationsDirectory;
     this.language = language;
+    this.strictModeInput = strictModeInput;
   }
 
   public static Builder builder(File relativePathBase, File configFile,
@@ -660,6 +664,10 @@ public final class Config implements Comparable<Config> {
     return language;
   }
 
+  public boolean isStrictModeInput() {
+    return strictModeInput;
+  }
+
   /**
    * @param path a relative path, such as "foo/bar_test.js" or
    *     "foo/bar_test.html".
@@ -701,7 +709,7 @@ public final class Config implements Comparable<Config> {
     }
     options.setCodingConvention(new ClosureCodingConvention());
     warningLevel.setOptionsForWarningLevel(options);
-    options.prettyPrint = prettyPrint;
+    options.setPrettyPrint(prettyPrint);
     options.printInputDelimiter = printInputDelimiter;
     if (printInputDelimiter) {
       options.inputDelimiter = "// Input %num%: %name%";
@@ -1179,6 +1187,8 @@ public final class Config implements Comparable<Config> {
 
     private List<LocationMapping> locationMappings = Lists.newArrayList();
 
+    private boolean strictModeInput;
+
     /**
      * Pattern to validate a config id. A config id may not contain funny
      * characters, such as slashes, because ids are used in RESTful URLs, so
@@ -1271,6 +1281,7 @@ public final class Config implements Comparable<Config> {
       this.language = config.language;
       this.cssOutputFormat = config.cssOutputFormat;
       this.errorStream = config.errorStream;
+      this.strictModeInput = config.strictModeInput;
     }
 
     /** Directory against which relative paths should be resolved. */
@@ -1731,6 +1742,10 @@ public final class Config implements Comparable<Config> {
       this.errorStream = Preconditions.checkNotNull(errorStream);
     }
 
+    public void setStrictModeInput(boolean newVal) {
+      this.strictModeInput = newVal;
+    }
+
     private SoyMsgBundle getSoyMsgBundle() {
       if (soyTranslationPlugin.isEmpty()) {
         return null;
@@ -1857,7 +1872,8 @@ public final class Config implements Comparable<Config> {
           errorStream,
           locationMappings,
           translationsDirectory,
-          language);
+          language,
+          strictModeInput);
 
       return config;
     }

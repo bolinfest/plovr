@@ -10,7 +10,9 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.google.template.soy.SoyFileSet;
+import com.google.template.soy.data.SanitizedContent;
 import com.google.template.soy.data.SoyMapData;
+import com.google.template.soy.data.UnsafeSanitizedContentOrdainer;
 import com.google.template.soy.tofu.SoyTofu;
 
 import com.sun.net.httpserver.Headers;
@@ -56,6 +58,10 @@ public class InputFileHandler extends AbstractGetHandler {
   public InputFileHandler(CompilationServer server) {
     super(server, true /* usesRestfulPath */);
     this.reporter = new ClientErrorReporter();
+  }
+
+  private static SanitizedContent ordainAsSafe(String content, SanitizedContent.ContentKind kind) {
+    return UnsafeSanitizedContentOrdainer.ordainAsSafe(content, kind);
   }
 
   /**
@@ -112,15 +118,20 @@ public class InputFileHandler extends AbstractGetHandler {
       inputUrls.add(inputToUri.apply(input));
     }
 
+    String path = exchange.getRequestURI().getPath();
     // TODO(bolinfest): Figure out how to reuse Compilation#appendRootModuleInfo
     // May require moving the method to ModuleConfig.
+    SanitizedContent.ContentKind scHtml = SanitizedContent.ContentKind.HTML;
     SoyMapData mapData = new SoyMapData(
-        "moduleInfo", moduleInfo,
-        "moduleUris", moduleUris,
-        "filesAsJsonArray", inputUrls.toString(),
-        "path", exchange.getRequestURI().getPath());
+        "moduleInfo", moduleInfo == null ? null : ordainAsSafe(moduleInfo, SanitizedContent.ContentKind.JS),
+        "moduleUris", moduleUris == null ? null : ordainAsSafe(moduleUris, SanitizedContent.ContentKind.JS),
+        "filesAsJsonArray", ordainAsSafe(inputUrls.toString(), SanitizedContent.ContentKind.JS),
+        "path", path);
 
-    return TOFU.newRenderer("org.plovr.raw").setData(mapData).render();
+    return TOFU.newRenderer("org.plovr.raw")
+            .setData(mapData)
+            .setContentKind(SanitizedContent.ContentKind.JS)
+            .render();
   }
 
   /**
@@ -185,7 +196,7 @@ public class InputFileHandler extends AbstractGetHandler {
 
     // Add 'use strict' headers if we're in strict mode.
     String prefix = "";
-    if (config.getLanguageIn() != null && config.getLanguageIn().isStrict()) {
+    if (config.isStrictModeInput()) {
       prefix = "'use strict';";
     }
 
