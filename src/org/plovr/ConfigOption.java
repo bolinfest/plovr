@@ -208,20 +208,6 @@ public enum ConfigOption {
     }
   }),
 
-  PRINT_CONFIG("print-config", new ConfigUpdater() {
-    @Override
-    public void apply(boolean value, Config.Builder builder) {
-      builder.setPrintConfig(value);
-    }
-
-    @Override
-    public boolean update(String printConfigParam, Config.Builder builder) {
-      boolean printConfig = Boolean.valueOf(printConfigParam);
-      builder.setPrintConfig(printConfig);
-      return true;
-    }
-  }),
-
   SOURCE_MAP_BASE_URL("source-map-base-url", new ConfigUpdater() {
     @Override
     public void apply(String sourceMapBaseUrl, Config.Builder builder) {

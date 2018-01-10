@@ -17,6 +17,10 @@ public class BuildCommandOptions extends AbstractCommandOptions {
       usage = "Specifies the language to use for translations.")
   private String language = null;
 
+  @Option(name = "--print_config",
+          usage = "Print all configuration options of the compiler to stderr.")
+  private boolean printConfig = false;
+
   @Argument
   private List<String> arguments = Lists.newLinkedList();
 
@@ -26,6 +30,10 @@ public class BuildCommandOptions extends AbstractCommandOptions {
 
   public String getLanguage() {
     return language;
+  }
+
+  public boolean getPrintConfig() {
+    return printConfig;
   }
 
   public List<String> getArguments() {

@@ -418,7 +418,6 @@ public final class Config implements Comparable<Config> {
         .put("level", getWarningLevel())
         .put("debug", debug)
         .put("pretty-print", prettyPrint)
-        .put("print-config", printConfig)
         .put("print-input-delimeter", printInputDelimiter)
         .put("soy-proto-file-descriptors", getSoyProtoFileDescriptors())
         .put("css-output-format", getCssOutputFormat())
