@@ -54,6 +54,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       if (options.getLanguage() != null) {
         builder.setLanguage(options.getLanguage());
       }
+      builder.setPrintConfig(options.getPrintConfig());
       Config config = builder.build();
       Compilation compilation;
       try {

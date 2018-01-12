@@ -119,6 +119,8 @@ public final class Config implements Comparable<Config> {
 
   private final boolean prettyPrint;
 
+  private final boolean printConfig;
+
   private final boolean printInputDelimiter;
 
   private final boolean enableAggressiveRawCaching;
@@ -228,6 +230,7 @@ public final class Config implements Comparable<Config> {
       WarningLevel warningLevel,
       boolean debug,
       boolean prettyPrint,
+      boolean printConfig,
       boolean printInputDelimiter,
       boolean enableAggressiveRawCaching,
       @Nullable File outputFile,
@@ -287,6 +290,7 @@ public final class Config implements Comparable<Config> {
     this.warningLevel = warningLevel;
     this.debug = debug;
     this.prettyPrint = prettyPrint;
+    this.printConfig = printConfig;
     this.printInputDelimiter = printInputDelimiter;
     this.enableAggressiveRawCaching = enableAggressiveRawCaching;
     this.outputFile = outputFile;
@@ -710,6 +714,7 @@ public final class Config implements Comparable<Config> {
     options.setCodingConvention(new ClosureCodingConvention());
     warningLevel.setOptionsForWarningLevel(options);
     options.setPrettyPrint(prettyPrint);
+    options.setPrintConfig(printConfig);
     options.printInputDelimiter = printInputDelimiter;
     if (printInputDelimiter) {
       options.inputDelimiter = "// Input %num%: %name%";
@@ -1107,6 +1112,8 @@ public final class Config implements Comparable<Config> {
 
     private boolean prettyPrint = false;
 
+    private boolean printConfig = false;
+
     private boolean printInputDelimiter = false;
 
     private boolean enableAggressiveRawCaching = false;
@@ -1241,6 +1248,7 @@ public final class Config implements Comparable<Config> {
       this.warningLevel = config.warningLevel;
       this.debug = config.debug;
       this.prettyPrint = config.prettyPrint;
+      this.printConfig = config.printConfig;
       this.printInputDelimiter = config.printInputDelimiter;
       this.enableAggressiveRawCaching = config.enableAggressiveRawCaching;
       this.outputFile = config.outputFile;
@@ -1521,6 +1529,10 @@ public final class Config implements Comparable<Config> {
 
     public void setPrettyPrint(boolean prettyPrint) {
       this.prettyPrint = prettyPrint;
+    }
+
+    public void setPrintConfig(boolean newVal) {
+      this.printConfig = newVal;
     }
 
     public void setPrintInputDelimiter(boolean printInputDelimiter) {
@@ -1831,6 +1843,7 @@ public final class Config implements Comparable<Config> {
           warningLevel,
           debug,
           prettyPrint,
+          printConfig,
           printInputDelimiter,
           enableAggressiveRawCaching,
           outputFile,
