@@ -2,7 +2,7 @@
 #
 # Use this script to update closure-library. Usage:
 #
-# ./update-repository.sh hash
+# ./update-closure-library.sh hash
 
 cd `dirname $0`/..
 
@@ -14,11 +14,11 @@ if [ $# -ne $EXPECTED_ARGS ]; then
 fi
 
 REPOSITORY="closure-library"
-COMMIT=$2
+COMMIT=$1
 
 set -ex
-git subtree pull --prefix="closure/${REPOSITORY}" "git@github.com:google/${REPOSITORY}" "$2"
-echo "$2" > tools/imports/rev-$1.txt
+git subtree pull --prefix="closure/${REPOSITORY}" "git@github.com:google/${REPOSITORY}" "$COMMIT"
+echo "$COMMIT" > tools/imports/rev-$REPOSITORY.txt
 
 ./listfiles.sh closure/closure-library/closure/goog > library_manifest.txt
 ./listfiles.sh closure/closure-library/third_party/closure/goog > third_party_manifest.txt

@@ -45,15 +45,15 @@ To upgrade one of Closure Library, go to the official repo and find the SHA dige
 of the commit you want to sync to. Then run.
 
 ```
-scripts/update-repository.sh closure-library sha-digest
+scripts/update-closure-library.sh sha-digest
 ```
 
 Sometimes this doesn't work because `git subtree` is buggy. If nothing updates, try running:
 
 ```
-scripts/update-repository.sh closure-library master
+scripts/update-closure-library.sh master
 git reset --hard origin/master
-scripts/update-repository.sh closure-library sha-digest
+scripts/update-closure-library.sh sha-digest
 ```
 
 This will bully `git subtree` into shape.
