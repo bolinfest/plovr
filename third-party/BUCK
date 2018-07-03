@@ -2,14 +2,21 @@ java_library(
   name = 'COMPILE',
   visibility = ['PUBLIC'],
   exported_deps = [
-    ':com.google.closure-stylesheets-jar',
+    ':com.google.closure-stylesheets-closure-stylesheets-jar',
+    ':args4j-args4j-jar',
+    ':org.easymock-easymock-jar',
+    ':cglib-cglib-nodep-jar',
+    ':com.google.guava-guava-jar',
+    ':com.google.code.gson-gson-jar',
+    ':net.java.dev.javacc-javacc-jar',
+    ':com.google.code.findbugs-jsr305-jar',
+    ':com.google.javascript-closure-compiler-unshaded-jar',
     ':com.google.template-soy-jar',
     ':javax.inject-javax.inject-jar',
     ':com.google.inject-guice-jar',
     ':aopalliance-aopalliance-jar',
     ':com.google.inject.extensions-guice-assistedinject-jar',
     ':com.google.inject.extensions-guice-multibindings-jar',
-    ':com.google.guava-guava-jar',
     ':com.google.common.html.types-types-jar',
     ':com.google.gwt-gwt-user-jar',
     ':javax.validation-validation-api-jar',
@@ -22,16 +29,14 @@ java_library(
     ':org.ow2.asm-asm-util-jar',
     ':org.ow2.asm-asm-analysis-jar',
     ':com.ibm.icu-icu4j-jar',
-    ':args4j-args4j-jar',
-    ':com.google.code.findbugs-jsr305-jar',
-    ':com.google.code.gson-gson-jar',
     ':org.json-json-jar',
     ':com.google.javascript-closure-compiler-jar',
     ':com.google.javascript-closure-compiler-externs-jar',
+    ':com.google.errorprone-error_prone_annotations-jar',
+    ':com.google.jsinterop-jsinterop-annotations-jar',
     ':org.seleniumhq.selenium-selenium-java-jar',
     ':org.seleniumhq.selenium-selenium-android-driver-jar',
     ':org.seleniumhq.selenium-selenium-remote-driver-jar',
-    ':cglib-cglib-nodep-jar',
     ':org.seleniumhq.selenium-selenium-chrome-driver-jar',
     ':org.seleniumhq.selenium-selenium-htmlunit-driver-jar',
     ':org.seleniumhq.selenium-selenium-api-jar',
@@ -61,7 +66,8 @@ java_library(
     ':org.seleniumhq.selenium-selenium-safari-driver-jar',
     ':org.seleniumhq.selenium-selenium-support-jar',
     ':org.webbitserver-webbit-jar',
-    ':org.jboss.netty-netty-jar'
+    ':org.jboss.netty-netty-jar',
+    ':org.objenesis-objenesis-jar'
   ],
 )
 
@@ -95,8 +101,7 @@ java_library(
   exported_deps = [
     ':junit-junit-jar',
     ':org.hamcrest-hamcrest-core-jar',
-    ':org.mockito-mockito-core-jar',
-    ':org.objenesis-objenesis-jar'
+    ':org.mockito-mockito-core-jar'
   ],
 )
 
@@ -119,9 +124,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-args4j-args4j-jar',
-  out = 'args4j-args4j-jar-2.0.23.jar',
-  url = 'mvn:args4j:args4j:jar:2.0.23',
-  sha1 = '422e5b898b573b4537fbf5564f58829c0382b029',
+  out = 'args4j-args4j-jar-2.0.26.jar',
+  url = 'mvn:args4j:args4j:jar:2.0.26',
+  sha1 = '01ebb18ebb3b379a74207d5af4ea7c8338ebd78b',
 )
 
 prebuilt_jar(
@@ -131,9 +136,21 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-cglib-cglib-nodep-jar',
-  out = 'cglib-cglib-nodep-jar-2.1_3.jar',
-  url = 'mvn:cglib:cglib-nodep:jar:2.1_3',
-  sha1 = '58d3be5953547c0019e5704d6ed4ffda3b0c7c66',
+  out = 'cglib-cglib-nodep-jar-2.2.jar',
+  url = 'mvn:cglib:cglib-nodep:jar:2.2',
+  sha1 = '59afed7ab65e7ec6585d5bc60556c3cbd203532b',
+)
+
+prebuilt_jar(
+  name = 'com.google.closure-stylesheets-closure-stylesheets-jar',
+  binary_jar = ':remote-com.google.closure-stylesheets-closure-stylesheets-jar',
+)
+
+remote_file(
+  name = 'remote-com.google.closure-stylesheets-closure-stylesheets-jar',
+  out = 'com.google.closure-stylesheets-closure-stylesheets-jar-1.5.0.jar',
+  url = 'mvn:com.google.closure-stylesheets:closure-stylesheets:jar:1.5.0',
+  sha1 = '0d2b1c0dcba2ac4e13f28721f89134f7333fed2c',
 )
 
 prebuilt_jar(
@@ -143,9 +160,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.code.findbugs-jsr305-jar',
-  out = 'com.google.code.findbugs-jsr305-jar-2.0.3.jar',
-  url = 'mvn:com.google.code.findbugs:jsr305:jar:2.0.3',
-  sha1 = '5871fb60dc68d67da54a663c3fd636a10a532948',
+  out = 'com.google.code.findbugs-jsr305-jar-3.0.1.jar',
+  url = 'mvn:com.google.code.findbugs:jsr305:jar:3.0.1',
+  sha1 = 'f7be08ec23c21485b9b5a1cf1654c2ec8c58168d',
 )
 
 prebuilt_jar(
@@ -173,15 +190,27 @@ remote_file(
 )
 
 prebuilt_jar(
+  name = 'com.google.errorprone-error_prone_annotations-jar',
+  binary_jar = ':remote-com.google.errorprone-error_prone_annotations-jar',
+)
+
+remote_file(
+  name = 'remote-com.google.errorprone-error_prone_annotations-jar',
+  out = 'com.google.errorprone-error_prone_annotations-jar-2.0.18.jar',
+  url = 'mvn:com.google.errorprone:error_prone_annotations:jar:2.0.18',
+  sha1 = '5f65affce1684999e2f4024983835efc3504012e',
+)
+
+prebuilt_jar(
   name = 'com.google.guava-guava-jar',
   binary_jar = ':remote-com.google.guava-guava-jar',
 )
 
 remote_file(
   name = 'remote-com.google.guava-guava-jar',
-  out = 'com.google.guava-guava-jar-20.0.jar',
-  url = 'mvn:com.google.guava:guava:jar:20.0',
-  sha1 = '89507701249388e1ed5ddcf8c41f4ce1be7831ef',
+  out = 'com.google.guava-guava-jar-21.0.jar',
+  url = 'mvn:com.google.guava:guava:jar:21.0',
+  sha1 = '3a3d111be1be1b745edfa7d91678a12d7ed38709',
 )
 
 prebuilt_jar(
@@ -239,9 +268,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.javascript-closure-compiler-jar',
-  out = 'com.google.javascript-closure-compiler-jar-v20171023.jar',
-  url = 'mvn:com.google.javascript:closure-compiler:jar:v20171023',
-  sha1 = '24a912459b87ddc0572d8c701ea7a99bc0e50854',
+  out = 'com.google.javascript-closure-compiler-jar-v20180610.jar',
+  url = 'mvn:com.google.javascript:closure-compiler:jar:v20180610',
+  sha1 = '3b34b3d07c394781ac4fd9eeb5e1d31099bc58ca',
 )
 
 prebuilt_jar(
@@ -251,9 +280,33 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.javascript-closure-compiler-externs-jar',
-  out = 'com.google.javascript-closure-compiler-externs-jar-v20160822.jar',
-  url = 'mvn:com.google.javascript:closure-compiler-externs:jar:v20160822',
-  sha1 = '96640565d55f6711e5021e3d2120bd46c0ae075a',
+  out = 'com.google.javascript-closure-compiler-externs-jar-v20180610.jar',
+  url = 'mvn:com.google.javascript:closure-compiler-externs:jar:v20180610',
+  sha1 = '68f704c2f71c62fb4c35c865e98e95630f23233c',
+)
+
+prebuilt_jar(
+  name = 'com.google.javascript-closure-compiler-unshaded-jar',
+  binary_jar = ':remote-com.google.javascript-closure-compiler-unshaded-jar',
+)
+
+remote_file(
+  name = 'remote-com.google.javascript-closure-compiler-unshaded-jar',
+  out = 'com.google.javascript-closure-compiler-unshaded-jar-v20160713.jar',
+  url = 'mvn:com.google.javascript:closure-compiler-unshaded:jar:v20160713',
+  sha1 = '7df7b683e16c93f65361a15356283599ba012c78',
+)
+
+prebuilt_jar(
+  name = 'com.google.jsinterop-jsinterop-annotations-jar',
+  binary_jar = ':remote-com.google.jsinterop-jsinterop-annotations-jar',
+)
+
+remote_file(
+  name = 'remote-com.google.jsinterop-jsinterop-annotations-jar',
+  out = 'com.google.jsinterop-jsinterop-annotations-jar-1.0.0.jar',
+  url = 'mvn:com.google.jsinterop:jsinterop-annotations:jar:1.0.0',
+  sha1 = '23c3a3c060ffe4817e67673cc8294e154b0a4a95',
 )
 
 prebuilt_jar(
@@ -263,9 +316,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.protobuf-protobuf-java-jar',
-  out = 'com.google.protobuf-protobuf-java-jar-3.0.0-beta-2.jar',
-  url = 'mvn:com.google.protobuf:protobuf-java:jar:3.0.0-beta-2',
-  sha1 = 'de80fe047052445869b96f6def6baca7182c95af',
+  out = 'com.google.protobuf-protobuf-java-jar-3.3.0.jar',
+  url = 'mvn:com.google.protobuf:protobuf-java:jar:3.3.0',
+  sha1 = '9f301d1a27501b1afcb2ed16aad428337dabf9e4',
 )
 
 prebuilt_jar(
@@ -275,7 +328,7 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.template-soy-jar',
-  out = 'com.google.template-soy-jar-2017-02-01.jar',
+  out = 'com.google.template-soy-jar-2017-08-08.jar',
   url = 'mvn:com.google.template:soy:jar:2017-08-08',
   sha1 = '792aa49e3ec3f61e793e56b499f0724df1c1e16c',
 )
@@ -377,18 +430,6 @@ remote_file(
 )
 
 prebuilt_jar(
-  name = 'javax.validation-validation-api-jar',
-  binary_jar = ':remote-javax.validation-validation-api-jar',
-)
-
-remote_file(
-  name = 'remote-javax.validation-validation-api-jar',
-  out = 'javax.validation-validation-api-jar-1.0.0.GA.jar',
-  url = 'mvn:javax.validation:validation-api:jar:1.0.0.GA',
-  sha1 = 'b6bd7f9d78f6fdaa3c37dae18a4bd298915f328e',
-)
-
-prebuilt_jar(
   name = 'javax.validation-validation-api-sources',
   binary_jar = ':remote-javax.validation-validation-api-sources',
 )
@@ -401,6 +442,18 @@ remote_file(
 )
 
 prebuilt_jar(
+  name = 'javax.validation-validation-api-jar',
+  binary_jar = ':remote-javax.validation-validation-api-jar',
+)
+
+remote_file(
+  name = 'remote-javax.validation-validation-api-jar',
+  out = 'javax.validation-validation-api-jar-1.0.0.GA.jar',
+  url = 'mvn:javax.validation:validation-api:jar:1.0.0.GA',
+  sha1 = 'b6bd7f9d78f6fdaa3c37dae18a4bd298915f328e',
+)
+
+prebuilt_jar(
   name = 'junit-junit-jar',
   binary_jar = ':remote-junit-junit-jar',
 )
@@ -410,6 +463,18 @@ remote_file(
   out = 'junit-junit-jar-4.10.jar',
   url = 'mvn:junit:junit:jar:4.10',
   sha1 = 'e4f1766ce7404a08f45d859fb9c226fc9e41a861',
+)
+
+prebuilt_jar(
+  name = 'net.java.dev.javacc-javacc-jar',
+  binary_jar = ':remote-net.java.dev.javacc-javacc-jar',
+)
+
+remote_file(
+  name = 'remote-net.java.dev.javacc-javacc-jar',
+  out = 'net.java.dev.javacc-javacc-jar-4.1.jar',
+  url = 'mvn:net.java.dev.javacc:javacc:jar:4.1',
+  sha1 = '915805643a5651cfe0e2db40c689c6dc211db97d',
 )
 
 prebuilt_jar(
@@ -530,6 +595,18 @@ remote_file(
   out = 'org.apache.httpcomponents-httpmime-jar-4.1.2.jar',
   url = 'mvn:org.apache.httpcomponents:httpmime:jar:4.1.2',
   sha1 = 'c78eaaea68d0f36f73b646f08cdb34f1a784239b',
+)
+
+prebuilt_jar(
+  name = 'org.easymock-easymock-jar',
+  binary_jar = ':remote-org.easymock-easymock-jar',
+)
+
+remote_file(
+  name = 'remote-org.easymock-easymock-jar',
+  out = 'org.easymock-easymock-jar-3.0.jar',
+  url = 'mvn:org.easymock:easymock:jar:3.0',
+  sha1 = 'f28a4c31c330f95c9acbf1108cea19952b5c496f',
 )
 
 prebuilt_jar(
@@ -854,16 +931,4 @@ remote_file(
   out = 'xml-apis-xml-apis-jar-1.3.04.jar',
   url = 'mvn:xml-apis:xml-apis:jar:1.3.04',
   sha1 = '90b215f48fe42776c8c7f6e3509ec54e84fd65ef',
-)
-
-prebuilt_jar(
-  name = 'com.google.closure-stylesheets-jar',
-  binary_jar = ':remote-com.google.closure-stylesheets-jar',
-)
-
-remote_file(
-  name = 'remote-com.google.closure-stylesheets-jar',
-  out = 'com.google.closure-stylesheets-jar-1.5.0.jar',
-  url = 'mvn:com.google.closure-stylesheets:closure-stylesheets:jar:1.5.0',
-  sha1 = '0d2b1c0dcba2ac4e13f28721f89134f7333fed2c',
 )

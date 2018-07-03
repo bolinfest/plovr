@@ -32,6 +32,7 @@ import com.google.javascript.jscomp.CustomPassExecutionTime;
 import com.google.javascript.jscomp.DiagnosticGroup;
 import com.google.javascript.jscomp.PlovrCompilerOptions;
 import com.google.javascript.jscomp.SourceMap.LocationMapping;
+import com.google.javascript.jscomp.SourceMap.PrefixLocationMapping;
 import com.google.javascript.jscomp.StrictWarningsGuard;
 import com.google.javascript.jscomp.VariableMap;
 import com.google.javascript.jscomp.WarningLevel;
@@ -796,8 +797,8 @@ public final class Config implements Comparable<Config> {
     }
 
     if (moduleConfig != null) {
-      options.crossModuleCodeMotion = true;
-      options.crossModuleMethodMotion = true;
+      options.setCrossChunkCodeMotion(true);
+      options.setCrossChunkMethodMotion(true);
     }
 
     if (!Strings.isNullOrEmpty(globalScopeName)) {
@@ -1413,6 +1414,12 @@ public final class Config implements Comparable<Config> {
         public boolean apply(ConfigPath path) {
           return FileUtil.contains(path.getFile(), testExcludePath);
         }
+
+        // TODO(nick): We can remove this once we're on java8
+        @Override
+        public boolean test(ConfigPath path) {
+          return apply(path);
+        }
       }, null);
       Preconditions.checkNotNull(pathThatContainsExclude,
           "No path contains test exclude: " + testExcludePath);
@@ -1570,7 +1577,7 @@ public final class Config implements Comparable<Config> {
           String prefix = entry.getKey();
           String replacement = entry.getValue().getAsString();
           replacement = replacement.replace("%s", id);
-          this.locationMappings.add(new LocationMapping(prefix, replacement));
+          this.locationMappings.add(new PrefixLocationMapping(prefix, replacement));
         }
       }
     }
