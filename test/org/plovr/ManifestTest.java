@@ -198,6 +198,10 @@ public class ManifestTest {
       public boolean apply(JsInput dep) {
         return baseJsName.equals(dep.getName());
       }
+      @Override
+      public boolean test(JsInput dep) {
+        return apply(dep);
+      }
     }, valueIfNotFound);
     assertNotNull("Dependencies for Closure Library should contain " +
         baseJsName, foundValue);
