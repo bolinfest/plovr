@@ -1,9 +1,9 @@
-{namespace org.plovr autoescape="deprecated-noncontextual"}
+{namespace org.plovr}
 
 /**
  * @param configs
  */
-{template .index}
+{template .index autoescape="deprecated-noncontextual"}
 <!doctype html>
 <html>
 <head>
@@ -29,7 +29,7 @@
 
 <h1>List of configs loaded in plovr</h1>
 
-{foreach $config in $configs}
+{for $config in $configs}
 <h2><a href="/config/{$config.id}/">{$config.id}</a></h2>
 <ul>
   {if $config.hasModules}
@@ -79,7 +79,7 @@
   // This is buggy: try accessing this running "ant integration-test" to reproduce.
   // <li><a href="/size?id={$config.id}">List of file sizes</a>
 </ul>
-{/foreach}
+{/for}
 
 </body>
 </html>

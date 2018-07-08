@@ -1,11 +1,11 @@
-{namespace plovr.docgen autoescape="deprecated-noncontextual"}
+{namespace plovr.docgen}
 
 /**
  * @param title
  * @param content
  * @param pathToBase
  */
-{template .baseDoc}
+{template .baseDoc autoescape="deprecated-noncontextual"}
 <!doctype html>
 <html>
 <head>
@@ -21,14 +21,14 @@
 /**
  * @param hrefs
  */
-{template .index}
+{template .index autoescape="deprecated-noncontextual"}
 {call .baseDoc}
   {param title}Generated Files{/param}
   {param content}
     <h1>All Classes</h1>
-    {foreach $href in $hrefs}
+    {for $href in $hrefs}
       <a href="{$href}">{$href}</a><br>
-    {/foreach}
+    {/for}
   {/param}
   {param pathToBase: '' /}
 {/call}
@@ -39,7 +39,7 @@
  * @param pathToSuper
  * @param pathToBase
  */
-{template .classDoc}
+{template .classDoc autoescape="deprecated-noncontextual"}
 <a href="{$pathToBase}index.html">Home</a>
 
 <h1>Class {$classDescriptor.name}</h1>
@@ -68,15 +68,15 @@ extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
  * @param title
  * @param methods
  */
-{template .methodTable}
+{template .methodTable autoescape="deprecated-noncontextual"}
 {if length($methods) > 0}
 <table class="method-list">
   <tr>
     <td colspan="2"><strong>{$title}</strong></td>
   </tr>
-  {foreach $method in $methods}
+  {for $method in $methods}
     {call .methodDoc data="$method" /}
-  {/foreach}
+  {/for}
 </table>
 {/if}
 {/template}
@@ -89,7 +89,7 @@ extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
  * @param params
  * @param returnType
  */
-{template .methodDoc}
+{template .methodDoc autoescape="deprecated-noncontextual"}
   <tr>
     <td class="method-list-cell method-access method-
      {switch $accessLevel}
@@ -101,13 +101,13 @@ extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
     </td>
     <td class="method-list-cell method-cell">
       <code>{$name}(
-        {foreach $param in $params}
+        {for $param in $params}
           {if $param.type != null}
             {$param.type}{sp}
           {/if}
           {$param.name}
           {if not isLast($param)}, {/if}
-        {/foreach}
+        {/for}
       )
       {if $returnType and $returnType != 'void'}
         {sp}&#8658; {$returnType}
@@ -124,7 +124,7 @@ extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
  * @param classDescriptor
  * @param pathToBase
  */
-{template .classPage}
+{template .classPage autoescape="deprecated-noncontextual"}
 {call .baseDoc}
   {param title}{$classDescriptor.name}{/param}
   {param content}
@@ -138,7 +138,7 @@ extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
  * @param libraryDescriptor
  * @param pathToBase
  */
-{template .libraryDoc}
+{template .libraryDoc autoescape="deprecated-noncontextual"}
 <a href="{$pathToBase}index.html">Home</a>
 
 <h1>Library {$libraryDescriptor.name}</h1>
@@ -148,9 +148,9 @@ extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
   <tr>
     <td colspan="2">Function Summary</td>
   </tr>
-  {foreach $method in $libraryDescriptor.methods}
+  {for $method in $libraryDescriptor.methods}
     {call .methodDoc data="$method" /}
-  {/foreach}
+  {/for}
 </table>
 {/if}
 
@@ -160,7 +160,7 @@ extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
  * @param libraryDescriptor
  * @param pathToBase
  */
-{template .libraryPage}
+{template .libraryPage autoescape="deprecated-noncontextual"}
 {call .baseDoc}
   {param title}{$libraryDescriptor.name}{/param}
   {param content}
