@@ -9,7 +9,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.javascript.jscomp.Result;
 import com.google.template.soy.SoyFileSet;
-import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.data.SoyMapData;
 import com.google.template.soy.tofu.SoyTofu;
 import com.sun.net.httpserver.Headers;

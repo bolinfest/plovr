@@ -15,7 +15,6 @@ java_library(
     ':javax.inject-javax.inject-jar',
     ':com.google.inject-guice-jar',
     ':aopalliance-aopalliance-jar',
-    ':com.google.inject.extensions-guice-assistedinject-jar',
     ':com.google.inject.extensions-guice-multibindings-jar',
     ':com.google.common.html.types-types-jar',
     ':com.google.gwt-gwt-user-jar',
@@ -238,18 +237,6 @@ remote_file(
 )
 
 prebuilt_jar(
-  name = 'com.google.inject.extensions-guice-assistedinject-jar',
-  binary_jar = ':remote-com.google.inject.extensions-guice-assistedinject-jar',
-)
-
-remote_file(
-  name = 'remote-com.google.inject.extensions-guice-assistedinject-jar',
-  out = 'com.google.inject.extensions-guice-assistedinject-jar-4.1.0.jar',
-  url = 'mvn:com.google.inject.extensions:guice-assistedinject:jar:4.1.0',
-  sha1 = 'af799dd7e23e6fe8c988da12314582072b07edcb',
-)
-
-prebuilt_jar(
   name = 'com.google.inject.extensions-guice-multibindings-jar',
   binary_jar = ':remote-com.google.inject.extensions-guice-multibindings-jar',
 )
@@ -328,9 +315,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.template-soy-jar',
-  out = 'com.google.template-soy-jar-2017-08-08.jar',
-  url = 'mvn:com.google.template:soy:jar:2017-08-08',
-  sha1 = '792aa49e3ec3f61e793e56b499f0724df1c1e16c',
+  out = 'com.google.template-soy-jar-2018-03-14.jar',
+  url = 'mvn:com.google.template:soy:jar:2018-03-14',
+  sha1 = '76a1322705ba5a6d6329ee26e7387417725ce4b3',
 )
 
 prebuilt_jar(
@@ -676,9 +663,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-org.ow2.asm-asm-jar',
-  out = 'org.ow2.asm-asm-jar-5.0.3.jar',
-  url = 'mvn:org.ow2.asm:asm:jar:5.0.3',
-  sha1 = 'dcc2193db20e19e1feca8b1240dbbc4e190824fa',
+  out = 'org.ow2.asm-asm-jar-6.0.jar',
+  url = 'mvn:org.ow2.asm:asm:jar:6.0',
+  sha1 = 'bc6fa6b19424bb9592fe43bbc20178f92d403105',
 )
 
 prebuilt_jar(
@@ -688,9 +675,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-org.ow2.asm-asm-analysis-jar',
-  out = 'org.ow2.asm-asm-analysis-jar-5.0.3.jar',
-  url = 'mvn:org.ow2.asm:asm-analysis:jar:5.0.3',
-  sha1 = 'c7126aded0e8e13fed5f913559a0dd7b770a10f3',
+  out = 'org.ow2.asm-asm-analysis-jar-6.0.jar',
+  url = 'mvn:org.ow2.asm:asm-analysis:jar:6.0',
+  sha1 = 'dd1cc1381a970800268160203aae2d3784da779b',
 )
 
 prebuilt_jar(
@@ -700,9 +687,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-org.ow2.asm-asm-commons-jar',
-  out = 'org.ow2.asm-asm-commons-jar-5.0.3.jar',
-  url = 'mvn:org.ow2.asm:asm-commons:jar:5.0.3',
-  sha1 = 'a7111830132c7f87d08fe48cb0ca07630f8cb91c',
+  out = 'org.ow2.asm-asm-commons-jar-6.0.jar',
+  url = 'mvn:org.ow2.asm:asm-commons:jar:6.0',
+  sha1 = 'f256fd215d8dd5a4fa2ab3201bf653de266ed4ec',
 )
 
 prebuilt_jar(
@@ -712,9 +699,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-org.ow2.asm-asm-tree-jar',
-  out = 'org.ow2.asm-asm-tree-jar-5.0.3.jar',
-  url = 'mvn:org.ow2.asm:asm-tree:jar:5.0.3',
-  sha1 = '287749b48ba7162fb67c93a026d690b29f410bed',
+  out = 'org.ow2.asm-asm-tree-jar-6.0.jar',
+  url = 'mvn:org.ow2.asm:asm-tree:jar:6.0',
+  sha1 = 'a624f1a6e4e428dcd680a01bab2d4c56b35b18f0',
 )
 
 prebuilt_jar(
@@ -724,9 +711,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-org.ow2.asm-asm-util-jar',
-  out = 'org.ow2.asm-asm-util-jar-5.0.3.jar',
-  url = 'mvn:org.ow2.asm:asm-util:jar:5.0.3',
-  sha1 = '1512e5571325854b05fb1efce1db75fcced54389',
+  out = 'org.ow2.asm-asm-util-jar-6.0.jar',
+  url = 'mvn:org.ow2.asm:asm-util:jar:6.0',
+  sha1 = '430b2fc839b5de1f3643b528853d5cf26096c1de',
 )
 
 prebuilt_jar(

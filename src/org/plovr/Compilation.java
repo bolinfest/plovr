@@ -133,9 +133,7 @@ public final class Compilation {
   }
 
   private static CompilationException toCheckedException(Throwable e) {
-    if (e instanceof PlovrSoySyntaxException) {
-      return new CheckedSoySyntaxException((PlovrSoySyntaxException) e);
-    } else if (e instanceof PlovrCoffeeScriptCompilerException) {
+    if (e instanceof PlovrCoffeeScriptCompilerException) {
       return new CheckedCoffeeScriptCompilerException((PlovrCoffeeScriptCompilerException) e);
     }
     throw Throwables.propagate(e);

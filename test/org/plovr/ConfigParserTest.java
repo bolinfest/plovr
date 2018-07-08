@@ -80,7 +80,6 @@ public class ConfigParserTest {
     // soy-function-plugins
     List<String> soyFunctionPlugins = config.getSoyFunctionPlugins();
     assertEquals(Lists.newArrayList(
-        "com.google.template.soy.xliffmsgplugin.XliffMsgPluginModule",
         "org.plovr.soy.function.PlovrModule"),
         soyFunctionPlugins);
 

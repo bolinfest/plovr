@@ -29,6 +29,7 @@ import com.google.common.xml.XmlEscapers;
 import com.google.javascript.jscomp.JsMessage;
 import com.google.javascript.jscomp.SourceFile;
 import com.google.template.soy.base.SourceLocation;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.msgs.SoyMsgBundleHandler.OutputFileOptions;
 import com.google.template.soy.msgs.restricted.SoyMsg;
@@ -89,7 +90,7 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
       OutputFileOptions soyOutputFileOptions = new OutputFileOptions();
       soyOutputFileOptions.setSourceLocaleString(config.getLanguage());
       CharSequence output = new XliffMsgPlugin().generateExtractedMsgsFile(
-          convertToBundle(messages, config.getLanguage()), soyOutputFileOptions);
+          convertToBundle(messages, config.getLanguage()), soyOutputFileOptions, ErrorReporter.exploding());
       System.out.print(output);
     } else {
       System.err.println("Unknown format: " + options.getFormat());
@@ -134,7 +135,7 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
         if (part instanceof JsMessage.PlaceholderReference) {
           parts.add(
               new SoyMsgPlaceholderPart(
-            ((JsMessage.PlaceholderReference)part).getName()));
+                  ((JsMessage.PlaceholderReference)part).getName(), null));
         } else {
           parts.add(SoyMsgRawTextPart.of((String)part));
         }

@@ -41,7 +41,6 @@ import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.msgs.SoyMsgBundleHandler;
 import com.google.template.soy.msgs.SoyMsgException;
 import com.google.template.soy.msgs.SoyMsgPlugin;
-import com.google.template.soy.xliffmsgplugin.XliffMsgPluginModule;
 
 import org.plovr.util.Pair;
 import org.plovr.webdriver.WebDriverFactory;
@@ -1091,7 +1090,7 @@ public final class Config implements Comparable<Config> {
 
     private File testTemplate = null;
 
-    private ImmutableList.Builder<String> soyFunctionPlugins = null;
+    private ImmutableList.Builder<String> soyFunctionPlugins = ImmutableList.builder();
 
     private String soyTranslationPlugin = "";
 
@@ -1238,7 +1237,7 @@ public final class Config implements Comparable<Config> {
       this.testExcludePaths = Lists.newArrayList(config.testExcludePaths);
       this.soyFunctionPlugins = config.hasSoyFunctionPlugins()
           ? new ImmutableList.Builder<String>().addAll(config.getSoyFunctionPlugins())
-          : null;
+          : ImmutableList.<String>builder();
       this.soyTranslationPlugin = config.soyTranslationPlugin;
       this.soyProtoFileDescriptors = config.soyProtoFileDescriptors;
       this.customPasses = config.customPasses;
@@ -1442,17 +1441,11 @@ public final class Config implements Comparable<Config> {
      */
     public void addSoyFunctionPlugin(String qualifiedName) {
       Preconditions.checkNotNull(qualifiedName);
-
-      if (soyFunctionPlugins == null) {
-        soyFunctionPlugins = ImmutableList.builder();
-        // always add this one
-        soyFunctionPlugins.add(XliffMsgPluginModule.class.getName());
-      }
       soyFunctionPlugins.add(qualifiedName);
     }
 
     public void resetSoyFunctionPlugins() {
-      soyFunctionPlugins = null;
+      soyFunctionPlugins = ImmutableList.builder();
     }
 
     /**
@@ -1915,9 +1908,6 @@ public final class Config implements Comparable<Config> {
     }
 
     private List<String> createSoyFunctionPluginNames() {
-      if (this.soyFunctionPlugins == null) {
-        return ImmutableList.of(XliffMsgPluginModule.class.getName());
-      }
       // TODO: Do we need to add any other modules than what we've configured?
       return this.soyFunctionPlugins.build();
     }
