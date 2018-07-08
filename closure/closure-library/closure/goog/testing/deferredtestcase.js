@@ -64,6 +64,8 @@ goog.provide('goog.testing.DeferredTestCase');
 goog.require('goog.testing.AsyncTestCase');
 goog.require('goog.testing.TestCase');
 
+goog.forwardDeclare('goog.async.Deferred');
+
 
 
 /**
@@ -146,12 +148,12 @@ goog.testing.DeferredTestCase.prototype.waitForDeferred = function(a, opt_b) {
       waitMsg = a;
       break;
     default:  // Shouldn't be here in compiled mode
-      throw Error('Invalid number of arguments');
+      throw new Error('Invalid number of arguments');
   }
   deferred.addCallbacks(this.onSuccess, this.onError, this);
   if (!waitMsg) {
     waitMsg = 'Waiting for deferred in ' + this.getCurrentStepName();
   }
-  this.waitForAsync(/** @type {!string} */ (waitMsg));
+  this.waitForAsync(/** @type {string} */ (waitMsg));
   deferred.callback(true);
 };

@@ -74,11 +74,15 @@ goog.date.month = {
  * @param {string} monthName The month name to use in the result.
  * @param {number} yearNum The numeric year to use in the result.
  * @return {string} A formatted month/year string.
+ * @deprecated Use goog.i18n.DateTimeFormat with
+ *     goog.i18n.DateTimeFormat.Format.YEAR_MONTH_ABBR or
+ *     goog.i18n.DateTimeFormat.Format.YEAR_MONTH_FULL.
  */
 goog.date.formatMonthAndYear = function(monthName, yearNum) {
   /** @desc Month/year format given the month name and the numeric year. */
   var MSG_MONTH_AND_YEAR = goog.getMsg(
-      '{$monthName} {$yearNum}', {'monthName': monthName, 'yearNum': yearNum});
+      '{$monthName} {$yearNum}',
+      {'monthName': monthName, 'yearNum': String(yearNum)});
   return MSG_MONTH_AND_YEAR;
 };
 
@@ -293,18 +297,6 @@ goog.date.max = function(date1, date2) {
 
 
 /**
- * Creates a DateTime from a datetime string expressed in ISO 8601 format.
- *
- * @param {string} formatted A date or datetime expressed in ISO 8601 format.
- * @return {goog.date.DateTime} Parsed date or null if parse fails.
- */
-goog.date.fromIsoString = function(formatted) {
-  var ret = new goog.date.DateTime(2000);
-  return goog.date.setIso8601DateTime(ret, formatted) ? ret : null;
-};
-
-
-/**
  * Parses a datetime string expressed in ISO 8601 format. Overwrites the date
  * and optionally the time part of the given object with the parsed values.
  *
@@ -324,7 +316,7 @@ goog.date.setIso8601DateTime = function(dateTime, formatted) {
 /**
  * Sets date fields based on an ISO 8601 format string.
  *
- * @param {!goog.date.DateTime} d Object whose fields will be set.
+ * @param {!goog.date.Date} d Object whose fields will be set.
  * @param {string} formatted A date expressed in ISO 8601 format.
  * @return {boolean} Whether the parsing succeeded.
  * @private
@@ -379,7 +371,7 @@ goog.date.setIso8601DateOnly_ = function(d, formatted) {
  * Example: '1997-W01' lasts from 1996-12-30 to 1997-01-05.  January 1, 1997 is
  * a Wednesday. So W01's Monday is Dec.30, 1996, and Sunday is January 5, 1997.
  *
- * @param {goog.date.DateTime} d Object whose fields will be set.
+ * @param {!goog.date.Date} d Object whose fields will be set.
  * @param {number} week ISO week number.
  * @param {number} dayOfWeek ISO day of week.
  * @private
@@ -483,11 +475,17 @@ goog.date.Interval = function(
   if (goog.isString(opt_years)) {
     var type = opt_years;
     var interval = /** @type {number} */ (opt_months);
+    /** @type {number} */
     this.years = type == goog.date.Interval.YEARS ? interval : 0;
+    /** @type {number} */
     this.months = type == goog.date.Interval.MONTHS ? interval : 0;
+    /** @type {number} */
     this.days = type == goog.date.Interval.DAYS ? interval : 0;
+    /** @type {number} */
     this.hours = type == goog.date.Interval.HOURS ? interval : 0;
+    /** @type {number} */
     this.minutes = type == goog.date.Interval.MINUTES ? interval : 0;
+    /** @type {number} */
     this.seconds = type == goog.date.Interval.SECONDS ? interval : 0;
   } else {
     this.years = /** @type {number} */ (opt_years) || 0;
@@ -729,10 +727,6 @@ goog.date.Interval.prototype.add = function(interval) {
  * Closure APIs should accept goog.date.DateLike instead of the real Date
  * object.
  *
- * To allow goog.date.Date objects to be passed as arguments to methods
- * expecting Date objects this class is marked as extending the built in Date
- * object even though that's not strictly true.
- *
  * @param {number|goog.date.DateLike=} opt_year Four digit year or a date-like
  *     object. If not set, the created object will contain the date
  *     determined by goog.now().
@@ -931,7 +925,7 @@ goog.date.Date.prototype.getUTCHours = function() {
 
 
 /**
- * @return {number} The hours value according to universal time.
+ * @return {number} The minutes value according to universal time.
  */
 goog.date.Date.prototype.getUTCMinutes = function() {
   return this.date.getUTCMinutes();
@@ -1303,6 +1297,17 @@ goog.date.Date.compare = function(date1, date2) {
 };
 
 
+/**
+ * Parses an ISO 8601 string as a `goog.date.Date`.
+ * @param {string} formatted ISO 8601 string to parse.
+ * @return {?goog.date.Date} Parsed date or null if parse fails.
+ */
+goog.date.Date.fromIsoString = function(formatted) {
+  var ret = new goog.date.Date(2000);
+  return goog.date.setIso8601DateOnly_(ret, formatted) ? ret : null;
+};
+
+
 
 /**
  * Class representing a date and time. Defaults to current date and time if none
@@ -1311,9 +1316,9 @@ goog.date.Date.compare = function(date1, date2) {
  * Implements most methods of the native js Date object and can be used
  * interchangeably with it just as if goog.date.DateTime was a subclass of Date.
  *
- * @param {number|Object=} opt_year Four digit year or a date-like object. If
- *     not set, the created object will contain the date determined by
- *     goog.now().
+ * @param {(number|{getTime:?}|null)=} opt_year Four digit year or a date-like
+ *     object. If not set, the created object will contain the date determined
+ *     by goog.now().
  * @param {number=} opt_month Month, 0 = Jan, 11 = Dec.
  * @param {number=} opt_date Date of month, 1 - 31.
  * @param {number=} opt_hours Hours, 0 - 23.
@@ -1328,6 +1333,7 @@ goog.date.DateTime = function(
     opt_year, opt_month, opt_date, opt_hours, opt_minutes, opt_seconds,
     opt_milliseconds) {
   if (goog.isNumber(opt_year)) {
+    /** @override */
     this.date = new Date(
         opt_year, opt_month || 0, opt_date || 1, opt_hours || 0,
         opt_minutes || 0, opt_seconds || 0, opt_milliseconds || 0);
@@ -1637,6 +1643,18 @@ goog.date.DateTime.prototype.toUTCIsoString = function(opt_verbose, opt_tz) {
 
 
 /**
+ * Returns RFC 3339 string representation of datetime in UTC.
+ *
+ * @return {string} A UTC datetime expressed in RFC 3339 format.
+ */
+goog.date.DateTime.prototype.toUTCRfc3339String = function() {
+  var date = this.toUTCIsoString(true).replace(' ', 'T');
+  var millis = this.getUTCMilliseconds();
+  return (millis ? date + '.' + goog.string.padNumber(millis, 3) : date) + 'Z';
+};
+
+
+/**
  * Tests whether given datetime is exactly equal to this DateTime.
  *
  * @param {goog.date.Date} other The datetime to compare.
@@ -1659,7 +1677,7 @@ goog.date.DateTime.prototype.toString = function() {
 
 
 /**
- * Generates time label for the datetime, e.g., '5:30am'.
+ * Generates time label for the datetime, e.g., '5:30 AM'.
  * By default this does not pad hours (e.g., to '05:30') and it does add
  * an am/pm suffix.
  * TODO(user): i18n -- hardcoding time format like this is bad.  E.g., in CJK
@@ -1669,6 +1687,11 @@ goog.date.DateTime.prototype.toString = function() {
  * @param {boolean=} opt_omitZeroMinutes E.g., '5:00pm' becomes '5pm',
  *                                      but '5:01pm' remains '5:01pm'.
  * @return {string} The time label.
+ * @deprecated Use goog.i18n.DateTimeFormat with
+ *     goog.i18n.DateTimeFormat.Format.FULL_TIME or
+ *     goog.i18n.DateTimeFormat.Format.LONG_TIME or
+ *     goog.i18n.DateTimeFormat.Format.MEDIUM_TIME or
+ *     goog.i18n.DateTimeFormat.Format.SHORT_TIME.
  */
 goog.date.DateTime.prototype.toUsTimeString = function(
     opt_padHours, opt_showAmPm, opt_omitZeroMinutes) {
@@ -1701,17 +1724,7 @@ goog.date.DateTime.prototype.toUsTimeString = function(
 
   // by default, show am/pm suffix
   if (opt_showAmPm) {
-    /**
-     * @desc Suffix for morning times.
-     */
-    var MSG_TIME_AM = goog.getMsg('am');
-
-    /**
-     * @desc Suffix for afternoon times.
-     */
-    var MSG_TIME_PM = goog.getMsg('pm');
-
-    label += isPM ? MSG_TIME_PM : MSG_TIME_AM;
+    label += isPM ? ' PM' : ' AM';
   }
   return label;
 };
@@ -1743,4 +1756,16 @@ goog.date.DateTime.prototype.clone = function() {
   date.setFirstDayOfWeek(this.getFirstDayOfWeek());
   date.setFirstWeekCutOffDay(this.getFirstWeekCutOffDay());
   return date;
+};
+
+
+/**
+ * Parses an ISO 8601 string as a `goog.date.DateTime`.
+ * @param {string} formatted ISO 8601 string to parse.
+ * @return {?goog.date.DateTime} Parsed date or null if parse fails.
+ * @override
+ */
+goog.date.DateTime.fromIsoString = function(formatted) {
+  var ret = new goog.date.DateTime(2000);
+  return goog.date.setIso8601DateTime(ret, formatted) ? ret : null;
 };

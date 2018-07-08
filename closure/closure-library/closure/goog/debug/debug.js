@@ -21,11 +21,7 @@
 goog.provide('goog.debug');
 
 goog.require('goog.array');
-goog.require('goog.html.SafeHtml');
-goog.require('goog.html.SafeUrl');
-goog.require('goog.html.uncheckedconversions');
-goog.require('goog.string.Const');
-goog.require('goog.structs.Set');
+goog.require('goog.debug.errorcontext');
 goog.require('goog.userAgent');
 
 
@@ -44,6 +40,8 @@ goog.define('goog.debug.FORCE_SLOPPY_STACKS', false);
  * @param {boolean=} opt_cancel Whether to stop the error from reaching the
  *    browser.
  * @param {Object=} opt_target Object that fires onerror events.
+ * @suppress {strictMissingProperties} onerror is not defined as a property
+ *    on Object.
  */
 goog.debug.catchErrors = function(logFunc, opt_cancel, opt_target) {
   var target = opt_target || goog.global;
@@ -94,6 +92,7 @@ goog.debug.catchErrors = function(logFunc, opt_cancel, opt_target) {
       message: message,
       fileName: url,
       line: line,
+      lineNumber: line,
       col: opt_col,
       error: opt_error
     });
@@ -107,7 +106,7 @@ goog.debug.catchErrors = function(logFunc, opt_cancel, opt_target) {
  * @param {Object|null|undefined} obj Object to expose.
  * @param {boolean=} opt_showFn Show the functions as well as the properties,
  *     default is false.
- * @return {string} The string representation of {@code obj}.
+ * @return {string} The string representation of `obj`.
  */
 goog.debug.expose = function(obj, opt_showFn) {
   if (typeof obj == 'undefined') {
@@ -123,7 +122,7 @@ goog.debug.expose = function(obj, opt_showFn) {
       continue;
     }
     var s = x + ' = ';
-    /** @preserveTry */
+
     try {
       s += obj[x];
     } catch (e) {
@@ -137,27 +136,31 @@ goog.debug.expose = function(obj, opt_showFn) {
 
 /**
  * Creates a string representing a given primitive or object, and for an
- * object, all its properties and nested objects.  WARNING: If an object is
- * given, it and all its nested objects will be modified.  To detect reference
- * cycles, this method identifies objects using goog.getUid() which mutates the
- * object.
+ * object, all its properties and nested objects. NOTE: The output will include
+ * Uids on all objects that were exposed. Any added Uids will be removed before
+ * returning.
  * @param {*} obj Object to expose.
  * @param {boolean=} opt_showFn Also show properties that are functions (by
  *     default, functions are omitted).
- * @return {string} A string representation of {@code obj}.
+ * @return {string} A string representation of `obj`.
  */
 goog.debug.deepExpose = function(obj, opt_showFn) {
   var str = [];
 
-  var helper = function(obj, space, parentSeen) {
+  // Track any objects where deepExpose added a Uid, so they can be cleaned up
+  // before return. We do this globally, rather than only on ancestors so that
+  // if the same object appears in the output, you can see it.
+  var uidsToCleanup = [];
+  var ancestorUids = {};
+
+  var helper = function(obj, space) {
     var nestspace = space + '  ';
-    var seen = new goog.structs.Set(parentSeen);
 
     var indentMultiline = function(str) {
       return str.replace(/\n/g, '\n' + space);
     };
 
-    /** @preserveTry */
+
     try {
       if (!goog.isDef(obj)) {
         str.push('undefined');
@@ -168,10 +171,15 @@ goog.debug.deepExpose = function(obj, opt_showFn) {
       } else if (goog.isFunction(obj)) {
         str.push(indentMultiline(String(obj)));
       } else if (goog.isObject(obj)) {
-        if (seen.contains(obj)) {
-          str.push('*** reference loop detected ***');
+        // Add a Uid if needed. The struct calls implicitly adds them.
+        if (!goog.hasUid(obj)) {
+          uidsToCleanup.push(obj);
+        }
+        var uid = goog.getUid(obj);
+        if (ancestorUids[uid]) {
+          str.push('*** reference loop detected (id=' + uid + ') ***');
         } else {
-          seen.add(obj);
+          ancestorUids[uid] = true;
           str.push('{');
           for (var x in obj) {
             if (!opt_showFn && goog.isFunction(obj[x])) {
@@ -180,9 +188,10 @@ goog.debug.deepExpose = function(obj, opt_showFn) {
             str.push('\n');
             str.push(nestspace);
             str.push(x + ' = ');
-            helper(obj[x], nestspace, seen);
+            helper(obj[x], nestspace);
           }
           str.push('\n' + space + '}');
+          delete ancestorUids[uid];
         }
       } else {
         str.push(obj);
@@ -192,7 +201,13 @@ goog.debug.deepExpose = function(obj, opt_showFn) {
     }
   };
 
-  helper(obj, '', new goog.structs.Set());
+  helper(obj, '');
+
+  // Cleanup any Uids that were added by the deepExpose.
+  for (var i = 0; i < uidsToCleanup.length; i++) {
+    goog.removeUid(uidsToCleanup[i]);
+  }
+
   return str.join('');
 };
 
@@ -216,81 +231,16 @@ goog.debug.exposeArray = function(arr) {
 
 
 /**
- * Exposes an exception that has been caught by a try...catch and outputs the
- * error as HTML with a stack trace.
- * @param {Object} err Error object or string.
- * @param {Function=} opt_fn Optional function to start stack trace from.
- * @return {string} Details of exception, as HTML.
- */
-goog.debug.exposeException = function(err, opt_fn) {
-  var html = goog.debug.exposeExceptionAsHtml(err, opt_fn);
-  return goog.html.SafeHtml.unwrap(html);
-};
-
-
-/**
- * Exposes an exception that has been caught by a try...catch and outputs the
- * error with a stack trace.
- * @param {Object} err Error object or string.
- * @param {Function=} opt_fn Optional function to start stack trace from.
- * @return {!goog.html.SafeHtml} Details of exception.
- */
-goog.debug.exposeExceptionAsHtml = function(err, opt_fn) {
-  /** @preserveTry */
-  try {
-    var e = goog.debug.normalizeErrorObject(err);
-    // Create the error message
-    var viewSourceUrl = goog.debug.createViewSourceUrl_(e.fileName);
-    var error = goog.html.SafeHtml.concat(
-        goog.html.SafeHtml.htmlEscapePreservingNewlinesAndSpaces(
-            'Message: ' + e.message + '\nUrl: '),
-        goog.html.SafeHtml.create(
-            'a', {href: viewSourceUrl, target: '_new'}, e.fileName),
-        goog.html.SafeHtml.htmlEscapePreservingNewlinesAndSpaces(
-            '\nLine: ' + e.lineNumber + '\n\nBrowser stack:\n' + e.stack +
-            '-> ' +
-            '[end]\n\nJS stack traversal:\n' +
-            goog.debug.getStacktrace(opt_fn) + '-> '));
-    return error;
-  } catch (e2) {
-    return goog.html.SafeHtml.htmlEscapePreservingNewlinesAndSpaces(
-        'Exception trying to expose exception! You win, we lose. ' + e2);
-  }
-};
-
-
-/**
- * @param {?string=} opt_fileName
- * @return {!goog.html.SafeUrl} SafeUrl with view-source scheme, pointing at
- *     fileName.
- * @private
- */
-goog.debug.createViewSourceUrl_ = function(opt_fileName) {
-  if (!goog.isDefAndNotNull(opt_fileName)) {
-    opt_fileName = '';
-  }
-  if (!/^https?:\/\//i.test(opt_fileName)) {
-    return goog.html.SafeUrl.fromConstant(
-        goog.string.Const.from('sanitizedviewsrc'));
-  }
-  var sanitizedFileName = goog.html.SafeUrl.sanitize(opt_fileName);
-  return goog.html.uncheckedconversions
-      .safeUrlFromStringKnownToSatisfyTypeContract(
-          goog.string.Const.from('view-source scheme plus HTTP/HTTPS URL'),
-          'view-source:' + goog.html.SafeUrl.unwrap(sanitizedFileName));
-};
-
-
-/**
  * Normalizes the error/exception object between browsers.
- * @param {Object} err Raw error object.
- * @return {!{
+ * @param {*} err Raw error object.
+ * @return {{
  *    message: (?|undefined),
  *    name: (?|undefined),
  *    lineNumber: (?|undefined),
  *    fileName: (?|undefined),
  *    stack: (?|undefined)
  * }} Normalized error object.
+ * @suppress {strictMissingProperties} properties not defined on err
  */
 goog.debug.normalizeErrorObject = function(err) {
   var href = goog.getObjectByName('window.location.href');
@@ -384,6 +334,27 @@ goog.debug.enhanceError = function(err, opt_message) {
 
 
 /**
+ * Converts an object to an Error using the object's toString if it's not
+ * already an Error, adds a stacktrace if there isn't one, and optionally adds
+ * context to the Error, which is reported by the closure error reporter.
+ * @param {*} err The original thrown error, object, or string.
+ * @param {!Object<string, string>=} opt_context Key-value context to add to the
+ *     Error.
+ * @return {!Error} If err is an Error, it is enhanced and returned. Otherwise,
+ *     it is converted to an Error which is enhanced and returned.
+ */
+goog.debug.enhanceErrorWithContext = function(err, opt_context) {
+  var error = goog.debug.enhanceError(err);
+  if (opt_context) {
+    for (var key in opt_context) {
+      goog.debug.errorcontext.addErrorContext(error, key, opt_context[key]);
+    }
+  }
+  return error;
+};
+
+
+/**
  * Gets the current stack trace. Simple and iterative - doesn't worry about
  * catching circular references or getting the args.
  * @param {number=} opt_depth Optional maximum depth to trace back to.
@@ -408,7 +379,7 @@ goog.debug.getStacktraceSimple = function(opt_depth) {
   while (fn && (!opt_depth || depth < opt_depth)) {
     sb.push(goog.debug.getFunctionName(fn));
     sb.push('()\n');
-    /** @preserveTry */
+
     try {
       fn = fn.caller;
     } catch (e) {
@@ -467,23 +438,23 @@ goog.debug.getNativeStackTrace_ = function(fn) {
 /**
  * Gets the current stack trace, either starting from the caller or starting
  * from a specified function that's currently on the call stack.
- * @param {Function=} opt_fn Optional function to start getting the trace from.
- *     If not provided, defaults to the function that called this.
+ * @param {?Function=} fn If provided, when collecting the stack trace all
+ *     frames above the topmost call to this function, including that call,
+ *     will be left out of the stack trace.
  * @return {string} Stack trace.
  * @suppress {es5Strict}
  */
-goog.debug.getStacktrace = function(opt_fn) {
+goog.debug.getStacktrace = function(fn) {
   var stack;
   if (!goog.debug.FORCE_SLOPPY_STACKS) {
     // Try to get the stack trace from the environment if it is available.
-    var contextFn = opt_fn || goog.debug.getStacktrace;
+    var contextFn = fn || goog.debug.getStacktrace;
     stack = goog.debug.getNativeStackTrace_(contextFn);
   }
   if (!stack) {
     // NOTE: browsers that have strict mode support also have native "stack"
     // properties. This function will throw in strict mode.
-    stack =
-        goog.debug.getStacktraceHelper_(opt_fn || arguments.callee.caller, []);
+    stack = goog.debug.getStacktraceHelper_(fn || arguments.callee.caller, []);
   }
   return stack;
 };
@@ -491,7 +462,9 @@ goog.debug.getStacktrace = function(opt_fn) {
 
 /**
  * Private helper for getStacktrace().
- * @param {Function} fn Function to start getting the trace from.
+ * @param {?Function} fn If provided, when collecting the stack trace all
+ *     frames above the topmost call to this function, including that call,
+ *     will be left out of the stack trace.
  * @param {Array<!Function>} visited List of functions visited so far.
  * @return {string} Stack trace starting from function fn.
  * @suppress {es5Strict}
@@ -551,7 +524,7 @@ goog.debug.getStacktraceHelper_ = function(fn, visited) {
     }
     visited.push(fn);
     sb.push(')\n');
-    /** @preserveTry */
+
     try {
       sb.push(goog.debug.getStacktraceHelper_(fn.caller, visited));
     } catch (e) {
@@ -639,8 +612,8 @@ goog.debug.runtimeType = function(value) {
   if (value instanceof Function) {
     return value.displayName || value.name || 'unknown type name';
   } else if (value instanceof Object) {
-    return value.constructor.displayName || value.constructor.name ||
-        Object.prototype.toString.call(value);
+    return /** @type {string} */ (value.constructor.displayName) ||
+        value.constructor.name || Object.prototype.toString.call(value);
   } else {
     return value === null ? 'null' : typeof value;
   }
@@ -661,3 +634,35 @@ goog.debug.fnNameCache_ = {};
  * @private
  */
 goog.debug.fnNameResolver_;
+
+
+/**
+ * Private internal function to support goog.debug.freeze.
+ * @param {T} arg
+ * @return {T}
+ * @template T
+ * @private
+ */
+goog.debug.freezeInternal_ = goog.DEBUG && Object.freeze || function(arg) {
+  return arg;
+};
+
+
+/**
+ * Freezes the given object, but only in debug mode (and in browsers that
+ * support it).  Note that this is a shallow freeze, so for deeply nested
+ * objects it must be called at every level to ensure deep immutability.
+ * @param {T} arg
+ * @return {T}
+ * @template T
+ */
+goog.debug.freeze = function(arg) {
+  // NOTE: this compiles to nothing, but hides the possible side effect of
+  // freezeInternal_ from the compiler so that the entire call can be
+  // removed if the result is not used.
+  return {
+    valueOf: function() {
+      return goog.debug.freezeInternal_(arg);
+    }
+  }.valueOf();
+};

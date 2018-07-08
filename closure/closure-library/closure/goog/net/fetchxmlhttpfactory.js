@@ -191,7 +191,7 @@ goog.net.FetchXmlHttp.prototype.open = function(method, url, opt_async) {
   goog.asserts.assert(!!opt_async, 'Only async requests are supported.');
   if (this.readyState != goog.net.FetchXmlHttp.RequestState.UNSENT) {
     this.abort();
-    throw Error('Error reopening a connection');
+    throw new Error('Error reopening a connection');
   }
 
   this.method_ = method;
@@ -206,7 +206,7 @@ goog.net.FetchXmlHttp.prototype.open = function(method, url, opt_async) {
 goog.net.FetchXmlHttp.prototype.send = function(opt_data) {
   if (this.readyState != goog.net.FetchXmlHttp.RequestState.OPENED) {
     this.abort();
-    throw Error('need to call open() first. ');
+    throw new Error('need to call open() first. ');
   }
 
   this.inProgress_ = true;
@@ -323,14 +323,37 @@ goog.net.FetchXmlHttp.prototype.setRequestHeader = function(header, value) {
 
 /** @override */
 goog.net.FetchXmlHttp.prototype.getResponseHeader = function(header) {
+  // TODO(b/70808323): This method should return null when the headers are not
+  // present or the specified header is missing. The externs need to be fixed.
+  if (!this.responseHeaders_) {
+    goog.log.warning(
+        this.logger_,
+        'Attempting to get response header but no headers have been received ' +
+            'for url: ' + this.url_);
+    return '';
+  }
   return this.responseHeaders_.get(header.toLowerCase()) || '';
 };
 
 
 /** @override */
 goog.net.FetchXmlHttp.prototype.getAllResponseHeaders = function() {
-  // TODO(user): Implement once the Headers extern support entries().
-  return '';
+  if (!this.responseHeaders_) {
+    goog.log.warning(
+        this.logger_,
+        'Attempting to get all response headers but no headers have been ' +
+            'received for url: ' + this.url_);
+    return '';
+  }
+  var lines = [];
+  var iter = this.responseHeaders_.entries();
+  var entry = iter.next();
+  while (!entry.done) {
+    var pair = entry.value;
+    lines.push(pair[0] + ': ' + pair[1]);
+    entry = iter.next();
+  }
+  return lines.join('\r\n');
 };
 
 

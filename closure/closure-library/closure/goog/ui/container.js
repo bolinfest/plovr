@@ -38,6 +38,7 @@ goog.require('goog.events.KeyHandler');
 goog.require('goog.object');
 goog.require('goog.style');
 goog.require('goog.ui.Component');
+goog.require('goog.ui.ComponentUtil');
 goog.require('goog.ui.ContainerRenderer');
 goog.require('goog.ui.Control');
 
@@ -54,7 +55,7 @@ goog.require('goog.ui.Control');
  *    <li>default mouse and keyboard event handling methods.
  *  </ul>
  * @param {?goog.ui.Container.Orientation=} opt_orientation Container
- *     orientation; defaults to {@code VERTICAL}.
+ *     orientation; defaults to `VERTICAL`.
  * @param {goog.ui.ContainerRenderer=} opt_renderer Renderer used to render or
  *     decorate the container; defaults to {@link goog.ui.ContainerRenderer}.
  * @param {goog.dom.DomHelper=} opt_domHelper DOM helper, used for document
@@ -155,7 +156,7 @@ goog.ui.Container.prototype.enabled_ = true;
 
 /**
  * Whether the container supports keyboard focus.  Defaults to true.  Focusable
- * containers have a {@code tabIndex} and can be navigated to via the keyboard.
+ * containers have a `tabIndex` and can be navigated to via the keyboard.
  * @type {boolean}
  * @private
  */
@@ -257,7 +258,7 @@ goog.ui.Container.prototype.setKeyEventTarget = function(element) {
       this.enableFocusHandling_(true);
     }
   } else {
-    throw Error(
+    throw new Error(
         'Can\'t set key event target for container ' +
         'that doesn\'t support keyboard focus!');
   }
@@ -295,7 +296,7 @@ goog.ui.Container.prototype.getRenderer = function() {
 goog.ui.Container.prototype.setRenderer = function(renderer) {
   if (this.getElement()) {
     // Too late.
-    throw Error(goog.ui.Component.Error.ALREADY_RENDERED);
+    throw new Error(goog.ui.Component.Error.ALREADY_RENDERED);
   }
 
   this.renderer_ = renderer;
@@ -379,6 +380,8 @@ goog.ui.Container.prototype.enterDocument = function() {
   // Initialize visibility (opt_force = true, so we don't dispatch events).
   this.setVisible(this.visible_, true);
 
+  var MouseEventType = goog.ui.ComponentUtil.getMouseEventType(this);
+
   // Handle events dispatched by child controls.
   this.getHandler()
       .listen(this, goog.ui.Component.EventType.ENTER, this.handleEnterItem)
@@ -389,28 +392,50 @@ goog.ui.Container.prototype.enterDocument = function() {
           this.handleUnHighlightItem)
       .listen(this, goog.ui.Component.EventType.OPEN, this.handleOpenItem)
       .listen(this, goog.ui.Component.EventType.CLOSE, this.handleCloseItem)
-      .
 
       // Handle mouse events.
-      listen(elem, goog.events.EventType.MOUSEDOWN, this.handleMouseDown)
+      .listen(elem, MouseEventType.MOUSEDOWN, this.handleMouseDown)
       .listen(
-          goog.dom.getOwnerDocument(elem), goog.events.EventType.MOUSEUP,
+          goog.dom.getOwnerDocument(elem),
+          [MouseEventType.MOUSEUP, MouseEventType.MOUSECANCEL],
           this.handleDocumentMouseUp)
-      .
 
       // Handle mouse events on behalf of controls in the container.
-      listen(
+      .listen(
           elem,
           [
-            goog.events.EventType.MOUSEDOWN, goog.events.EventType.MOUSEUP,
-            goog.events.EventType.MOUSEOVER, goog.events.EventType.MOUSEOUT,
+            MouseEventType.MOUSEDOWN,
+            MouseEventType.MOUSEUP,
+            MouseEventType.MOUSECANCEL,
+            MouseEventType.MOUSEOVER,
+            MouseEventType.MOUSEOUT,
             goog.events.EventType.CONTEXTMENU
           ],
           this.handleChildMouseEvents);
 
+  if (this.pointerEventsEnabled()) {
+    // Prevent pointer events from capturing the target element so they behave
+    // more like mouse events.
+    this.getHandler().listen(
+        elem, goog.events.EventType.GOTPOINTERCAPTURE,
+        this.preventPointerCapture_);
+  }
+
   // If the container is focusable, set up keyboard event handling.
   if (this.isFocusable()) {
     this.enableFocusHandling_(true);
+  }
+};
+
+
+/**
+ * @param {!goog.events.BrowserEvent} e Event to handle.
+ * @private
+ */
+goog.ui.Container.prototype.preventPointerCapture_ = function(e) {
+  var elem = /** @type {!Element} */ (e.target);
+  if (!!elem.releasePointerCapture) {
+    elem.releasePointerCapture(e.pointerId);
   }
 };
 
@@ -632,20 +657,23 @@ goog.ui.Container.prototype.handleDocumentMouseUp = function(e) {
  * @param {goog.events.BrowserEvent} e Mouse event to handle.
  */
 goog.ui.Container.prototype.handleChildMouseEvents = function(e) {
+  var MouseEventType = goog.ui.ComponentUtil.getMouseEventType(this);
+
   var control = this.getOwnerControl(/** @type {Node} */ (e.target));
   if (control) {
     // Child control identified; forward the event.
     switch (e.type) {
-      case goog.events.EventType.MOUSEDOWN:
+      case MouseEventType.MOUSEDOWN:
         control.handleMouseDown(e);
         break;
-      case goog.events.EventType.MOUSEUP:
+      case MouseEventType.MOUSEUP:
+      case MouseEventType.MOUSECANCEL:
         control.handleMouseUp(e);
         break;
-      case goog.events.EventType.MOUSEOVER:
+      case MouseEventType.MOUSEOVER:
         control.handleMouseOver(e);
         break;
-      case goog.events.EventType.MOUSEOUT:
+      case MouseEventType.MOUSEOUT:
         control.handleMouseOut(e);
         break;
       case goog.events.EventType.CONTEXTMENU:
@@ -731,7 +759,7 @@ goog.ui.Container.prototype.handleKeyEvent = function(e) {
 /**
  * Attempts to handle a keyboard event; returns true if the event was handled,
  * false otherwise.  If the container is enabled, and a child is highlighted,
- * calls the child control's {@code handleKeyEvent} method to give the control
+ * calls the child control's `handleKeyEvent` method to give the control
  * a chance to handle the event first.
  * @param {goog.events.KeyEvent} e Key event to handle.
  * @return {boolean} Whether the event was handled by the container (or one of
@@ -957,7 +985,7 @@ goog.ui.Container.prototype.updateHighlightedIndex_ = function(
  * uses {@link #removeChild} internally, we only need to override this method.
  * @param {string|goog.ui.Component} control The ID of the child to remove, or
  *     the control itself.
- * @param {boolean=} opt_unrender Whether to call {@code exitDocument} on the
+ * @param {boolean=} opt_unrender Whether to call `exitDocument` on the
  *     removed control, and detach its DOM from the document (defaults to
  *     false).
  * @return {goog.ui.Control} The removed control, if any.
@@ -1016,7 +1044,7 @@ goog.ui.Container.prototype.getOrientation = function() {
 goog.ui.Container.prototype.setOrientation = function(orientation) {
   if (this.getElement()) {
     // Too late.
-    throw Error(goog.ui.Component.Error.ALREADY_RENDERED);
+    throw new Error(goog.ui.Component.Error.ALREADY_RENDERED);
   }
 
   this.orientation_ = orientation;
@@ -1084,8 +1112,8 @@ goog.ui.Container.prototype.isEnabled = function() {
 
 
 /**
- * Enables/disables the container based on the {@code enable} argument.
- * Dispatches an {@code ENABLED} or {@code DISABLED} event prior to changing
+ * Enables/disables the container based on the `enable` argument.
+ * Dispatches an `ENABLED` or `DISABLED` event prior to changing
  * the container's state, which may be caught and canceled to prevent the
  * container from changing state.  Also enables/disables child controls.
  * @param {boolean} enable Whether to enable or disable the container.

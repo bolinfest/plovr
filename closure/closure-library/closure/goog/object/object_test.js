@@ -434,6 +434,9 @@ function createTestDeepObject() {
   obj.a.b.c = {};
   obj.a.b.c.fooArr = [5, 6, 7, 8];
   obj.a.b.c.knownNull = null;
+  obj.knownEmptyString = '';
+  obj.knownSingleCharacterString = '1';
+
   return obj;
 }
 
@@ -447,7 +450,14 @@ function testGetValueByKeys() {
       obj.a.b.c.d, goog.object.getValueByKeys(obj, 'a', 'b', 'c', 'd'));
   assertEquals(8, goog.object.getValueByKeys(obj, 'a', 'b', 'c', 'fooArr', 3));
   assertNull(goog.object.getValueByKeys(obj, 'a', 'b', 'c', 'knownNull'));
+  assertUndefined(
+      goog.object.getValueByKeys(obj, 'a', 'b', 'c', 'knownNull', 'd'));
   assertUndefined(goog.object.getValueByKeys(obj, 'e', 'f', 'g'));
+  assertEquals(
+      0, goog.object.getValueByKeys(obj, 'knownEmptyString', 'length'));
+  assertEquals(
+      1,
+      goog.object.getValueByKeys(obj, 'knownSingleCharacterString', 'length'));
 }
 
 function testGetValueByKeysArraySyntax() {
@@ -462,6 +472,8 @@ function testGetValueByKeysArraySyntax() {
   assertEquals(
       8, goog.object.getValueByKeys(obj, ['a', 'b', 'c', 'fooArr', 3]));
   assertNull(goog.object.getValueByKeys(obj, ['a', 'b', 'c', 'knownNull']));
+  assertUndefined(
+      goog.object.getValueByKeys(obj, ['a', 'b', 'c', 'knownNull', 'd']));
   assertUndefined(goog.object.getValueByKeys(obj, 'e', 'f', 'g'));
 }
 
@@ -606,6 +618,7 @@ function testGetAllPropertyNames_es6ClassProperties() {
         'Foo.prototype.b = null;' +
         'var Bar = class extends Foo {' +
         '  c() {}' +
+        '  static d() {}' +
         '};');
   } catch (e) {
     if (e instanceof SyntaxError) {
@@ -619,6 +632,17 @@ function testGetAllPropertyNames_es6ClassProperties() {
   assertSameElements(
       ['a', 'b', 'c', 'constructor'],
       goog.object.getAllPropertyNames(Bar.prototype));
+
+  var expectedBarProperties = ['d', 'prototype', 'length', 'name'];
+
+  // Some versions of Firefox don't find the name property via
+  // getOwnPropertyNames.
+  if (!goog.array.contains(Object.getOwnPropertyNames(Bar), 'name')) {
+    goog.array.remove(expectedBarProperties, 'name');
+  }
+
+  assertSameElements(
+      expectedBarProperties, goog.object.getAllPropertyNames(Bar));
 }
 
 function testGetAllPropertyNames_includeObjectPrototype() {
@@ -635,4 +659,21 @@ function testGetAllPropertyNames_includeObjectPrototype() {
   assertSameElements(
       ['a', 'b', 'c'].concat(additionalProps),
       goog.object.getAllPropertyNames(obj, true));
+}
+
+function testGetAllPropertyNames_includeFunctionPrototype() {
+  var obj = function() {};
+  obj.a = function() {};
+
+  // There's slightly different behavior depending on what APIs the browser
+  // under test supports.
+  var additionalProps = !!Object.getOwnPropertyNames ?
+      Object.getOwnPropertyNames(Function.prototype).concat(['prototype']) :
+      [];
+
+  var expectedElements = ['a'].concat(additionalProps);
+  goog.array.removeDuplicates(expectedElements);
+
+  assertSameElements(
+      expectedElements, goog.object.getAllPropertyNames(obj, false, true));
 }

@@ -15,15 +15,18 @@
 goog.module('goog.testing.MultiTestRunnerTest');
 goog.setTestOnly('goog.testing.MultiTestRunnerTest');
 
-var Promise = goog.require('goog.Promise');
-var events = goog.require('goog.events');
-var testingEvents = goog.require('goog.testing.events');
+// Delay running the tests after page load. This test has some asynchronous
+// behavior that interacts with page load detection.
+goog.testing.jsunit.AUTO_RUN_DELAY_IN_MS = 500;
+
 var MockControl = goog.require('goog.testing.MockControl');
 var MultiTestRunner = goog.require('goog.testing.MultiTestRunner');
+var Promise = goog.require('goog.Promise');
 var PropertyReplacer = goog.require('goog.testing.PropertyReplacer');
 var TestCase = goog.require('goog.testing.TestCase');
-var jsunit = goog.require('goog.testing.jsunit');
+var events = goog.require('goog.events');
 var testSuite = goog.require('goog.testing.testSuite');
+var testingEvents = goog.require('goog.testing.events');
 
 var ALL_TESTS = [
   'testdata/fake_passing_test.html', 'testdata/fake_failing_test.html',
@@ -70,7 +73,7 @@ function assertArrayContainsMatcher(matcher, array) {
 
 /**
  * Returns promise that resolves when eventType is dispatched from target.
- * @param {!EventTarget|!goog.events.Listenable} target Target to listen for
+ * @param {!EventTarget|!events.Listenable} target Target to listen for
  *     event on.
  * @param {string} eventType Type of event.
  * @return {!Promise} Promise that resolves with triggered event.
@@ -84,7 +87,7 @@ function createEventPromise(target, eventType) {
 
 /**
  * @typedef {{
- *   failureReports: !Array<string>,
+ *   failureReports: !Array<TestCase.IResult>,
  *   testNames: !Array<string>
  * }}
  */
@@ -94,8 +97,8 @@ var TestResults;
 /**
  * Processes the test results returned from MultiTestRunner and creates a
  * consolidated test result object.
- * @param {!Array<!Object<string,!Array<string>>>} testResults The list of
- *     individual test results from MultiTestRunner.
+ * @param {!Array<!Object<string,!Array<TestCase.IResult>>>}
+ *     testResults The list of individual test results from MultiTestRunner.
  * @return {!TestResults} Consolidated test results for all individual tests.
  */
 function processTestResults(testResults) {
@@ -291,27 +294,28 @@ testSuite({
 
     testRunner.render(document.getElementById('runner'));
     testRunner.setTimeout(0);
+    // If the fake tests complete before the timeout check, this test will fail.
     testRunner.start();
 
     return promise.then(function(results) {
       var testResults = processTestResults(results['allTestResults']);
       var testNames = testResults.testNames;
-      assertEquals(3, testNames.length);
       // Only the filename should be the test name for timeouts.
       assertArrayContainsString('testdata/fake_failing_test2', testNames);
       assertArrayContainsString('testdata/fake_failing_test', testNames);
       assertArrayContainsString('testdata/fake_passing_test', testNames);
+      assertEquals(3, testNames.length);
       var failureReports = testResults.failureReports;
-      var failedTests = testRunner.getTestsThatFailed();
+      assertContains('timed out', failureReports[0]['message']);
+      assertContains('timed out', failureReports[1]['message']);
+      assertContains('timed out', failureReports[2]['message']);
       assertEquals(3, failureReports.length);
-      assertEquals(3, failedTests.length);
-      assertContains('timed out', failureReports[0]);
-      assertContains('timed out', failureReports[1]);
-      assertContains('timed out', failureReports[2]);
+      var failedTests = testRunner.getTestsThatFailed();
       assertArrayContainsString('testdata/fake_passing_test.html', failedTests);
       assertArrayContainsString('testdata/fake_failing_test.html', failedTests);
       assertArrayContainsString(
           'testdata/fake_failing_test2.html', failedTests);
+      assertEquals(3, failedTests.length);
     });
   },
 

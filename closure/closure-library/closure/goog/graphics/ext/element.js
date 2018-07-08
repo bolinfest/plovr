@@ -25,6 +25,11 @@ goog.require('goog.events.EventTarget');
 goog.require('goog.functions');
 goog.require('goog.graphics.ext.coordinates');
 
+goog.forwardDeclare('goog.graphics.AbstractGraphics');
+goog.forwardDeclare('goog.graphics.Element');
+goog.forwardDeclare('goog.graphics.ext.Graphics');
+goog.forwardDeclare('goog.graphics.ext.Group');
+
 
 
 /**
@@ -672,7 +677,7 @@ goog.graphics.ext.Element.prototype.getPixelScaleY = function() {
 
 /** @override */
 goog.graphics.ext.Element.prototype.disposeInternal = function() {
-  goog.graphics.ext.Element.superClass_.disposeInternal.call();
+  goog.graphics.ext.Element.superClass_.disposeInternal.call(this);
   this.wrapper_.dispose();
 };
 

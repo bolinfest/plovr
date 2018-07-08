@@ -18,8 +18,23 @@ goog.setTestOnly('goog.html.safeHtmlFormatterTest');
 
 goog.require('goog.html.SafeHtml');
 goog.require('goog.html.SafeHtmlFormatter');
+goog.require('goog.html.SafeUrl');
 goog.require('goog.string');
+goog.require('goog.testing.PropertyReplacer');
 goog.require('goog.testing.jsunit');
+
+
+var stubs;
+
+
+function setUp() {
+  stubs = new goog.testing.PropertyReplacer();
+}
+
+
+function tearDown() {
+  stubs.reset();
+}
 
 
 function testFormat() {
@@ -42,6 +57,20 @@ function testFormatWithGetMsg() {
       })));
 }
 
+function testFormatWithGetMsgAndSafeValues() {
+  var formatter = new goog.html.SafeHtmlFormatter();
+  assertSameHtml(
+      'start <a href="about:invalid#zClosurez">bbb</a>' +
+          ' <a href="about:blank">ccc</a> end',
+      formatter.format(
+          goog.getMsg('start {$startA1}bbb{$endA1} {$startA2}ccc{$endA2} end', {
+            'startA1': formatter.startTag('a', {'href': 'javascript:alert(1)'}),
+            'endA1': formatter.endTag('a'),
+            'startA2': formatter.startTag(
+                'a', {'href': goog.html.SafeUrl.ABOUT_BLANK}),
+            'endA2': formatter.endTag('a'),
+          })));
+}
 
 function testFormatWithText() {
   var formatter = new goog.html.SafeHtmlFormatter();
@@ -121,6 +150,14 @@ function testFormatBalancingTags() {
   assertThrows(function() {
     formatter.format(formatter.endTag('b'));
   });
+}
+
+
+function testDetectDoubleEscaping() {
+  stubs.set(goog.string, 'DETECT_DOUBLE_ESCAPING', true);
+  stubs.set(goog.string, 'ALL_RE_', /[\x00&<>"'e]/);
+  var formatter = new goog.html.SafeHtmlFormatter();
+  assertSameHtml('t&#101;st', formatter.format(formatter.text('test')));
 }
 
 

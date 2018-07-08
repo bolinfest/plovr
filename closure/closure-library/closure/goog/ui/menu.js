@@ -79,7 +79,7 @@ goog.ui.Menu = function(opt_domHelper, opt_renderer) {
 
   // Unlike Containers, Menus aren't keyboard-accessible by default.  This line
   // preserves backwards compatibility with code that depends on menus not
-  // receiving focus - e.g. {@code goog.ui.MenuButton}.
+  // receiving focus - e.g. `goog.ui.MenuButton`.
   this.setFocusable(false);
 };
 goog.inherits(goog.ui.Menu, goog.ui.Container);
@@ -137,7 +137,7 @@ goog.ui.Menu.prototype.allowAutoFocus_ = true;
 
 
 /**
- * Whether the menu should use windows syle behavior and allow disabled menu
+ * Whether the menu should use windows style behavior and allow disabled menu
  * items to be highlighted (though not selectable).  Defaults to false
  * @type {boolean}
  * @private

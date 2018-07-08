@@ -50,7 +50,7 @@ goog.net.streams.Base64StreamDecoder = function() {
 
   /**
    * The current position in the streamed data that has been processed, i.e.
-   * the position right before {@code leftoverInput_}.
+   * the position right before `leftoverInput_`.
    * @private {number}
    */
   this.streamPos_ = 0;
@@ -84,7 +84,7 @@ Decoder.prototype.isInputValid = function() {
  */
 Decoder.prototype.error_ = function(input, errorMsg) {
   this.isInputValid_ = false;
-  throw Error(
+  throw new Error(
       'The stream is broken @' + this.streamPos_ + '. Error: ' + errorMsg +
       '. With input:\n' + input);
 };

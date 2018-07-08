@@ -25,6 +25,9 @@ goog.setTestOnly('goog.testing.MockClock');
 goog.provide('goog.testing.MockClock');
 
 goog.require('goog.Disposable');
+/** @suppress {extraRequire} */
+goog.require('goog.Promise');
+goog.require('goog.Thenable');
 goog.require('goog.async.run');
 goog.require('goog.testing.PropertyReplacer');
 goog.require('goog.testing.events');
@@ -66,7 +69,9 @@ goog.testing.MockClock = function(opt_autoInstall) {
    * right.  For example, the expiration times for each element of the queue
    * might be in the order 300, 200, 200.
    *
-   * @type {Array<Object>}
+   * @type {Array<{
+   *    timeoutKey: number, millis: number,
+   *    runAtMillis: number, funcToCall: Function, recurring: boolean}>}
    * @private
    */
   this.queue_ = [];
@@ -330,6 +335,8 @@ goog.testing.MockClock.prototype.tick = function(opt_millis) {
  * rejected, it throws the rejection as an exception. If the promise is not
  * resolved at all, throws an exception.
  * Also ticks the general clock by the specified amount.
+ * Only works with goog.Thenable, hence goog.Promise. Does NOT work with native
+ * browser promises.
  *
  * @param {!goog.Thenable<T>} promise A promise that should be resolved after
  *     the mockClock is ticked for the given opt_millis.
@@ -511,7 +518,7 @@ goog.testing.MockClock.MAX_INT_ = 2147483647;
 
 
 /**
- * Schedules a function to be called after {@code millis} milliseconds.
+ * Schedules a function to be called after `millis` milliseconds.
  * Mock implementation for setTimeout.
  * @param {Function} funcToCall The function to call.
  * @param {number=} opt_millis The number of milliseconds to call it after.
@@ -522,7 +529,7 @@ goog.testing.MockClock.prototype.setTimeout_ = function(
     funcToCall, opt_millis) {
   var millis = opt_millis || 0;
   if (millis > goog.testing.MockClock.MAX_INT_) {
-    throw Error(
+    throw new Error(
         'Bad timeout value: ' + millis + '.  Timeouts over MAX_INT ' +
         '(24.8 days) cause timeouts to be fired ' +
         'immediately in most browsers, except for IE.');
@@ -535,7 +542,7 @@ goog.testing.MockClock.prototype.setTimeout_ = function(
 
 
 /**
- * Schedules a function to be called every {@code millis} milliseconds.
+ * Schedules a function to be called every `millis` milliseconds.
  * Mock implementation for setInterval.
  * @param {Function} funcToCall The function to call.
  * @param {number=} opt_millis The number of milliseconds between calls.

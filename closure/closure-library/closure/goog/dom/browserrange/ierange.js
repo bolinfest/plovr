@@ -387,7 +387,7 @@ goog.dom.browserrange.IeRange.prototype.getContainer = function() {
 
 /**
  * Helper method to find the deepest parent for this range, starting
- * the search from {@code node}, which must contain the range.
+ * the search from `node`, which must contain the range.
  * @param {Node} node The node to start the search from.
  * @return {Node} The deepest parent for this range.
  * @private
@@ -769,7 +769,7 @@ goog.dom.browserrange.IeRange.prototype.removeContents = function() {
     // the other browsers.
     var newStartNode = this.getStartNode();
     var newStartOffset = this.getStartOffset();
-    /** @preserveTry */
+
     try {
       var sibling = startNode.nextSibling;
       if (startNode == endNode && startNode.parentNode &&

@@ -24,6 +24,9 @@
 
 goog.provide('goog.net.WebChannelTransport');
 
+goog.forwardDeclare('goog.net.WebChannel');
+goog.forwardDeclare('goog.net.WebChannel.Options');
+
 
 
 /**
@@ -57,7 +60,7 @@ goog.net.WebChannelTransport = function() {};
  * @const
  * @type {number}
  */
-goog.net.WebChannelTransport.CLIENT_VERSION = 20;
+goog.net.WebChannelTransport.CLIENT_VERSION = 22;
 
 
 /**

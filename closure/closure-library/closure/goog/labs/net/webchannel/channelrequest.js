@@ -19,8 +19,6 @@
  * the logic for the two types of transports we use:
  * XMLHTTP and Image request. It provides timeout detection. More transports
  * to be added in future, such as Fetch, WebSocket.
- *
- * @visibility {:internal}
  */
 
 
@@ -31,14 +29,18 @@ goog.require('goog.async.Throttle');
 goog.require('goog.events.EventHandler');
 goog.require('goog.labs.net.webChannel.Channel');
 goog.require('goog.labs.net.webChannel.WebChannelDebug');
+goog.require('goog.labs.net.webChannel.environment');
 goog.require('goog.labs.net.webChannel.requestStats');
-goog.require('goog.labs.net.webChannel.requestStats.ServerReachability');
-goog.require('goog.labs.net.webChannel.requestStats.Stat');
 goog.require('goog.net.ErrorCode');
 goog.require('goog.net.EventType');
+goog.require('goog.net.WebChannel');
 goog.require('goog.net.XmlHttp');
 goog.require('goog.object');
+goog.require('goog.string');
 goog.require('goog.userAgent');
+
+goog.forwardDeclare('goog.Uri');
+goog.forwardDeclare('goog.net.XhrIo');
 
 
 
@@ -106,10 +108,8 @@ goog.labs.net.webChannel.ChannelRequest = function(
    * onreadystatechange during incremental loading of responseText.
    * @private {goog.Timer}
    */
-  this.pollingTimer_ = new goog.Timer();
-
-  this.pollingTimer_.setInterval(
-      goog.labs.net.webChannel.ChannelRequest.POLLING_INTERVAL_MS_);
+  this.pollingTimer_ =
+      new goog.Timer(goog.labs.net.webChannel.environment.getPollingInterval());
 
   /**
    * Extra HTTP headers to add to all the requests sent to the server.
@@ -171,6 +171,14 @@ goog.labs.net.webChannel.ChannelRequest = function(
   this.postData_ = null;
 
   /**
+   * An array of pending messages that we have either received a non-successful
+   * response for, or no response at all, and which therefore may or may not
+   * have been received by the server.
+   * @private {!Array<goog.labs.net.webChannel.Wire.QueuedMap>}
+   */
+  this.pendingMessages_ = [];
+
+  /**
    * The XhrLte request if the request is using XMLHTTP
    * @private {goog.net.XhrIo}
    */
@@ -202,12 +210,6 @@ goog.labs.net.webChannel.ChannelRequest = function(
   this.lastStatusCode_ = -1;
 
   /**
-   * Whether to send the Connection:close header as part of the request.
-   * @private {boolean}
-   */
-  this.sendClose_ = true;
-
-  /**
    * Whether the request has been cancelled due to a call to cancel.
    * @private {boolean}
    */
@@ -231,21 +233,34 @@ goog.labs.net.webChannel.ChannelRequest = function(
    */
   this.readyStateChangeThrottle_ = null;
 
-
   /**
    * Whether to the result is expected to be encoded for chunking and thus
    * requires decoding.
    * @private {boolean}
    */
   this.decodeChunks_ = false;
+
+  /**
+   * Whether to decode x-http-initial-response.
+   * @private {boolean}
+   */
+  this.decodeInitialResponse_ = false;
+
+  /**
+   * Whether x-http-initial-response has been decoded (dispatched).
+   * @private {boolean}
+   */
+  this.initialResponseDecoded_ = false;
 };
 
 
 goog.scope(function() {
+var WebChannel = goog.net.WebChannel;
 var Channel = goog.labs.net.webChannel.Channel;
 var ChannelRequest = goog.labs.net.webChannel.ChannelRequest;
 var requestStats = goog.labs.net.webChannel.requestStats;
 var WebChannelDebug = goog.labs.net.webChannel.WebChannelDebug;
+var environment = goog.labs.net.webChannel.environment;
 
 
 /**
@@ -254,14 +269,6 @@ var WebChannelDebug = goog.labs.net.webChannel.WebChannelDebug;
  * @private {number}
  */
 ChannelRequest.TIMEOUT_MS_ = 45 * 1000;
-
-
-/**
- * How often to poll (in MS) for changes to responseText in browsers that don't
- * fire onreadystatechange during incremental loading of responseText.
- * @private {number}
- */
-ChannelRequest.POLLING_INTERVAL_MS_ = 250;
 
 
 /**
@@ -382,6 +389,16 @@ ChannelRequest.prototype.setExtraHeaders = function(extraHeaders) {
 
 
 /**
+ * Overrides the default HTTP method.
+ *
+ * @param {string} verb The HTTP method
+ */
+ChannelRequest.prototype.setVerb = function(verb) {
+  this.verb_ = verb;
+};
+
+
+/**
  * Sets the timeout for a request
  *
  * @param {number} timeout   The timeout in MS for when we fail the request.
@@ -403,10 +420,32 @@ ChannelRequest.prototype.setReadyStateChangeThrottle = function(throttle) {
 
 
 /**
+ * Sets the pending messages that this request is handling.
+ *
+ * @param {!Array<goog.labs.net.webChannel.Wire.QueuedMap>} pendingMessages
+ *     The pending messages for this request.
+ */
+ChannelRequest.prototype.setPendingMessages = function(pendingMessages) {
+  this.pendingMessages_ = pendingMessages;
+};
+
+
+/**
+ * Gets the pending messages that this request is handling, in case of a retry.
+ *
+ * @return {!Array<goog.labs.net.webChannel.Wire.QueuedMap>} The pending
+ *     messages for this request.
+ */
+ChannelRequest.prototype.getPendingMessages = function() {
+  return this.pendingMessages_;
+};
+
+
+/**
  * Uses XMLHTTP to send an HTTP POST to the server.
  *
  * @param {goog.Uri} uri  The uri of the request.
- * @param {string} postData  The data for the post body.
+ * @param {?string} postData  The data for the post body.
  * @param {boolean} decodeChunks  Whether to the result is expected to be
  *     encoded for chunking and thus requires decoding.
  */
@@ -428,18 +467,12 @@ ChannelRequest.prototype.xmlHttpPost = function(uri, postData, decodeChunks) {
  * @param {?string} hostPrefix  The host prefix, if we might be using a
  *     secondary domain.  Note that it should also be in the URL, adding this
  *     won't cause it to be added to the URL.
- * @param {boolean=} opt_noClose   Whether to request that the tcp/ip connection
- *     should be closed.
  */
-ChannelRequest.prototype.xmlHttpGet = function(
-    uri, decodeChunks, hostPrefix, opt_noClose) {
+ChannelRequest.prototype.xmlHttpGet = function(uri, decodeChunks, hostPrefix) {
   this.type_ = ChannelRequest.Type_.XML_HTTP;
   this.baseUri_ = uri.clone().makeUnique();
   this.postData_ = null;
   this.decodeChunks_ = decodeChunks;
-  if (opt_noClose) {
-    this.sendClose_ = false;
-  }
 
   this.sendXmlHttp_(hostPrefix);
 };
@@ -480,18 +513,13 @@ ChannelRequest.prototype.sendXmlHttp_ = function(hostPrefix) {
 
   var headers = this.extraHeaders_ ? goog.object.clone(this.extraHeaders_) : {};
   if (this.postData_) {
-    this.verb_ = 'POST';
+    if (!this.verb_) {
+      this.verb_ = 'POST';
+    }
     headers['Content-Type'] = 'application/x-www-form-urlencoded';
     this.xmlHttp_.send(this.requestUri_, this.verb_, this.postData_, headers);
   } else {
     this.verb_ = 'GET';
-
-    // If the user agent is webkit, we cannot send the close header since it is
-    // disallowed by the browser.  If we attempt to set the "Connection: close"
-    // header in WEBKIT browser, it will actually causes an error message.
-    if (this.sendClose_ && !goog.userAgent.WEBKIT) {
-      headers['Connection'] = 'close';
-    }
     this.xmlHttp_.send(this.requestUri_, this.verb_, null, headers);
   }
   requestStats.notifyServerReachabilityEvent(
@@ -529,7 +557,7 @@ ChannelRequest.prototype.readyStateChangeHandler_ = function(evt) {
 ChannelRequest.prototype.xmlHttpHandler_ = function(xmlhttp) {
   requestStats.onStartExecution();
 
-  /** @preserveTry */
+
   try {
     if (xmlhttp == this.xmlHttp_) {
       this.onXmlHttpReadyStateChanged_();
@@ -541,8 +569,10 @@ ChannelRequest.prototype.xmlHttpHandler_ = function(xmlhttp) {
   } catch (ex) {
     this.channelDebug_.debug('Failed call to OnXmlHttpReadyStateChanged_');
     if (this.xmlHttp_ && this.xmlHttp_.getResponseText()) {
-      this.channelDebug_.dumpException(
-          ex, 'ResponseText: ' + this.xmlHttp_.getResponseText());
+      var channelRequest = this;
+      this.channelDebug_.dumpException(ex, function() {
+        return 'ResponseText: ' + channelRequest.xmlHttp_.getResponseText();
+      });
     } else {
       this.channelDebug_.dumpException(ex, 'No response text');
     }
@@ -564,13 +594,12 @@ ChannelRequest.prototype.onXmlHttpReadyStateChanged_ = function() {
 
   // we get partial results in browsers that support ready state interactive.
   // We also make sure that getResponseText is not null in interactive mode
-  // before we continue.  However, we don't do it in Opera because it only
-  // fire readyState == INTERACTIVE once.  We need the following code to poll
+  // before we continue.
   if (readyState < goog.net.XmlHttp.ReadyState.INTERACTIVE ||
-      readyState == goog.net.XmlHttp.ReadyState.INTERACTIVE &&
-          !goog.userAgent.OPERA && !this.xmlHttp_.getResponseText()) {
-    // not yet ready
-    return;
+      (readyState == goog.net.XmlHttp.ReadyState.INTERACTIVE &&
+       !environment.isPollingRequired() &&  // otherwise, go on to startPolling
+       !this.xmlHttp_.getResponseText())) {
+    return;  // not yet ready
   }
 
   // Dispatch any appropriate network events.
@@ -594,8 +623,11 @@ ChannelRequest.prototype.onXmlHttpReadyStateChanged_ = function() {
   this.lastStatusCode_ = status;
   var responseText = this.xmlHttp_.getResponseText();
   if (!responseText) {
-    this.channelDebug_.debug(
-        'No response text for uri ' + this.requestUri_ + ' status ' + status);
+    var channelRequest = this;
+    this.channelDebug_.debug(function() {
+      return 'No response text for uri ' + channelRequest.requestUri_ +
+          ' status ' + status;
+    });
   }
   this.successful_ = (status == 200);
 
@@ -624,9 +656,18 @@ ChannelRequest.prototype.onXmlHttpReadyStateChanged_ = function() {
     return;
   }
 
+  var initialResponse = this.checkInitialResponse_();
+  if (initialResponse) {
+    this.channelDebug_.xmlHttpChannelResponseText(
+        this.rid_, initialResponse,
+        'Initial handshake response via ' + WebChannel.X_HTTP_INITIAL_RESPONSE);
+    this.initialResponseDecoded_ = true;
+    this.safeOnRequestData_(initialResponse);
+  }
+
   if (this.decodeChunks_) {
     this.decodeNextChunks_(readyState, responseText);
-    if (goog.userAgent.OPERA && this.successful_ &&
+    if (environment.isPollingRequired() && this.successful_ &&
         readyState == goog.net.XmlHttp.ReadyState.INTERACTIVE) {
       this.startPolling_();
     }
@@ -655,6 +696,47 @@ ChannelRequest.prototype.onXmlHttpReadyStateChanged_ = function() {
       this.ensureWatchDogTimer_();
     }
   }
+};
+
+
+/**
+ * Checks the initial response header that is sent during the handshake.
+ *
+ * @return {?string} The non-empty header value or null.
+ * @private
+ */
+ChannelRequest.prototype.checkInitialResponse_ = function() {
+  if (!this.decodeInitialResponse_ || this.initialResponseDecoded_) {
+    return null;
+  }
+
+  if (this.xmlHttp_) {
+    var value = this.xmlHttp_.getStreamingResponseHeader(
+        WebChannel.X_HTTP_INITIAL_RESPONSE);
+    if (value && !goog.string.isEmptyOrWhitespace(value)) {
+      return value;
+    }
+  }
+
+  return null;
+};
+
+
+/**
+ * Check if the initial response header has been handled.
+ *
+ * @return {boolean} true if X_HTTP_INITIAL_RESPONSE has been handled.
+ */
+ChannelRequest.prototype.isInitialResponseDecoded = function() {
+  return this.initialResponseDecoded_;
+};
+
+
+/**
+ * Decodes X_HTTP_INITIAL_RESPONSE if present.
+ */
+ChannelRequest.prototype.setDecodeInitialResponse = function() {
+  this.decodeInitialResponse_ = true;
 };
 
 
@@ -715,6 +797,9 @@ ChannelRequest.prototype.decodeNextChunks_ = function(
  * @private
  */
 ChannelRequest.prototype.pollResponse_ = function() {
+  if (!this.xmlHttp_) {
+    return;  // already closed
+  }
   var readyState = this.xmlHttp_.getReadyState();
   var responseText = this.xmlHttp_.getResponseText();
   if (this.xmlHttpChunkStart_ < responseText.length) {
@@ -795,6 +880,9 @@ ChannelRequest.prototype.getNextChunk_ = function(responseText) {
  * For Chrome Apps, sendBeacon is always necessary due to Content Security
  * Policy (CSP) violation of using an IMG tag.
  *
+ * For react-native, we use xhr to send the actual close request, and assume
+ * there is no page-close issue with react-native.
+ *
  * @param {goog.Uri} uri The uri to send a request to.
  */
 ChannelRequest.prototype.sendCloseRequest = function(uri) {
@@ -809,9 +897,16 @@ ChannelRequest.prototype.sendCloseRequest = function(uri) {
         goog.global.navigator.sendBeacon(this.baseUri_.toString(), '');
   }
 
-  if (!requestSent) {
+  if (!requestSent && goog.global.Image) {
     var eltImg = new Image();
     eltImg.src = this.baseUri_;
+    requestSent = true;
+  }
+
+  if (!requestSent) {
+    // no handler is set to match the sendBeacon/Image behavior
+    this.xmlHttp_ = this.channel_.createXhrIo(null);
+    this.xmlHttp_.send(this.baseUri_);
   }
 
   this.requestStartTime_ = goog.now();
@@ -825,6 +920,23 @@ ChannelRequest.prototype.sendCloseRequest = function(uri) {
 ChannelRequest.prototype.cancel = function() {
   this.cancelled_ = true;
   this.cleanup_();
+};
+
+
+/**
+ * Resets the timeout.
+ *
+ * @param {number=} opt_timeout The new timeout
+ */
+ChannelRequest.prototype.resetTimeout = function(opt_timeout) {
+  if (opt_timeout) {
+    this.setTimeout(opt_timeout);
+  }
+  // restart only if a timer is currently set
+  if (this.watchDogTimerId_) {
+    this.cancelWatchDogTimer_();
+    this.ensureWatchDogTimer_();
+  }
 };
 
 
@@ -849,7 +961,7 @@ ChannelRequest.prototype.ensureWatchDogTimer_ = function() {
 ChannelRequest.prototype.startWatchDogTimer_ = function(time) {
   if (this.watchDogTimerId_ != null) {
     // assertion
-    throw Error('WatchDog timer not null');
+    throw new Error('WatchDog timer not null');
   }
   this.watchDogTimerId_ =
       requestStats.setTimeout(goog.bind(this.onWatchDogTimeout_, this), time);
@@ -1046,12 +1158,11 @@ ChannelRequest.prototype.getRequestStartTime = function() {
 
 /**
  * Helper to call the callback's onRequestData, which catches any
- * exception and cleans up the request.
+ * exception.
  * @param {string} data The request data.
  * @private
  */
 ChannelRequest.prototype.safeOnRequestData_ = function(data) {
-  /** @preserveTry */
   try {
     this.channel_.onRequestData(this, data);
     var stats = requestStats.ServerReachability;

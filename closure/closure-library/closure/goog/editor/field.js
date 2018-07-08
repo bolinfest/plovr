@@ -35,6 +35,7 @@ goog.require('goog.dom');
 goog.require('goog.dom.Range');
 goog.require('goog.dom.TagName');
 goog.require('goog.dom.classlist');
+goog.require('goog.dom.safe');
 goog.require('goog.editor.BrowserFeature');
 goog.require('goog.editor.Command');
 goog.require('goog.editor.Plugin');
@@ -50,7 +51,7 @@ goog.require('goog.events.EventType');
 goog.require('goog.events.KeyCodes');
 goog.require('goog.functions');
 goog.require('goog.html.SafeHtml');
-goog.require('goog.html.legacyconversions');
+goog.require('goog.html.SafeStyleSheet');
 goog.require('goog.log');
 goog.require('goog.log.Level');
 goog.require('goog.string');
@@ -133,10 +134,10 @@ goog.editor.Field = function(id, opt_doc) {
 
   /**
    * Additional styles to install for the editable field.
-   * @type {string}
+   * @type {!goog.html.SafeStyleSheet}
    * @protected
    */
-  this.cssStyles = '';
+  this.cssStyles = goog.html.SafeStyleSheet.EMPTY;
 
   // The field will not listen to change events until it has finished loading
   /** @private */
@@ -345,6 +346,13 @@ goog.editor.Field.prototype.inModalMode_ = false;
 goog.editor.Field.prototype.appWindow_;
 
 
+/** @private {?goog.async.Delay} */
+goog.editor.Field.prototype.selectionChangeTimer_ = null;
+
+/** @private {boolean} */
+goog.editor.Field.prototype.isSelectionEditable_ = false;
+
+
 /**
  * Target node to be used when dispatching SELECTIONCHANGE asynchronously on
  * mouseup (to avoid IE quirk). Should be set just before starting the timer and
@@ -356,7 +364,7 @@ goog.editor.Field.prototype.selectionChangeTarget_;
 
 
 /**
- * Flag controlling wether to capture mouse up events on the window or not.
+ * Flag controlling whether to capture mouse up events on the window or not.
  * @type {boolean}
  * @private
  */
@@ -1356,8 +1364,8 @@ goog.editor.Field.prototype.handleKeyUp_ = function(e) {
 
 
 /**
- * Fires {@code BEFORESELECTIONCHANGE} and starts the selection change timer
- * (which will fire {@code SELECTIONCHANGE}) if the given event is a key event
+ * Fires `BEFORESELECTIONCHANGE` and starts the selection change timer
+ * (which will fire `SELECTIONCHANGE`) if the given event is a key event
  * that causes a selection change.
  * @param {!goog.events.BrowserEvent} e The browser event.
  * @private
@@ -1802,11 +1810,11 @@ goog.editor.Field.prototype.isEventStopped = function(eventType) {
  * delayed change events are handled appropriately. Extra delayed change events
  * will cause undesired states to be added to the undo-redo stack. This method
  * will always fire at most one delayed change event, depending on the value of
- * {@code opt_preventDelayedChange}.
+ * `opt_preventDelayedChange`.
  *
  * @param {function()} func The function to call that will manipulate the dom.
  * @param {boolean=} opt_preventDelayedChange Whether delayed change should be
- *      prevented after calling {@code func}. Defaults to always firing
+ *      prevented after calling `func`. Defaults to always firing
  *      delayed change.
  * @param {Object=} opt_handler Object in whose scope to call the listener.
  */
@@ -2159,26 +2167,6 @@ goog.editor.Field.prototype.getFieldCopy = function() {
  * Sets the contents of the field.
  * @param {boolean} addParas Boolean to specify whether to add paragraphs
  *    to long fields.
- * @param {?string} html html to insert.  If html=null, then this defaults
- *    to a nsbp for mozilla and an empty string for IE.
- * @param {boolean=} opt_dontFireDelayedChange True to make this content change
- *    not fire a delayed change event.
- * @param {boolean=} opt_applyLorem Whether to apply lorem ipsum styles.
- * @deprecated Use setSafeHtml instead.
- */
-goog.editor.Field.prototype.setHtml = function(
-    addParas, html, opt_dontFireDelayedChange, opt_applyLorem) {
-  var safeHtml =
-      html ? goog.html.legacyconversions.safeHtmlFromString(html) : null;
-  this.setSafeHtml(
-      addParas, safeHtml, opt_dontFireDelayedChange, opt_applyLorem);
-};
-
-
-/**
- * Sets the contents of the field.
- * @param {boolean} addParas Boolean to specify whether to add paragraphs
- *    to long fields.
  * @param {?goog.html.SafeHtml} html html to insert.  If html=null, then this
  *    defaults to a nsbp for mozilla and an empty string for IE.
  * @param {boolean=} opt_dontFireDelayedChange True to make this content change
@@ -2294,8 +2282,8 @@ goog.editor.Field.prototype.turnOnDesignModeGecko = function() {
  * @protected
  */
 goog.editor.Field.prototype.installStyles = function() {
-  if (this.cssStyles && this.shouldLoadAsynchronously()) {
-    goog.style.installStyles(this.cssStyles, this.getElement());
+  if (this.cssStyles.getTypedStringValue() && this.shouldLoadAsynchronously()) {
+    goog.style.installSafeStyleSheet(this.cssStyles, this.getElement());
   }
 };
 
@@ -2306,8 +2294,7 @@ goog.editor.Field.prototype.installStyles = function() {
  * @private
  */
 goog.editor.Field.prototype.dispatchLoadEvent_ = function() {
-  var field = this.getElement();
-
+  this.getElement();
   this.installStyles();
   this.startChangeEvents();
   goog.log.info(this.logger, 'Dispatching load ' + this.id);
@@ -2442,7 +2429,8 @@ goog.editor.Field.prototype.restoreSavedRange = function(opt_range) {
 /**
  * Makes a field editable.
  *
- * @param {string=} opt_iframeSrc URL to set the iframe src to if necessary.
+ * @param {!goog.html.TrustedResourceUrl=} opt_iframeSrc URL to set the iframe
+ *     src to if necessary.
  */
 goog.editor.Field.prototype.makeEditable = function(opt_iframeSrc) {
   this.loadState_ = goog.editor.Field.LoadState_.LOADING;
@@ -2465,7 +2453,8 @@ goog.editor.Field.prototype.makeEditable = function(opt_iframeSrc) {
 /**
  * Handles actually making something editable - creating necessary nodes,
  * injecting content, etc.
- * @param {string=} opt_iframeSrc URL to set the iframe src to if necessary.
+ * @param {!goog.html.TrustedResourceUrl=} opt_iframeSrc URL to set the iframe
+ *     src to if necessary.
  * @protected
  */
 goog.editor.Field.prototype.makeEditableInternal = function(opt_iframeSrc) {
@@ -2515,7 +2504,7 @@ goog.editor.Field.prototype.handleFieldLoad = function() {
  */
 goog.editor.Field.prototype.makeUneditable = function(opt_skipRestore) {
   if (this.isUneditable()) {
-    throw Error('makeUneditable: Field is already uneditable');
+    throw new Error('makeUneditable: Field is already uneditable');
   }
 
   // Fire any events waiting on a timeout.
@@ -2627,7 +2616,8 @@ goog.editor.Field.prototype.shouldLoadAsynchronously = function() {
  * Start the editable iframe creation process for Mozilla or IE whitebox.
  * The iframes load asynchronously.
  *
- * @param {string=} opt_iframeSrc URL to set the iframe src to if necessary.
+ * @param {!goog.html.TrustedResourceUrl=} opt_iframeSrc URL to set the iframe
+ *     src to if necessary.
  * @private
  */
 goog.editor.Field.prototype.makeIframeField_ = function(opt_iframeSrc) {
@@ -2665,7 +2655,7 @@ goog.editor.Field.prototype.makeIframeField_ = function(opt_iframeSrc) {
           goog.events.listen(iframe, goog.events.EventType.LOAD, onLoad, true);
 
       if (opt_iframeSrc) {
-        iframe.src = opt_iframeSrc;
+        goog.dom.safe.setIframeSrc(iframe, opt_iframeSrc);
       }
     }
 
@@ -2728,7 +2718,7 @@ goog.editor.Field.prototype.writeIframeContent = function(
     goog.editor.icontent.writeHttpsInitialIframe(formatInfo, doc, innerHtml);
   } else {
     var styleInfo = new goog.editor.icontent.FieldStyleInfo(
-        this.getElement(), this.cssStyles);
+        this.getElement(), this.cssStyles.getTypedStringValue());
     goog.editor.icontent.writeNormalInitialIframe(
         formatInfo, innerHtml, styleInfo, iframe);
   }

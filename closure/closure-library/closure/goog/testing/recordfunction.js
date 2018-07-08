@@ -24,14 +24,14 @@
  * }
  *
  * function testShuffle() {
- *   stubs.set(Math, 'random', goog.testing.recordFunction(Math.random));
+ *   stubs.replace(Math, 'random', goog.testing.recordFunction(Math.random));
  *   var arr = shuffle([1, 2, 3, 4, 5]);
  *   assertSameElements([1, 2, 3, 4, 5], arr);
  *   assertEquals(4, Math.random.getCallCount());
  * }
  *
  * function testOpenDialog() {
- *   stubs.set(goog.ui, 'Dialog',
+ *   stubs.replace(goog.ui, 'Dialog',
  *       goog.testing.recordConstructor(goog.ui.Dialog));
  *   openConfirmDialog();
  *   var lastDialogInstance = goog.ui.Dialog.getLastCall().getThis();
@@ -52,7 +52,7 @@ goog.require('goog.testing.asserts');
 /**
  * Wraps the function into another one which calls the inner function and
  * records its calls. The recorded function will have 3 static methods:
- * {@code getCallCount}, {@code getCalls} and {@code getLastCall} but won't
+ * `getCallCount`, `getCalls` and `getLastCall` but won't
  * inherit the original function's prototype and static fields.
  *
  * @param {!Function=} opt_f The function to wrap and record. Defaults to
@@ -146,7 +146,7 @@ goog.testing.recordConstructor = function(ctor) {
 /**
  * Struct for a single function call.
  * @param {!Function} func The called function.
- * @param {!Object} thisContext {@code this} context of called function.
+ * @param {!Object} thisContext `this` context of called function.
  * @param {!Arguments} args Arguments of the called function.
  * @param {*} ret Return value of the function or undefined in case of error.
  * @param {*} error The error thrown by the function or null if none.
@@ -170,7 +170,7 @@ goog.testing.FunctionCall.prototype.getFunction = function() {
 
 
 /**
- * @return {!Object} {@code this} context of called function. It is the same as
+ * @return {!Object} `this` context of called function. It is the same as
  *     the created object if the function is a constructor.
  */
 goog.testing.FunctionCall.prototype.getThis = function() {

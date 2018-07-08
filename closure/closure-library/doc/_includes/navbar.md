@@ -6,10 +6,9 @@
 * [Demos]
 
 
-
 <!-- URLS -->
+[Home]: /closure-library/
+[Develop]: /closure-library/develop
+[API]: /closure-library/api
+[Demos]: /closure-library/source/closure/goog/demos
 
-[Home]: {{site.github.url}}/index
-[Develop]: {{site.github.url}}/develop
-[API]: {{site.github.url}}/api
-[Demos]: {{site.github.url}}/demos

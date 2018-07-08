@@ -10,6 +10,7 @@ goog.require('goog.demos.editor.HelloWorldDialogPlugin');
 goog.require('goog.demos.editor.HelloWorldDialogPlugin.Command');
 goog.require('goog.dom');
 goog.require('goog.dom.NodeType');
+goog.require('goog.editor.Field');
 goog.require('goog.testing.ExpectedFailures');
 goog.require('goog.testing.MockControl');
 goog.require('goog.testing.MockRange');
@@ -33,8 +34,11 @@ var fieldObj;
 
 var CUSTOM_MESSAGE = 'Hello, cruel world...';
 
-var expectedFailures = new goog.testing.ExpectedFailures();
+var expectedFailures;
 
+function setUpPage() {
+  expectedFailures = new goog.testing.ExpectedFailures();
+}
 
 function setUp() {
   mockCtrl = new goog.testing.MockControl();

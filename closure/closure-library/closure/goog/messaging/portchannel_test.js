@@ -44,8 +44,9 @@ function setUpPage() {
   frameDiv = goog.dom.getElement('frame');
 
   // Use a relatively long timeout because the iframe created by createIframe
-  // can take a couple seconds to load its JS.
-  goog.testing.TestCase.getActiveTestCase().promiseTimeout = 3 * 1000;
+  // can take a couple seconds to load its JS. It seems to take a particularly
+  // long time in Edge.
+  goog.testing.TestCase.getActiveTestCase().promiseTimeout = 10 * 1000;
 
   if (!('Worker' in goog.global)) {
     return;
@@ -425,7 +426,7 @@ function assertPortsEntangled(port1, port2) {
 /**
  * @param {string=} opt_url A URL to use for the iframe src (defaults to
  *     "testdata/portchannel_inner.html").
- * @return {!goog.Promise<HTMLIframeElement>} A promise that resolves with the
+ * @return {!goog.Promise<HTMLIFrameElement>} A promise that resolves with the
  *     loaded iframe.
  */
 function createIframe(opt_url) {

@@ -463,7 +463,10 @@ function testDecoratePreservesClasses() {
 
 
 function testKeyboardNavigation() {
-  picker = new goog.ui.DatePicker();
+  // This is a Sunday, so it's the first cell in the grid.
+  picker = new goog.ui.DatePicker(new Date(2017, 9, 1));
+  // Make the first column be Sunday, not week numbers
+  picker.setShowWeekNum(false);
   picker.render(goog.dom.getElement('sandbox'));
   var selectEvents = goog.testing.recordFunction();
   var changeEvents = goog.testing.recordFunction();
@@ -476,9 +479,31 @@ function testKeyboardNavigation() {
   changeEvents.assertCallCount(1);
   selectEvents.assertCallCount(0);
 
+  // Make sure the new selection is focused, for a11y.  elTable_[0] has the week
+  // day headers, so elTable_[2] means the second row.
+  assertEquals(picker.elTable_[2][1], document.activeElement);
+
   goog.testing.events.fireNonAsciiKeySequence(
       picker.getElement(), goog.events.KeyCodes.ENTER,
       goog.events.KeyCodes.ENTER);
   changeEvents.assertCallCount(1);
   selectEvents.assertCallCount(1);
+}
+
+
+function testDayGridHasNonEmptyAriaLabels() {
+  picker = new goog.ui.DatePicker(new Date(2017, 8, 9));
+  picker.render(goog.dom.getElement('sandbox'));
+
+  var cells = goog.dom.getElementsByTagNameAndClass(
+      goog.dom.TagName.TD, undefined, picker.getElement());
+  var numCells = cells.length;
+  for (var i = 0; i < numCells; i++) {
+    assertNotNull(cells[i]);
+    if (goog.a11y.aria.getRole(cells[i]) == goog.a11y.aria.Role.GRIDCELL) {
+      assertNonEmptyString(
+          'Aria label in date cell should not be empty',
+          goog.a11y.aria.getLabel(cells[i]));
+    }
+  }
 }

@@ -24,8 +24,9 @@ goog.require('goog.labs.net.webChannel.Channel');
 goog.require('goog.labs.net.webChannel.ChannelRequest');
 goog.require('goog.labs.net.webChannel.WebChannelDebug');
 goog.require('goog.labs.net.webChannel.requestStats');
-goog.require('goog.labs.net.webChannel.requestStats.Stat');
 goog.require('goog.net.WebChannel');
+
+goog.forwardDeclare('goog.labs.net.webChannel.WebChannelBase');
 
 
 
@@ -174,7 +175,8 @@ BaseTestChannel.prototype.connect = function(path) {
   sendDataUri.setParameterValues('MODE', 'init');
 
   // http-session-id to be generated as the response
-  if (this.channel_.getHttpSessionIdParam()) {
+  if (!this.channel_.getBackgroundChannelTest() &&
+      this.channel_.getHttpSessionIdParam()) {
     sendDataUri.setParameterValues(WebChannel.X_HTTP_SESSION_ID,
         this.channel_.getHttpSessionIdParam());
   }
@@ -184,8 +186,7 @@ BaseTestChannel.prototype.connect = function(path) {
   this.request_.setExtraHeaders(this.extraHeaders_);
 
   this.request_.xmlHttpGet(
-      sendDataUri, false /* decodeChunks */, null /* hostPrefix */,
-      true /* opt_noClose */);
+      sendDataUri, false /* decodeChunks */, null /* hostPrefix */);
   this.state_ = BaseTestChannel.State_.INIT;
 };
 
@@ -205,11 +206,12 @@ BaseTestChannel.prototype.checkBufferingProxy_ = function() {
   var bufferingProxyResult =
       this.channel_.getConnectionState().bufferingProxyResult;
   if (goog.isDefAndNotNull(bufferingProxyResult)) {
-    this.channelDebug_.debug(
-        'TestConnection: skipping stage 2, precomputed result is ' +
-                bufferingProxyResult ?
-            'Buffered' :
-            'Unbuffered');
+    this.channelDebug_.debug(function() {
+      return 'TestConnection: skipping stage 2, precomputed result is ' +
+              bufferingProxyResult ?
+          'Buffered' :
+          'Unbuffered';
+    });
     requestStats.notifyStatEvent(requestStats.Stat.TEST_STAGE_TWO_START);
     if (bufferingProxyResult) {  // Buffered/Proxy connection
       requestStats.notifyStatEvent(requestStats.Stat.PROXY);
@@ -236,8 +238,7 @@ BaseTestChannel.prototype.checkBufferingProxy_ = function() {
   }
 
   this.request_.xmlHttpGet(
-      recvDataUri, false /** decodeChunks */, this.hostPrefix_,
-      false /** opt_noClose */);
+      recvDataUri, false /** decodeChunks */, this.hostPrefix_);
 };
 
 
@@ -294,7 +295,7 @@ BaseTestChannel.prototype.onRequestData = function(req, responseText) {
       return;
     }
 
-    /** @preserveTry */
+
     try {
       var channel = /** @type {!goog.labs.net.webChannel.WebChannelBase} */ (
           this.channel_);
@@ -389,6 +390,10 @@ BaseTestChannel.prototype.onRequestComplete = function(req) {
  * @private
  */
 BaseTestChannel.prototype.applyControlHeaders_ = function(req) {
+  if (this.channel_.getBackgroundChannelTest()) {
+    return;
+  }
+
   var xhr = req.getXhr();
   if (xhr) {
     var protocolHeader = xhr.getStreamingResponseHeader(
@@ -519,4 +524,10 @@ BaseTestChannel.prototype.setHttpSessionId = goog.abstractMethod;
  * @override
  */
 BaseTestChannel.prototype.getHttpSessionId = goog.abstractMethod;
+
+
+/**
+ * @override
+ */
+BaseTestChannel.prototype.getBackgroundChannelTest = goog.abstractMethod;
 });  // goog.scope

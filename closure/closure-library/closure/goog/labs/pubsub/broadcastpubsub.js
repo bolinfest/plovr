@@ -21,7 +21,6 @@ goog.require('goog.array');
 goog.require('goog.async.run');
 goog.require('goog.events.EventHandler');
 goog.require('goog.events.EventType');
-goog.require('goog.json');
 goog.require('goog.log');
 goog.require('goog.math');
 goog.require('goog.pubsub.PubSub');
@@ -58,7 +57,7 @@ goog.require('goog.userAgent');
  * objects.
  *
  * Special handling is done for the IE8 browsers. See the IE8_EVENTS_KEY_
- * constant and the {@code publish} function for more information.
+ * constant and the `publish` function for more information.
  *
  *
  * @constructor @struct @extends {goog.Disposable}
@@ -135,7 +134,7 @@ goog.labs.pubsub.BroadcastPubSub.prototype.handleStorageEvent_ = function(e) {
     return;
   }
 
-  var data = goog.json.parse(browserEvent.newValue);
+  var data = JSON.parse(browserEvent.newValue);
   var args = goog.isObject(data) && data['args'];
   if (goog.isArray(args) && goog.array.every(args, goog.isString)) {
     this.dispatch_(args);
@@ -179,7 +178,7 @@ goog.labs.pubsub.BroadcastPubSub.prototype.publish = function(topic, var_args) {
     } else {
       // With IE8 we need to manage our own events queue.
       var events = null;
-      /** @preserveTry */
+
       try {
         events =
             this.storage_.get(goog.labs.pubsub.BroadcastPubSub.IE8_EVENTS_KEY_);
@@ -262,7 +261,7 @@ goog.labs.pubsub.BroadcastPubSub.prototype.unsubscribeByKey = function(key) {
 
 /**
  * Subscribes a function to a topic. The function is invoked as a method on the
- * given {@code opt_context} object, or in the global scope if no context is
+ * given `opt_context` object, or in the global scope if no context is
  * specified. Subscribing the same function to the same topic multiple times
  * will result in multiple function invocations while publishing. Returns a
  * subscription key that can be used to unsubscribe the function from the topic
@@ -282,7 +281,7 @@ goog.labs.pubsub.BroadcastPubSub.prototype.subscribe = function(
 
 /**
  * Subscribes a single-use function to a topic. The function is invoked as a
- * method on the given {@code opt_context} object, or in the global scope if no
+ * method on the given `opt_context` object, or in the global scope if no
  * context is specified, and is then unsubscribed. Returns a subscription key
  * that can be used to unsubscribe the function from the topic via {@link
  * #unsubscribeByKey}.
@@ -374,11 +373,11 @@ goog.labs.pubsub.BroadcastPubSub.IE8_TIMESTAMP_UNIQUE_OFFSET_MS_ = .01;
  * This key is a static member shared by all instances of BroadcastPubSub in the
  * same Window context. To avoid read-update-write contention, this key is only
  * written in a single context in the cleanupIe8StorageEvents_ function. Since
- * instances in other contexts will read this key there is code in the {@code
- * publish} function to make sure timestamps are unique even within the same
+ * instances in other contexts will read this key there is code in the
+ * `publish` function to make sure timestamps are unique even within the same
  * millisecond.
  *
- * @private @const
+ * @private @const {string}
  */
 goog.labs.pubsub.BroadcastPubSub.IE8_EVENTS_KEY_ =
     goog.labs.pubsub.BroadcastPubSub.IE8_EVENTS_KEY_PREFIX_ +
@@ -507,7 +506,7 @@ goog.labs.pubsub.BroadcastPubSub.prototype.handleIe8StorageEvent_ = function() {
     }
 
     var events = null;
-    /** @preserveTry */
+
     try {
       events = this.storage_.get(key);
     } catch (ex) {
@@ -531,7 +530,7 @@ goog.labs.pubsub.BroadcastPubSub.prototype.handleIe8StorageEvent_ = function() {
 goog.labs.pubsub.BroadcastPubSub.prototype.cleanupIe8StorageEvents_ = function(
     timestamp) {
   var events = null;
-  /** @preserveTry */
+
   try {
     events =
         this.storage_.get(goog.labs.pubsub.BroadcastPubSub.IE8_EVENTS_KEY_);

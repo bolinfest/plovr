@@ -26,6 +26,8 @@ goog.require('goog.storage.ErrorCode');
 goog.require('goog.storage.ExpiringStorage');
 goog.require('goog.storage.RichStorage');
 
+goog.forwardDeclare('goog.storage.mechanism.IterableMechanism');
+
 
 
 /**
@@ -57,7 +59,7 @@ goog.storage.CollectableStorage.prototype.getExpiredKeys_ = function(
   goog.iter.forEach(keys, function(key) {
     // Get the wrapper.
     var wrapper;
-    /** @preserveTry */
+
     try {
       wrapper = goog.storage.CollectableStorage.prototype.getWrapper.call(
           this, key, true);
@@ -86,7 +88,7 @@ goog.storage.CollectableStorage.prototype.getExpiredKeys_ = function(
     }
     // Objects which can't be decoded are removed in strict mode.
     if (opt_strict) {
-      /** @preserveTry */
+
       try {
         goog.storage.RichStorage.Wrapper.unwrap(wrapper);
       } catch (ex) {

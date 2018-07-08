@@ -15,6 +15,7 @@
 goog.provide('goog.math.LongTest');
 goog.setTestOnly('goog.math.LongTest');
 
+goog.require('goog.asserts');
 goog.require('goog.math.Long');
 goog.require('goog.testing.jsunit');
 
@@ -1347,6 +1348,29 @@ function testToFromNumber() {
       goog.math.Long.getMinValue(), goog.math.Long.fromNumber(-Infinity));
 }
 
+
+// Make sure we are not leaking longs by incorrect caching of decimal numbers
+// and failing-fast in debug mode.
+function testFromDecimalCachedValues() {
+  try {
+    var handledException;
+    goog.asserts.setErrorHandler(function(e) { handledException = e; });
+
+    assertEquals(goog.math.Long.getZero(), goog.math.Long.fromInt(0.1));
+    assertTrue(handledException != null);
+
+    handledException = null;
+    assertEquals(goog.math.Long.getZero(), goog.math.Long.fromInt(0.2));
+    assertTrue(handledException != null);
+
+    handledException = null;
+    assertEquals(goog.math.Long.getOne(), goog.math.Long.fromInt(1.1));
+    assertTrue(handledException != null);
+  } finally {
+    goog.asserts.setErrorHandler(goog.asserts.DEFAULT_ERROR_HANDLER);
+  }
+}
+
 function testIsZero() {
   for (var i = 0; i < TEST_BITS.length; i += 2) {
     var val = goog.math.Long.fromBits(TEST_BITS[i + 1], TEST_BITS[i]);
@@ -1534,7 +1558,7 @@ function createTestDivMod(i, count) {
         assertTrue(vi.equals(combinedResult));
       }
     }
-  }
+  };
 }
 
 var countPerDivModCall = 0;
@@ -1569,7 +1593,7 @@ function createTestToFromString(i) {
           TEST_BITS[i + 1],
           goog.math.Long.fromString(result, radix).getLowBits());
     }
-  }
+  };
 }
 
 for (var i = 0; i < TEST_BITS.length; i += 2) {

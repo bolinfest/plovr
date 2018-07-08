@@ -14,13 +14,17 @@
 
 /**
  * @fileoverview A shared interface for WebChannelBase and BaseTestChannel.
- *
- * @visibility {:internal}
  */
 
 
 goog.provide('goog.labs.net.webChannel.Channel');
 
+goog.forwardDeclare('goog.Uri');
+goog.forwardDeclare('goog.labs.net.webChannel.BaseTestChannel');
+goog.forwardDeclare('goog.labs.net.webChannel.ChannelRequest');
+goog.forwardDeclare('goog.labs.net.webChannel.ChannelRequest.Error');
+goog.forwardDeclare('goog.labs.net.webChannel.ConnectionState');
+goog.forwardDeclare('goog.net.XhrIo');
 
 
 /**
@@ -210,4 +214,12 @@ Channel.prototype.setHttpSessionId = goog.abstractMethod;
  * @return {?string} The http session id if there is one in effect.
  */
 Channel.prototype.getHttpSessionId = goog.abstractMethod;
+
+
+/**
+ * Returns true if the channel-test is done in background.
+ *
+ * @return {boolean} if the channel-test is done in background.
+ */
+Channel.prototype.getBackgroundChannelTest = goog.abstractMethod;
 });  // goog.scope

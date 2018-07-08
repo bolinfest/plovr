@@ -55,19 +55,19 @@ function tearDown() {
 
 
 /**
- * Asserts properties of {@code target} matches the expected value.
+ * Asserts properties of `target` matches the expected value.
  *
  * @param {Object} target The target specifying how the popup menu should be
  *     attached to an anchor.
  * @param {Element} expectedElement The expected anchoring element.
  * @param {goog.positioning.Corner} expectedTargetCorner The expected value of
- *     the {@code target.targetCorner_} property.
+ *     the `target.targetCorner_` property.
  * @param {goog.positioning.Corner} expectedMenuCorner The expected value of
- *     the {@code target.menuCorner_} property.
+ *     the `target.menuCorner_` property.
  * @param {goog.events.EventType} expectedEventType The expected value of the
- *     {@code target.eventType_} property.
+ *     `target.eventType_` property.
  * @param {goog.math.Box} expectedMargin The expected value of the
- *     {@code target.margin_} property.
+ *     `target.margin_` property.
  */
 function assertTarget(
     target, expectedElement, expectedTargetCorner, expectedMenuCorner,
@@ -105,12 +105,12 @@ function testBeforeShowEvent() {
         popup.getAttachedElement());
     beforeShowPopupCalled = true;
     return showPopup;
-  };
+  }
   function onShowPopup(e) {
     assertEquals(
         'The attached anchor element is incorrect', target.element_,
         popup.getAttachedElement());
-  };
+  }
 
   handler.listen(popup, goog.ui.Menu.EventType.BEFORE_SHOW, beforeShowPopup);
   handler.listen(popup, goog.ui.Menu.EventType.SHOW, onShowPopup);
@@ -384,7 +384,7 @@ function testMenuItemKeyboardActivation() {
         event.keyCode == goog.events.KeyCodes.ENTER) {
       menuitemListenerFired = true;
     }
-  };
+  }
   handler.listen(menuitem1, goog.events.EventType.KEYDOWN, onMenuitemAction);
   // Simulate opening a menu using the DOWN key, and pressing the SPACE/ENTER
   // key in order to activate the first menuitem.

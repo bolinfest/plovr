@@ -21,11 +21,11 @@
 goog.module('goog.testing.parallelClosureTestSuite');
 goog.setTestOnly('goog.testing.parallelClosureTestSuite');
 
-var Promise = goog.require('goog.Promise');
-var events = goog.require('goog.events');
 var MultiTestRunner = goog.require('goog.testing.MultiTestRunner');
+var Promise = goog.require('goog.Promise');
 var TestCase = goog.require('goog.testing.TestCase');
-var jsunit = goog.require('goog.testing.jsunit');
+var events = goog.require('goog.events');
+var json = goog.require('goog.json');
 var testSuite = goog.require('goog.testing.testSuite');
 
 var testRunner;
@@ -119,6 +119,10 @@ var testObj = {
     // containing "testRunAllTests".
     window['G_testRunner']['getTestResults'] = function() {
       return allResults;
+    };
+
+    window['G_testRunner']['getTestResultsAsJson'] = function() {
+      return json.serialize(allResults);
     };
 
     return failurePromise.then(function(failures) {
