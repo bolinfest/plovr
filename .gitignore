@@ -5,6 +5,8 @@ build/
 /.nobuckcheck
 .buckd/
 
+/third-party/target
+
 package/node_modules
 package/bin/plovr.jar
 package/npm-debug.log

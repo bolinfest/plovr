@@ -6,7 +6,6 @@ java_library(
     ':args4j-args4j-jar',
     ':org.easymock-easymock-jar',
     ':cglib-cglib-nodep-jar',
-    ':com.google.guava-guava-jar',
     ':com.google.code.gson-gson-jar',
     ':net.java.dev.javacc-javacc-jar',
     ':com.google.code.findbugs-jsr305-jar',
@@ -15,6 +14,7 @@ java_library(
     ':com.google.inject-guice-jar',
     ':aopalliance-aopalliance-jar',
     ':com.google.inject.extensions-guice-multibindings-jar',
+    ':com.google.guava-guava-jar',
     ':com.google.common.html.types-types-jar',
     ':com.google.gwt-gwt-user-jar',
     ':javax.validation-validation-api-jar',
@@ -73,7 +73,7 @@ java_library(
   name = 'OPTIONAL',
   visibility = ['PUBLIC'],
   exported_deps = [
-
+    
   ],
 )
 
@@ -81,7 +81,7 @@ java_library(
   name = 'PROVIDED',
   visibility = ['PUBLIC'],
   exported_deps = [
-
+    
   ],
 )
 
@@ -89,7 +89,7 @@ java_library(
   name = 'RUNTIME',
   visibility = ['PUBLIC'],
   exported_deps = [
-
+    
   ],
 )
 
@@ -906,3 +906,4 @@ remote_file(
   url = 'mvn:xml-apis:xml-apis:jar:1.3.04',
   sha1 = '90b215f48fe42776c8c7f6e3509ec54e84fd65ef',
 )
+
