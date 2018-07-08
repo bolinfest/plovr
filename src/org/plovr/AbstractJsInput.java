@@ -20,12 +20,12 @@ import com.google.common.io.LineReader;
 public abstract class AbstractJsInput implements JsInput {
 
   /**
-   * This should match the _BASE_REGEX_STRING defined in
-   * http://code.google.com/p/closure-library/source/browse/trunk/closure/bin/build/source.py
+   * This is based on _BASE_REGEX_STRING defined in
+   * https://github.com/google/closure-library/blob/master/closure/bin/build/source.py
    * to ensure consistency with closurebuilder.py.
    */
   private static final Pattern GOOG_PROVIDE_OR_REQUIRE =
-      Pattern.compile("\\s*goog\\.(provide|require)\\(\\s*['\"]([\\w\\.]+)['\"]\\s*\\);?.*");
+      Pattern.compile("\\s*goog\\.(module|provide|require)\\(\\s*['\"]([\\w\\.]+)['\"]\\s*\\);?.*");
 
   private final String name;
 
@@ -125,6 +125,8 @@ public abstract class AbstractJsInput implements JsInput {
 
     code = generateCode();
 
+    // TODO(nick): It would be nice to replace this code with the closure-compiler
+    // built-in deps analysis.
     List<String> provides = Lists.newArrayList();
     List<String> requires = Lists.newArrayList();
     StringLineReader lineReader = new StringLineReader(code);
@@ -134,7 +136,12 @@ public abstract class AbstractJsInput implements JsInput {
       if (matcher.matches()) {
         String type = matcher.group(1);
         String namespace = matcher.group(2);
-        (("provide".equals(type)) ? provides : requires).add(namespace);
+        boolean isProvide = "provide".equals(type) || "module".equals(type);
+        if (isProvide) {
+          provides.add(namespace);
+        } else {
+          requires.add(namespace);
+        }
       }
     }
     this.provides = ImmutableList.copyOf(provides);
