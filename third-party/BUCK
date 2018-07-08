@@ -10,7 +10,6 @@ java_library(
     ':com.google.code.gson-gson-jar',
     ':net.java.dev.javacc-javacc-jar',
     ':com.google.code.findbugs-jsr305-jar',
-    ':com.google.javascript-closure-compiler-unshaded-jar',
     ':com.google.template-soy-jar',
     ':javax.inject-javax.inject-jar',
     ':com.google.inject-guice-jar',
@@ -270,18 +269,6 @@ remote_file(
   out = 'com.google.javascript-closure-compiler-externs-jar-v20180610.jar',
   url = 'mvn:com.google.javascript:closure-compiler-externs:jar:v20180610',
   sha1 = '68f704c2f71c62fb4c35c865e98e95630f23233c',
-)
-
-prebuilt_jar(
-  name = 'com.google.javascript-closure-compiler-unshaded-jar',
-  binary_jar = ':remote-com.google.javascript-closure-compiler-unshaded-jar',
-)
-
-remote_file(
-  name = 'remote-com.google.javascript-closure-compiler-unshaded-jar',
-  out = 'com.google.javascript-closure-compiler-unshaded-jar-v20160713.jar',
-  url = 'mvn:com.google.javascript:closure-compiler-unshaded:jar:v20160713',
-  sha1 = '7df7b683e16c93f65361a15356283599ba012c78',
 )
 
 prebuilt_jar(
