@@ -29,6 +29,11 @@ goog.require('goog.testing.jsunit');
 goog.require('goog.userAgent');
 goog.require('goog.userAgent.product');
 
+function shouldRunTests() {
+  // This test has not yet been updated to run on IE8 and up. See b/2997691.
+  return !goog.userAgent.IE || !goog.userAgent.isVersionOrHigher(8);
+}
+
 var SAVED_HTML;
 var FIELDMOCK;
 var FORMATTER;
@@ -368,7 +373,7 @@ function testRemoveFormattingDoesNotShrinkSelection() {
   // <br> to the end of the html.
   var html = '<div>l </div><br class="GECKO WEBKIT">afoo bar' +
       (goog.editor.BrowserFeature.ADDS_NBSPS_IN_REMOVE_FORMAT ? '<br>' : '');
-  if (goog.userAgent.EDGE) {  // TODO(user): I have no idea where this comes from
+  if (goog.userAgent.EDGE) {  // TODO(sdh): I have no idea where this comes from
     html = html.replace(' class="GECKO WEBKIT"', '');
   }
 
@@ -788,7 +793,7 @@ function testTwoTablesSelectedFullyAndPartiallyRemoveFormatting() {
     var expectedHtml = '<br>foo<br>' +
         '<table><tr><td id="td2">ba<b>r</b></td></tr></table>';
     if (goog.userAgent.EDGE) {
-      // TODO(user): Edge inserts an extra empty <b> tag but is otherwise correct
+      // TODO(sdh): Edge inserts an extra empty <b> tag but is otherwise correct
       expectedHtml = expectedHtml.replace('</b>', '<b></b></b>');
     }
     assertHTMLEquals(expectedHtml, div.innerHTML);
@@ -1053,6 +1058,36 @@ function testKeyboardShortcut_withBothModifierKeys() {
   var e = {};
   e.metaKey = true;
   e.ctrlKey = true;
+  var key = ' ';
+  var result = FORMATTER.handleKeyboardShortcut(e, key, true);
+  assertFalse(result);
+
+  FIELDMOCK.$verify();
+}
+
+
+function testKeyboardShortcut_withMetaKeyAndShiftKey() {
+  FIELDMOCK.$reset();
+  FIELDMOCK.$replay();
+
+  var e = {};
+  e.metaKey = true;
+  e.shiftKey = true;
+  var key = ' ';
+  var result = FORMATTER.handleKeyboardShortcut(e, key, true);
+  assertFalse(result);
+
+  FIELDMOCK.$verify();
+}
+
+
+function testKeyboardShortcut_withCtrlKeyAndShiftKey() {
+  FIELDMOCK.$reset();
+  FIELDMOCK.$replay();
+
+  var e = {};
+  e.ctrlKey = true;
+  e.shiftKey = true;
   var key = ' ';
   var result = FORMATTER.handleKeyboardShortcut(e, key, true);
   assertFalse(result);

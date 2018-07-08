@@ -22,6 +22,8 @@
 goog.provide('goog.net.Cookies');
 goog.provide('goog.net.cookies');
 
+goog.require('goog.string');
+
 
 
 /**
@@ -49,14 +51,6 @@ goog.net.Cookies = function(context) {
  * @type {number}
  */
 goog.net.Cookies.MAX_COOKIE_LENGTH = 3950;
-
-
-/**
- * RegExp used to split the cookies string.
- * @type {RegExp}
- * @private
- */
-goog.net.Cookies.SPLIT_RE_ = /\s*;\s*/;
 
 
 /**
@@ -114,12 +108,12 @@ goog.net.Cookies.prototype.isValidValue = function(value) {
  * Sets a cookie.  The max_age can be -1 to set a session cookie. To remove and
  * expire cookies, use remove() instead.
  *
- * Neither the {@code name} nor the {@code value} are encoded in any way. It is
- * up to the callers of {@code get} and {@code set} (as well as all the other
+ * Neither the `name` nor the `value` are encoded in any way. It is
+ * up to the callers of `get` and `set` (as well as all the other
  * methods) to handle any possible encoding and decoding.
  *
- * @throws {!Error} If the {@code name} fails #goog.net.cookies.isValidName.
- * @throws {!Error} If the {@code value} fails #goog.net.cookies.isValidValue.
+ * @throws {!Error} If the `name` fails #goog.net.cookies.isValidName.
+ * @throws {!Error} If the `value` fails #goog.net.cookies.isValidValue.
  *
  * @param {string} name  The cookie name.
  * @param {string} value  The cookie value.
@@ -138,10 +132,10 @@ goog.net.Cookies.prototype.isValidValue = function(value) {
 goog.net.Cookies.prototype.set = function(
     name, value, opt_maxAge, opt_path, opt_domain, opt_secure) {
   if (!this.isValidName(name)) {
-    throw Error('Invalid cookie name "' + name + '"');
+    throw new Error('Invalid cookie name "' + name + '"');
   }
   if (!this.isValidValue(value)) {
-    throw Error('Invalid cookie value "' + value + '"');
+    throw new Error('Invalid cookie value "' + value + '"');
   }
 
   if (!goog.isDef(opt_maxAge)) {
@@ -189,7 +183,8 @@ goog.net.Cookies.prototype.set = function(
 goog.net.Cookies.prototype.get = function(name, opt_default) {
   var nameEq = name + '=';
   var parts = this.getParts_();
-  for (var i = 0, part; part = parts[i]; i++) {
+  for (var i = 0, part; i < parts.length; i++) {
+    part = goog.string.trim(parts[i]);
     // startsWith
     if (part.lastIndexOf(nameEq, 0) == 0) {
       return part.substr(nameEq.length);
@@ -315,7 +310,7 @@ goog.net.Cookies.prototype.setCookie_ = function(s) {
 /**
  * Private helper function to allow testing cookies without depending on the
  * browser. IE6 can return null here.
- * @return {string} Returns the {@code document.cookie}.
+ * @return {string} Returns the `document.cookie`.
  * @private
  */
 goog.net.Cookies.prototype.getCookie_ = function() {
@@ -328,20 +323,21 @@ goog.net.Cookies.prototype.getCookie_ = function() {
  * @private
  */
 goog.net.Cookies.prototype.getParts_ = function() {
-  return (this.getCookie_() || '').split(goog.net.Cookies.SPLIT_RE_);
+  return (this.getCookie_() || '').split(';');
 };
 
 
 /**
  * Gets the names and values for all the cookies.
- * @return {!{keys:!Array<string>, values:!Array<string>}} An object with keys
+ * @return {{keys:!Array<string>, values:!Array<string>}} An object with keys
  *     and values.
  * @private
  */
 goog.net.Cookies.prototype.getKeyValues_ = function() {
   var parts = this.getParts_();
   var keys = [], values = [], index, part;
-  for (var i = 0; part = parts[i]; i++) {
+  for (var i = 0; i < parts.length; i++) {
+    part = goog.string.trim(parts[i]);
     index = part.indexOf('=');
 
     if (index == -1) {  // empty name
@@ -356,14 +352,23 @@ goog.net.Cookies.prototype.getKeyValues_ = function() {
 };
 
 
-// TODO(b/23687502): This should be a singleton getter instead of a static
+// TODO(closure-team): This should be a singleton getter instead of a static
 // instance.
 /**
  * A static default instance.
- * @type {goog.net.Cookies}
+ * @const {!goog.net.Cookies}
  */
 goog.net.cookies =
     new goog.net.Cookies(typeof document == 'undefined' ? null : document);
+
+
+/**
+ * Getter for the static instance of goog.net.Cookies.
+ * @return {!goog.net.Cookies}
+ */
+goog.net.Cookies.getInstance = function() {
+  return goog.net.cookies;
+};
 
 
 /**

@@ -23,6 +23,8 @@ goog.provide('goog.storage.Storage');
 goog.require('goog.json');
 goog.require('goog.storage.ErrorCode');
 
+goog.forwardDeclare('goog.storage.mechanism.Mechanism');
+
 
 
 /**
@@ -78,9 +80,9 @@ goog.storage.Storage.prototype.get = function(key) {
   if (goog.isNull(json)) {
     return undefined;
   }
-  /** @preserveTry */
+
   try {
-    return goog.json.parse(json);
+    return JSON.parse(json);
   } catch (e) {
     throw goog.storage.ErrorCode.INVALID_VALUE;
   }

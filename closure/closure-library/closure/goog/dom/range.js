@@ -16,6 +16,7 @@
  * @fileoverview Utilities for working with ranges in HTML documents.
  *
  * @author robbyw@google.com (Robby Walker)
+ * @suppress {strictMissingProperties}
  */
 
 goog.provide('goog.dom.Range');
@@ -57,7 +58,7 @@ goog.dom.Range.createFromBrowserSelection = function(selection) {
   var range;
   var isReversed = false;
   if (selection.createRange) {
-    /** @preserveTry */
+
     try {
       range = selection.createRange();
     } catch (e) {

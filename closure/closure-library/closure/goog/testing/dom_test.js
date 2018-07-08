@@ -22,6 +22,13 @@ goog.require('goog.testing.dom');
 goog.require('goog.testing.jsunit');
 goog.require('goog.userAgent');
 
+
+function shouldRunTests() {
+  // This test has not yet been updated to run on IE8. See b/2997682.
+  return !goog.userAgent.IE || goog.userAgent.isVersionOrHigher(9);
+}
+
+
 var root;
 function setUpPage() {
   // TODO(b/25875505): Fix unreported assertions (go/failonunreportedasserts).
@@ -429,6 +436,62 @@ function testAssertHtmlMatchesWithWhitespaceAndNesting() {
 
   root.innerHTML = '&nbsp;';
   goog.testing.dom.assertHtmlContentsMatch('&nbsp;', root);
+}
+
+function testAssertHtmlContentsMatchWithTemplate() {
+  var template = '<template><p>foo</p></template>';
+  root.innerHTML = template;
+  goog.testing.dom.assertHtmlContentsMatch(template, root, true);
+  assertThrowsJsUnitException(function() {
+    goog.testing.dom.assertHtmlContentsMatch(
+        '<template><p id="bar">foo</p></template>', root, true);
+  });
+  assertThrowsJsUnitException(function() {
+    goog.testing.dom.assertHtmlContentsMatch(
+        '<template><p>bar</p></template>', root, true);
+  });
+}
+
+function testAssertHtmlContentsMatchWithNestedTemplate() {
+  var nestedTemplate = '<template><br><template><br></template><br></template>';
+  root.innerHTML = nestedTemplate;
+  goog.testing.dom.assertHtmlContentsMatch(nestedTemplate, root, true);
+  assertThrowsJsUnitException(function() {
+    goog.testing.dom.assertHtmlContentsMatch(
+        '<template><br><template id="foo"><br></template><br></template>', root,
+        true);
+  });
+  assertThrowsJsUnitException(function() {
+    goog.testing.dom.assertHtmlContentsMatch(
+        '<template><br><template><br>bar</template><br></template>', root,
+        true);
+  });
+}
+
+function testAssertHtmlContentsMatchWithEmptyTemplate() {
+  var template = '<template><p>foo</p></template>';
+  root.innerHTML = template;
+  assertThrowsJsUnitException(function() {
+    goog.testing.dom.assertHtmlContentsMatch(
+        '<template></template>', root, true);
+  });
+
+  template = '<template></template>';
+  root.innerHTML = template;
+  assertThrowsJsUnitException(function() {
+    goog.testing.dom.assertHtmlContentsMatch(
+        '<template><p>bar</p></template>', root, true);
+  });
+}
+
+function testAssertHtmlContentsMatchWithHttpCredentials() {
+  var img = '<img src="http://foo:bar@example.com">';
+  root.innerHTML = img;
+  goog.testing.dom.assertHtmlContentsMatch(img, root, true);
+  assertThrowsJsUnitException(function() {
+    goog.testing.dom.assertHtmlContentsMatch(
+        '<img src="http://bar:baz@example.com">', root, true);
+  });
 }
 
 function testAssertHtmlMatches() {

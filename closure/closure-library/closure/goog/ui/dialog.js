@@ -290,9 +290,9 @@ goog.ui.Dialog.prototype.setSafeHtmlContent = function(html) {
  * Gets the content HTML of the content element as a plain string.
  *
  * Note that this method returns the HTML markup that was previously set via
- * setContent(). In particular, the HTML returned by this method does not
- * reflect any changes to the content element's DOM that were made my means
- * other than setContent().
+ * setSafeHtmlContent() or setTextContent(). In particular, the HTML returned by
+ * this method does not reflect any changes to the content element's DOM that
+ * were made by other means.
  *
  * @return {string} Content HTML.
  */
@@ -1201,6 +1201,13 @@ goog.ui.Dialog.ButtonSet.prototype.element_ = null;
 goog.ui.Dialog.ButtonSet.prototype.cancelButton_ = null;
 
 
+/** @override */
+goog.ui.Dialog.ButtonSet.prototype.clear = function() {
+  goog.structs.Map.prototype.clear.call(this);
+  this.defaultButton_ = this.cancelButton_ = null;
+};
+
+
 /**
  * Adds a button to the button set.  Buttons will be displayed in the order they
  * are added.
@@ -1279,7 +1286,7 @@ goog.ui.Dialog.ButtonSet.prototype.render = function() {
 
 
 /**
- * Decorates the given element by adding any {@code button} elements found
+ * Decorates the given element by adding any `button` elements found
  * among its descendants to the button set.  The first button found is assumed
  * to be the default and will receive focus when the button set is rendered.
  * If a button with a name of {@link goog.ui.Dialog.DefaultButtonKeys.CANCEL}

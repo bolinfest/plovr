@@ -224,7 +224,7 @@ goog.testing.AsyncTestCase.prototype.origFail_;
 
 /**
  * A reference to the original window.onerror function.
- * @type {Function|undefined}
+ * @type {?Function|undefined}
  * @private
  */
 goog.testing.AsyncTestCase.prototype.origOnError_;
@@ -232,7 +232,7 @@ goog.testing.AsyncTestCase.prototype.origOnError_;
 
 /**
  * The stage of the test we are currently on.
- * @type {Function|undefined}}
+ * @type {?Function|undefined}}
  * @private
  */
 goog.testing.AsyncTestCase.prototype.curStepFunc_;
@@ -248,7 +248,7 @@ goog.testing.AsyncTestCase.prototype.curStepName_ = '';
 
 /**
  * The stage of the test we should run next.
- * @type {Function|undefined}
+ * @type {?Function|undefined}
  * @private
  */
 goog.testing.AsyncTestCase.prototype.nextStepFunc_;
@@ -384,7 +384,7 @@ goog.testing.AsyncTestCase.prototype.waitForAsync = function(opt_name) {
 goog.testing.AsyncTestCase.prototype.continueTesting = function() {
   if (this.receivedSignalCount_ < this.expectedSignalCount_) {
     var remaining = this.expectedSignalCount_ - this.receivedSignalCount_;
-    throw Error('Still waiting for ' + remaining + ' signals.');
+    throw new Error('Still waiting for ' + remaining + ' signals.');
   }
   this.endCurrentStep_();
 };
@@ -463,9 +463,9 @@ goog.testing.AsyncTestCase.prototype.doAsyncError = function(opt_e) {
   }
 
   if (this.activeTest) {
-    // Note: if the test has an error, and then tearDown has an error, they will
-    // both be reported.
-    this.doError(fakeTestObj, opt_e);
+    // Log the error, then fail the test.
+    this.recordError(fakeTestObj.name, opt_e);
+    this.doError(fakeTestObj);
   } else {
     this.exceptionBeforeTest = opt_e;
   }
@@ -566,7 +566,7 @@ goog.testing.AsyncTestCase.prototype.dbgLog_ = function(message) {
  * @private
  */
 goog.testing.AsyncTestCase.prototype.doTopOfStackAsyncError_ = function(opt_e) {
-  /** @preserveTry */
+
   try {
     this.doAsyncError(opt_e);
   } catch (e) {
@@ -635,7 +635,7 @@ goog.testing.AsyncTestCase.prototype.hookAssert_ = function() {
     this.origFail_ = fail;
     var self = this;
     _assert = function() {
-      /** @preserveTry */
+
       try {
         self.origAssert_.apply(this, arguments);
       } catch (e) {
@@ -644,7 +644,7 @@ goog.testing.AsyncTestCase.prototype.hookAssert_ = function() {
       }
     };
     fail = function() {
-      /** @preserveTry */
+
       try {
         self.origFail_.apply(this, arguments);
       } catch (e) {
@@ -719,7 +719,7 @@ goog.testing.AsyncTestCase.prototype.startTimeoutTimer_ = function() {
       this.doTopOfStackAsyncError_(
           'Timed out while waiting for ' +
           'continueTesting() to be called.');
-    }, this, null), this.stepTimeout);
+    }, this), this.stepTimeout);
     this.dbgLog_('Started timeout timer with id ' + this.timeoutHandle_);
   }
 };
@@ -758,13 +758,13 @@ goog.testing.AsyncTestCase.prototype.setNextStep_ = function(func, name) {
  * @private
  */
 goog.testing.AsyncTestCase.prototype.callTopOfStackFunc_ = function(func) {
-  /** @preserveTry */
+
   try {
     func.call(this);
     return {controlBreakingExceptionThrown: false, message: ''};
   } catch (e) {
     this.dbgLog_('Caught exception in callTopOfStackFunc_');
-    /** @preserveTry */
+
     try {
       this.doAsyncError(e);
       return {controlBreakingExceptionThrown: false, message: ''};

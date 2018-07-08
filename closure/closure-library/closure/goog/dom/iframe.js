@@ -26,6 +26,8 @@ goog.require('goog.dom.TagName');
 goog.require('goog.dom.safe');
 goog.require('goog.html.SafeHtml');
 goog.require('goog.html.SafeStyle');
+goog.require('goog.html.TrustedResourceUrl');
+goog.require('goog.string.Const');
 goog.require('goog.userAgent');
 
 
@@ -37,15 +39,26 @@ goog.require('goog.userAgent');
  * Security Policy (CSP). According to http://www.w3.org/TR/CSP/ CSP does not
  * allow inline javascript by default.
  *
- * @type {string}
+ * @const {!goog.html.TrustedResourceUrl}
+ */
+goog.dom.iframe.BLANK_SOURCE_URL = goog.userAgent.IE ?
+    goog.html.TrustedResourceUrl.fromConstant(
+        goog.string.Const.from('javascript:""')) :
+    goog.html.TrustedResourceUrl.fromConstant(
+        goog.string.Const.from('about:blank'));
+
+
+/**
+ * Legacy version of goog.dom.iframe.BLANK_SOURCE_URL.
+ * @const {string}
  */
 goog.dom.iframe.BLANK_SOURCE =
-    goog.userAgent.IE ? 'javascript:""' : 'about:blank';
+    goog.html.TrustedResourceUrl.unwrap(goog.dom.iframe.BLANK_SOURCE_URL);
 
 
 /**
  * Safe source for a new blank iframe that may not cause a new load of the
- * iframe. This is different from {@code goog.dom.iframe.BLANK_SOURCE} in that
+ * iframe. This is different from `goog.dom.iframe.BLANK_SOURCE` in that
  * it will allow an iframe to be loaded synchronously in more browsers, notably
  * Gecko, following the javascript protocol spec.
  *
@@ -54,7 +67,7 @@ goog.dom.iframe.BLANK_SOURCE =
  *
  * Due to cross-browser differences, the load is not guaranteed  to be
  * synchronous. If code depends on the load of the iframe,
- * then {@code goog.net.IframeLoadMonitor} or a similar technique should be
+ * then `goog.net.IframeLoadMonitor` or a similar technique should be
  * used.
  *
  * According to
@@ -69,15 +82,26 @@ goog.dom.iframe.BLANK_SOURCE =
  * throws an error with 'javascript:undefined'. Webkit browsers will reload the
  * iframe when setting this source on an existing iframe.
  *
- * @type {string}
+ * @const {!goog.html.TrustedResourceUrl}
  */
-goog.dom.iframe.BLANK_SOURCE_NEW_FRAME =
-    goog.userAgent.IE ? 'javascript:""' : 'javascript:undefined';
+goog.dom.iframe.BLANK_SOURCE_NEW_FRAME_URL = goog.userAgent.IE ?
+    goog.html.TrustedResourceUrl.fromConstant(
+        goog.string.Const.from('javascript:""')) :
+    goog.html.TrustedResourceUrl.fromConstant(
+        goog.string.Const.from('javascript:undefined'));
+
+
+/**
+ * Legacy version of goog.dom.iframe.BLANK_SOURCE_NEW_FRAME_URL.
+ * @const {string}
+ */
+goog.dom.iframe.BLANK_SOURCE_NEW_FRAME = goog.html.TrustedResourceUrl.unwrap(
+    goog.dom.iframe.BLANK_SOURCE_NEW_FRAME_URL);
 
 
 /**
  * Styles to help ensure an undecorated iframe.
- * @type {string}
+ * @const {string}
  * @private
  */
 goog.dom.iframe.STYLES_ = 'border:0;vertical-align:bottom;';

@@ -51,6 +51,15 @@ goog.soy.StrictTemplate;
 
 
 /**
+ * Type definition for strict Soy HTML templates. Very useful when passing
+ * a template as an argument.
+ * @typedef {function(?, null=, ?Object<string, *>=):
+ *     !goog.soy.data.SanitizedHtml}
+ */
+goog.soy.StrictHtmlTemplate;
+
+
+/**
  * Sets the processed template as the innerHTML of an element. It is recommended
  * to use this helper function instead of directly setting innerHTML in your
  * hand-written code, so that it will be easier to audit the code for cross-site
@@ -73,7 +82,8 @@ goog.soy.renderHtml = function(element, templateResult) {
  * will be easier to audit the code for cross-site scripting vulnerabilities.
  *
  * @param {Element} element The element whose content we are rendering into.
- * @param {null|function(ARG_TYPES, null=, Object<string, *>=):*} template
+ * @param {?function(ARG_TYPES, Object<string, *>=):*|
+ *     ?function(ARG_TYPES, null=, Object<string, *>=):*} template
  *     The Soy template defining the element's content.
  * @param {ARG_TYPES=} opt_templateData The data for the template.
  * @param {Object=} opt_injectedData The injected data for the template.
@@ -97,12 +107,13 @@ goog.soy.renderElement = function(
  * the method). Otherwise a document fragment is returned containing the
  * rendered nodes.
  *
- * @param {null|function(ARG_TYPES, null=, Object<string, *>=):*} template
+ * @param {?function(ARG_TYPES, Object<string, *>=):*|
+ *     ?function(ARG_TYPES, null=, Object<string, *>=):*} template
  *     The Soy template defining the element's content.
  * @param {ARG_TYPES=} opt_templateData The data for the template.
  * @param {Object=} opt_injectedData The injected data for the template.
  * @param {goog.dom.DomHelper=} opt_domHelper The DOM helper used to
- *     create DOM nodes; defaults to {@code goog.dom.getDomHelper}.
+ *     create DOM nodes; defaults to `goog.dom.getDomHelper`.
  * @return {!Node} The resulting node or document fragment.
  * @template ARG_TYPES
  */
@@ -128,12 +139,13 @@ goog.soy.renderAsFragment = function(
  * HTML string represents a single node, then that node is returned. Otherwise,
  * a DIV element is returned containing the rendered nodes.
  *
- * @param {null|function(ARG_TYPES, null=, Object<string, *>=):*} template
+ * @param {?function(ARG_TYPES, Object<string, *>=):*|
+ *     ?function(ARG_TYPES, null=, Object<string, *>=):*} template
  *     The Soy template defining the element's content.
  * @param {ARG_TYPES=} opt_templateData The data for the template.
  * @param {Object=} opt_injectedData The injected data for the template.
  * @param {goog.dom.DomHelper=} opt_domHelper The DOM helper used to
- *     create DOM nodes; defaults to {@code goog.dom.getDomHelper}.
+ *     create DOM nodes; defaults to `goog.dom.getDomHelper`.
  * @return {!Element} Rendered template contents, wrapped in a parent DIV
  *     element if necessary.
  * @template ARG_TYPES
@@ -158,7 +170,7 @@ goog.soy.renderAsElement = function(
  * @param {!goog.soy.data.SanitizedContent} templateResult The processed
  *     template of kind HTML or TEXT (which will be escaped).
  * @param {?goog.dom.DomHelper=} opt_domHelper The DOM helper used to
- *     create DOM nodes; defaults to {@code goog.dom.getDomHelper}.
+ *     create DOM nodes; defaults to `goog.dom.getDomHelper`.
  * @return {!Element} Rendered template contents, wrapped in a parent DIV
  *     element if necessary.
  */
@@ -168,11 +180,11 @@ goog.soy.convertToElement = function(templateResult, opt_domHelper) {
 
 
 /**
- * Non-strict version of {@code goog.soy.convertToElement}.
+ * Non-strict version of `goog.soy.convertToElement`.
  *
  * @param {*} templateResult The processed template.
  * @param {?goog.dom.DomHelper=} opt_domHelper The DOM helper used to
- *     create DOM nodes; defaults to {@code goog.dom.getDomHelper}.
+ *     create DOM nodes; defaults to `goog.dom.getDomHelper`.
  * @return {!Element} Rendered template contents, wrapped in a parent DIV
  *     element if necessary.
  * @private

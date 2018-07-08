@@ -42,6 +42,12 @@ goog.require('goog.string');
 goog.require('goog.string.Const');
 goog.require('goog.userAgent');
 
+goog.forwardDeclare('goog.Uri');
+goog.forwardDeclare('goog.net.BrowserChannel');
+goog.forwardDeclare('goog.net.BrowserTestChannel');
+goog.forwardDeclare('goog.net.ChannelDebug');
+goog.forwardDeclare('goog.net.XhrIo');
+
 // TODO(nnaze): This file depends on goog.net.BrowserChannel and vice versa (a
 // circular dependency).  Usages of BrowserChannel are marked as
 // "missingRequire" below for now.  This should be fixed through refactoring.
@@ -597,7 +603,7 @@ goog.net.ChannelRequest.prototype.xmlHttpHandler_ = function(xmlhttp) {
   /** @suppress {missingRequire} */
   goog.net.BrowserChannel.onStartExecution();
 
-  /** @preserveTry */
+
   try {
     if (xmlhttp == this.xmlHttp_) {
       this.onXmlHttpReadyStateChanged_();
@@ -1124,7 +1130,7 @@ goog.net.ChannelRequest.prototype.ensureWatchDogTimer_ = function() {
 goog.net.ChannelRequest.prototype.startWatchDogTimer_ = function(time) {
   if (this.watchDogTimerId_ != null) {
     // assertion
-    throw Error('WatchDog timer not null');
+    throw new Error('WatchDog timer not null');
   }
   /** @private @suppress {missingRequire} Circular dep. */
   this.watchDogTimerId_ = goog.net.BrowserChannel.setTimeout(
@@ -1322,7 +1328,7 @@ goog.net.ChannelRequest.prototype.getRequestStartTime = function() {
  * @private
  */
 goog.net.ChannelRequest.prototype.safeOnRequestData_ = function(data) {
-  /** @preserveTry */
+
   try {
     this.channel_.onRequestData(this, data);
     /** @suppress {missingRequire} goog.net.BrowserChannel */

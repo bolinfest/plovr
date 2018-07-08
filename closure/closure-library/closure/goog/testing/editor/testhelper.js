@@ -40,7 +40,7 @@ goog.require('goog.testing.dom');
  */
 goog.testing.editor.TestHelper = function(root) {
   if (!root) {
-    throw Error('Null root');
+    throw new Error('Null root');
   }
   goog.Disposable.call(this);
 
@@ -67,7 +67,7 @@ goog.inherits(goog.testing.editor.TestHelper, goog.Disposable);
  */
 goog.testing.editor.TestHelper.prototype.setRoot = function(root) {
   if (!root) {
-    throw Error('Null root');
+    throw new Error('Null root');
   }
   this.root_ = root;
 };
@@ -143,8 +143,8 @@ goog.testing.editor.TestHelper.prototype.findTextNode = function(textOrRegexp) {
 
 
 /**
- * Select from the given {@code fromOffset} in the given {@code from} node to
- * the given {@code toOffset} in the optionally given {@code to} node. If nodes
+ * Select from the given `fromOffset` in the given `from` node to
+ * the given `toOffset` in the optionally given `to` node. If nodes
  * are passed in, uses them, otherwise uses findTextNode to find the nodes to
  * select. Selects a caret if opt_to and opt_toOffset are not given.
  * @param {Node|string} from Node or text of the node to start the selection at.

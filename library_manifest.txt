@@ -59,6 +59,7 @@ date/datelike.js
 date/daterange.js
 date/duration.js
 date/relative.js
+date/relativecommontests.js
 date/relativewithplurals.js
 date/utcdatetime.js
 db/cursor.js
@@ -77,6 +78,7 @@ debug/devcss/devcssrunner.js
 debug/divconsole.js
 debug/entrypointregistry.js
 debug/error.js
+debug/errorcontext.js
 debug/errorhandler.js
 debug/errorhandlerweakdep.js
 debug/errorreporter.js
@@ -89,6 +91,8 @@ debug/logrecord.js
 debug/logrecordserializer.js
 debug/relativetimeprovider.js
 debug/tracer.js
+delegate/delegateregistry.js
+delegate/delegates.js
 demos/autocompleteremotedata.js
 demos/autocompleterichremotedata.js
 demos/editor/helloworld.js
@@ -105,6 +109,7 @@ dom/abstractrange.js
 dom/animationframe/animationframe.js
 dom/animationframe/polyfill.js
 dom/annotate.js
+dom/asserts.js
 dom/attr.js
 dom/browserfeature.js
 dom/browserrange/abstractrange.js
@@ -123,6 +128,7 @@ dom/dom.js
 dom/fontsizemonitor.js
 dom/forms.js
 dom/fullscreen.js
+dom/htmlelement.js
 dom/iframe.js
 dom/inputtype.js
 dom/iter.js
@@ -155,8 +161,10 @@ dom/selection.js
 dom/tagiterator.js
 dom/tagname.js
 dom/tags.js
+dom/textassert.js
 dom/textrange.js
 dom/textrangeiterator.js
+dom/uri.js
 dom/vendor.js
 dom/viewportsizemonitor.js
 dom/xml.js
@@ -215,6 +223,7 @@ events/inputhandler.js
 events/keycodes.js
 events/keyhandler.js
 events/keynames.js
+events/keys.js
 events/listenable.js
 events/listener.js
 events/listenermap.js
@@ -296,6 +305,7 @@ history/event.js
 history/eventtype.js
 history/history.js
 history/html5history.js
+html/cssspecificity.js
 html/flash.js
 html/legacyconversions.js
 html/safehtml.js
@@ -304,14 +314,19 @@ html/safescript.js
 html/safestyle.js
 html/safestylesheet.js
 html/safeurl.js
+html/safeurl_test_vectors.js
 html/sanitizer/attributewhitelist.js
 html/sanitizer/csssanitizer.js
+html/sanitizer/elementweakmap.js
 html/sanitizer/htmlsanitizer.js
+html/sanitizer/noclobber.js
+html/sanitizer/safedomtreeprocessor.js
 html/sanitizer/tagblacklist.js
 html/sanitizer/tagwhitelist.js
 html/sanitizer/unsafe.js
 html/silverlight.js
 html/testing.js
+html/textextractor.js
 html/trustedresourceurl.js
 html/uncheckedconversions.js
 html/utils.js
@@ -324,6 +339,11 @@ i18n/compactnumberformatsymbols.js
 i18n/compactnumberformatsymbolsext.js
 i18n/currency.js
 i18n/currencycodemap.js
+i18n/dateintervalformat.js
+i18n/dateintervalpatterns.js
+i18n/dateintervalpatternsext.js
+i18n/dateintervalsymbols.js
+i18n/dateintervalsymbolsext.js
 i18n/datetimeformat.js
 i18n/datetimeparse.js
 i18n/datetimepatterns.js
@@ -339,15 +359,14 @@ i18n/numberformatsymbolsext.js
 i18n/ordinalrules.js
 i18n/pluralrules.js
 i18n/timezone.js
+i18n/uchar.js
 i18n/uchar/localnamefetcher.js
 i18n/uchar/namefetcher.js
 i18n/uchar/remotenamefetcher.js
-i18n/uchar.js
 i18n/ucharnames.js
+iter/es6.js
 iter/iter.js
-json/evaljsonprocessor.js
 json/hybrid.js
-json/hybridjsonprocessor.js
 json/json.js
 json/json_perf.js
 json/nativejsonprocessor.js
@@ -363,10 +382,12 @@ labs/iterable/iterable.js
 labs/mock/mock.js
 labs/mock/verificationmode.js
 labs/net/image.js
+labs/net/webchannel.js
 labs/net/webchannel/basetestchannel.js
 labs/net/webchannel/channel.js
 labs/net/webchannel/channelrequest.js
 labs/net/webchannel/connectionstate.js
+labs/net/webchannel/environment.js
 labs/net/webchannel/forwardchannelrequestpool.js
 labs/net/webchannel/netutils.js
 labs/net/webchannel/requeststats.js
@@ -375,15 +396,11 @@ labs/net/webchannel/webchannelbasetransport.js
 labs/net/webchannel/webchanneldebug.js
 labs/net/webchannel/wire.js
 labs/net/webchannel/wirev8.js
-labs/net/webchannel.js
 labs/net/webchanneltransport.js
 labs/net/webchanneltransportfactory.js
 labs/net/xhr.js
-labs/promise/promise.js
 labs/pubsub/broadcastpubsub.js
 labs/storage/boundedcollectablestorage.js
-labs/structs/map.js
-labs/structs/map_perf.js
 labs/structs/multimap.js
 labs/style/pixeldensitymonitor.js
 labs/testing/assertthat.js
@@ -403,6 +420,8 @@ labs/useragent/platform.js
 labs/useragent/test_agents.js
 labs/useragent/util.js
 labs/useragent/verifier.js
+loader/abstractmodulemanager.js
+loader/activemodulemanager.js
 locale/countries.js
 locale/defaultlocalenameconstants.js
 locale/genericfontnames.js
@@ -492,6 +511,7 @@ net/mockiframeio.js
 net/multiiframeloadmonitor.js
 net/networkstatusmonitor.js
 net/networktester.js
+net/rpc/httpcors.js
 net/streams/base64pbstreamparser.js
 net/streams/base64streamdecoder.js
 net/streams/jsonstreamparser.js
@@ -591,6 +611,7 @@ storage/mechanism/mechanismtester.js
 storage/mechanism/prefixedmechanism.js
 storage/richstorage.js
 storage/storage.js
+storage/storagetester.js
 string/const.js
 string/linkify.js
 string/newlines.js
@@ -620,7 +641,6 @@ structs/stringset.js
 structs/structs.js
 structs/treenode.js
 structs/trie.js
-structs/weak/weak.js
 style/bidi.js
 style/cursor.js
 style/style.js
@@ -629,6 +649,7 @@ style/transform.js
 style/transition.js
 test_module.js
 test_module_dep.js
+testing/assertionfailure.js
 testing/asserts.js
 testing/async/mockcontrol.js
 testing/asynctestcase.js
@@ -658,6 +679,7 @@ testing/i18n/asserts.js
 testing/jstdasyncwrapper.js
 testing/jstdtestcaseadapter.js
 testing/jsunit.js
+testing/jsunitexception.js
 testing/loosemock.js
 testing/messaging/mockmessagechannel.js
 testing/messaging/mockmessageevent.js
@@ -674,6 +696,7 @@ testing/mockrange.js
 testing/mockstorage.js
 testing/mockuseragent.js
 testing/multitestrunner.js
+testing/net/mockiframeio.js
 testing/net/xhrio.js
 testing/net/xhriopool.js
 testing/objectpropertystring.js
@@ -699,6 +722,7 @@ testing/ui/rendererasserts.js
 testing/ui/rendererharness.js
 testing/ui/style.js
 timer/timer.js
+transitionalforwarddeclarations.js
 transpile.js
 tweak/entries.js
 tweak/registry.js
@@ -732,15 +756,13 @@ ui/charpicker.js
 ui/checkbox.js
 ui/checkboxmenuitem.js
 ui/checkboxrenderer.js
-ui/colorbutton.js
-ui/colorbuttonrenderer.js
 ui/colormenubutton.js
 ui/colormenubuttonrenderer.js
 ui/colorpalette.js
 ui/colorpicker.js
-ui/colorsplitbehavior.js
 ui/combobox.js
 ui/component.js
+ui/componentutil.js
 ui/container.js
 ui/containerrenderer.js
 ui/containerscroller.js
@@ -852,7 +874,6 @@ ui/separator.js
 ui/serverchart.js
 ui/slider.js
 ui/sliderbase.js
-ui/splitbehavior.js
 ui/splitpane.js
 ui/style/app/buttonrenderer.js
 ui/style/app/menubuttonrenderer.js

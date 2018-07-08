@@ -136,6 +136,41 @@ WebChannelBaseTransport.Channel = function(url, opt_options) {
 
   this.channel_.setExtraHeaders(messageHeaders);
 
+  var initHeaders = (opt_options && opt_options.initMessageHeaders) || null;
+
+  if (opt_options && opt_options.messageContentType) {
+    if (initHeaders) {
+      goog.object.set(
+          initHeaders, goog.net.WebChannel.X_WEBCHANNEL_CONTENT_TYPE,
+          opt_options.messageContentType);
+    } else {
+      initHeaders = goog.object.create(
+          goog.net.WebChannel.X_WEBCHANNEL_CONTENT_TYPE,
+          opt_options.messageContentType);
+    }
+  }
+
+  if (opt_options && opt_options.clientProfile) {
+    if (initHeaders) {
+      goog.object.set(
+          initHeaders, goog.net.WebChannel.X_WEBCHANNEL_CLIENT_PROFILE,
+          opt_options.clientProfile);
+    } else {
+      initHeaders = goog.object.create(
+          goog.net.WebChannel.X_WEBCHANNEL_CLIENT_PROFILE,
+          opt_options.clientProfile);
+    }
+  }
+
+  this.channel_.setInitHeaders(initHeaders);
+
+  var httpHeadersOverwriteParam =
+      opt_options && opt_options.httpHeadersOverwriteParam;
+  if (httpHeadersOverwriteParam &&
+      !goog.string.isEmptyOrWhitespace(httpHeadersOverwriteParam)) {
+    this.channel_.setHttpHeadersOverwriteParam(httpHeadersOverwriteParam);
+  }
+
   /**
    * @private {boolean} Whether to enable CORS.
    */
@@ -172,6 +207,29 @@ goog.inherits(WebChannelBaseTransport.Channel, goog.events.EventTarget);
 
 
 /**
+ * @override
+ * @suppress {checkTypes}
+ */
+WebChannelBaseTransport.Channel.prototype.addEventListener = function(
+    type, handler, /** boolean= */ opt_capture, opt_handlerScope) {
+  WebChannelBaseTransport.Channel.base(
+      this, 'addEventListener', type, handler, opt_capture, opt_handlerScope);
+};
+
+
+/**
+ * @override
+ * @suppress {checkTypes}
+ */
+WebChannelBaseTransport.Channel.prototype.removeEventListener = function(
+    type, handler, /** boolean= */ opt_capture, opt_handlerScope) {
+  WebChannelBaseTransport.Channel.base(
+      this, 'removeEventListener', type, handler, opt_capture,
+      opt_handlerScope);
+};
+
+
+/**
  * Test path is always set to "/url/test".
  *
  * @override
@@ -195,6 +253,15 @@ WebChannelBaseTransport.Channel.prototype.close = function() {
 
 
 /**
+ * @override
+ */
+WebChannelBaseTransport.Channel.prototype.halfClose = function() {
+  // to be implemented
+  throw new Error('Not implemented');
+};
+
+
+/**
  * The WebChannelBase only supports object types.
  *
  * @param {!goog.net.WebChannel.MessageData} message The message to send.
@@ -202,9 +269,15 @@ WebChannelBaseTransport.Channel.prototype.close = function() {
  * @override
  */
 WebChannelBaseTransport.Channel.prototype.send = function(message) {
-  goog.asserts.assert(goog.isObject(message), 'only object type expected');
+  goog.asserts.assert(
+      goog.isObject(message) || goog.isString(message),
+      'only object type or raw string is supported');
 
-  if (this.sendRawJson_) {
+  if (goog.isString(message)) {
+    var rawJson = {};
+    rawJson['__data__'] = message;
+    this.channel_.sendMap(rawJson);
+  } else if (this.sendRawJson_) {
     var rawJson = {};
     rawJson['__data__'] = goog.json.serialize(message);
     this.channel_.sendMap(rawJson);
@@ -231,7 +304,7 @@ WebChannelBaseTransport.Channel.prototype.disposeInternal = function() {
 /**
  * The message event.
  *
- * @param {!Array<?>} array The data array from the underlying channel.
+ * @param {!Array<?>|!Object} array The data array from the underlying channel.
  * @constructor
  * @extends {goog.net.WebChannel.MessageEvent}
  * @final
@@ -239,7 +312,18 @@ WebChannelBaseTransport.Channel.prototype.disposeInternal = function() {
 WebChannelBaseTransport.Channel.MessageEvent = function(array) {
   WebChannelBaseTransport.Channel.MessageEvent.base(this, 'constructor');
 
-  this.data = array;
+  // single-metadata only
+  var metadata = array['__sm__'];
+  if (metadata) {
+    this.metadataKey = goog.object.getAnyKey(metadata);
+    if (this.metadataKey) {
+      this.data = goog.object.get(metadata, this.metadataKey);
+    } else {
+      this.data = metadata;  // empty
+    }
+  } else {
+    this.data = array;
+  }
 };
 goog.inherits(
     WebChannelBaseTransport.Channel.MessageEvent,
@@ -259,9 +343,14 @@ WebChannelBaseTransport.Channel.ErrorEvent = function(error) {
   WebChannelBaseTransport.Channel.ErrorEvent.base(this, 'constructor');
 
   /**
-   * Transport specific error code is not to be propagated with the event.
+   * High-level status code.
    */
   this.status = goog.net.WebChannel.ErrorStatus.NETWORK_ERROR;
+
+  /**
+   * @const {WebChannelBase.Error} Internal error code, for debugging use only.
+   */
+  this.errorCode = error;
 };
 goog.inherits(
     WebChannelBaseTransport.Channel.ErrorEvent, goog.net.WebChannel.ErrorEvent);
@@ -384,6 +473,15 @@ WebChannelBaseTransport.ChannelProperties.prototype.isSpdyEnabled = function() {
 /**
  * @override
  */
+WebChannelBaseTransport.ChannelProperties.prototype.getPendingRequestCount =
+    function() {
+  return this.channel_.getForwardChannelRequestPool().getRequestCount();
+};
+
+
+/**
+ * @override
+ */
 WebChannelBaseTransport.ChannelProperties.prototype.getHttpSessionId =
     function() {
   return this.channel_.getHttpSessionId();
@@ -401,6 +499,13 @@ WebChannelBaseTransport.ChannelProperties.prototype.commit =
  * @override
  */
 WebChannelBaseTransport.ChannelProperties.prototype.getNonAckedMessageCount =
+    goog.abstractMethod;
+
+
+/**
+ * @override
+ */
+WebChannelBaseTransport.ChannelProperties.prototype.notifyNonAckedMessageCount =
     goog.abstractMethod;
 
 

@@ -182,9 +182,9 @@ goog.testing.Mock = function(
   } else if (
       opt_createProxy && opt_mockStaticMethods &&
       goog.isFunction(objectToMock)) {
-    throw Error('Cannot create a proxy when opt_mockStaticMethods is true');
+    throw new Error('Cannot create a proxy when opt_mockStaticMethods is true');
   } else if (opt_createProxy && !goog.isFunction(objectToMock)) {
-    throw Error('Must have a constructor to create a proxy');
+    throw new Error('Must have a constructor to create a proxy');
   }
 
   if (goog.isFunction(objectToMock) && !opt_mockStaticMethods) {
@@ -224,10 +224,21 @@ goog.testing.Mock.STRICT = 0;
  * @type {!Array<string>}
  * @private
  */
-goog.testing.Mock.PROTOTYPE_FIELDS_ = [
+goog.testing.Mock.OBJECT_PROTOTYPE_FIELDS_ = [
   'constructor', 'hasOwnProperty', 'isPrototypeOf', 'propertyIsEnumerable',
   'toLocaleString', 'toString', 'valueOf'
 ];
+
+
+/**
+ * This array contains the name of the functions that are part of the base
+ * Function prototype. The restricted field 'caller' and 'arguments' are
+ * excluded.
+ * @const
+ * @type {!Array<string>}
+ * @private
+ */
+goog.testing.Mock.FUNCTION_PROTOTYPE_FIELDS_ = ['apply', 'bind', 'call'];
 
 
 /**
@@ -278,14 +289,28 @@ goog.testing.Mock.prototype.$threwException_ = null;
  */
 goog.testing.Mock.prototype.$initializeFunctions_ = function(objectToMock) {
   // Gets the object properties.
-  var enumerableProperties = goog.object.getAllPropertyNames(objectToMock);
+  var enumerableProperties = goog.object.getAllPropertyNames(
+      objectToMock, false /* opt_includeObjectPrototype */,
+      false /* opt_includeFunctionPrototype */);
+
+  if (goog.isFunction(objectToMock)) {
+    for (var i = 0; i < goog.testing.Mock.FUNCTION_PROTOTYPE_FIELDS_.length;
+         i++) {
+      var prop = goog.testing.Mock.FUNCTION_PROTOTYPE_FIELDS_[i];
+      // Look at b/6758711 if you're considering adding ALL properties to ALL
+      // mocks.
+      if (objectToMock[prop] !== Function.prototype[prop]) {
+        enumerableProperties.push(prop);
+      }
+    }
+  }
 
   // The non enumerable properties are added if they override the ones in the
   // Object prototype. This is due to the fact that IE8 does not enumerate any
-  // of the prototype Object functions even when overriden and mocking these is
+  // of the prototype Object functions even when overridden and mocking these is
   // sometimes needed.
-  for (var i = 0; i < goog.testing.Mock.PROTOTYPE_FIELDS_.length; i++) {
-    var prop = goog.testing.Mock.PROTOTYPE_FIELDS_[i];
+  for (var i = 0; i < goog.testing.Mock.OBJECT_PROTOTYPE_FIELDS_.length; i++) {
+    var prop = goog.testing.Mock.OBJECT_PROTOTYPE_FIELDS_[i];
     // Look at b/6758711 if you're considering adding ALL properties to ALL
     // mocks.
     if (objectToMock[prop] !== Object.prototype[prop]) {
@@ -341,7 +366,7 @@ goog.testing.Mock.prototype.$mockMethod = function(name) {
       return this.$recordCall(name, args);
     }
   } catch (ex) {
-    this.$recordAndThrow(ex);
+    this.$recordAndThrow(ex, true /* rethrow */);
   }
 };
 
@@ -536,23 +561,29 @@ goog.testing.Mock.prototype.$throwException = function(comment, opt_message) {
 /**
  * Throws an exception and records that an exception was thrown.
  * @param {Object} ex Exception.
+ * @param {boolean=} rethrow True if this exception has already been thrown.  If
+ *     so, we should not report it to TestCase (since it was already reported at
+ *     the original throw). This is necessary to avoid logging it twice, because
+ *     assertThrowsJsUnitException only removes one record.
  * @throws {Object} #ex.
  * @protected
  */
-goog.testing.Mock.prototype.$recordAndThrow = function(ex) {
+goog.testing.Mock.prototype.$recordAndThrow = function(ex, rethrow) {
   // If it's an assert exception, record it.
   if (ex['isJsUnitException']) {
-    var testRunner = goog.global['G_testRunner'];
-    if (testRunner) {
-      var logTestFailureFunction = testRunner['logTestFailure'];
-      if (logTestFailureFunction) {
-        logTestFailureFunction.call(testRunner, ex);
-      }
-    }
-
     if (!this.$threwException_) {
       // Only remember first exception thrown.
       this.$threwException_ = ex;
+    }
+
+    // Don't fail if JSUnit isn't loaded.  Instead, the test can catch the error
+    // normally. Other test frameworks won't get automatic failures if assertion
+    // errors are swallowed.
+    var getTestCase =
+        goog.getObjectByName('goog.testing.TestCase.getActiveTestCase');
+    var testCase = getTestCase && getTestCase();
+    if (testCase && !rethrow) {
+      testCase.raiseAssertionException(ex);
     }
   }
   throw ex;

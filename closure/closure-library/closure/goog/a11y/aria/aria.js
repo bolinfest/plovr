@@ -113,7 +113,7 @@ goog.a11y.aria.setRole = function(element, roleName) {
 /**
  * Gets role of an element.
  * @param {!Element} element DOM element to get role of.
- * @return {goog.a11y.aria.Role} ARIA Role name.
+ * @return {?goog.a11y.aria.Role} ARIA Role name.
  */
 goog.a11y.aria.getRole = function(element) {
   var role = element.getAttribute(goog.a11y.aria.ROLE_ATTRIBUTE_);
@@ -304,9 +304,8 @@ goog.a11y.aria.assertRoleIsSetInternalUtil = function(element, allowedRoles) {
  */
 goog.a11y.aria.getStateBoolean = function(element, stateName) {
   var attr =
-      /** @type {string|boolean} */ (
-          element.getAttribute(
-              goog.a11y.aria.getAriaAttributeName_(stateName)));
+      /** @type {string|boolean|null} */ (element.getAttribute(
+          goog.a11y.aria.getAriaAttributeName_(stateName)));
   goog.asserts.assert(
       goog.isBoolean(attr) || attr == null || attr == 'true' ||
       attr == 'false');

@@ -68,7 +68,7 @@ goog.math.Matrix = function(m, opt_n) {
     this.array_ = goog.math.Matrix.createZeroPaddedArray_(
         /** @type {number} */ (m), opt_n);
   } else {
-    throw Error('Invalid argument(s) for Matrix contructor');
+    throw new Error('Invalid argument(s) for Matrix contructor');
   }
 
   this.size_ = new goog.math.Size(this.array_[0].length, this.array_.length);
@@ -83,7 +83,7 @@ goog.math.Matrix = function(m, opt_n) {
  * [ 0 0 1 ]
  * </pre>
  * @param {number} n The size of the square identity matrix.
- * @return {!goog.math.Matrix} Identity matrix of width and height {@code n}.
+ * @return {!goog.math.Matrix} Identity matrix of width and height `n`.
  */
 goog.math.Matrix.createIdentityMatrix = function(n) {
   var rv = [];
@@ -105,7 +105,7 @@ goog.math.Matrix.createIdentityMatrix = function(n) {
  *     takes 4 arguments (value, i, j, and the matrix)
  *     and the return value is irrelevant.
  * @param {T=} opt_obj The object to be used as the value of 'this'
- *     within {@code fn}.
+ *     within `fn`.
  * @template T
  */
 goog.math.Matrix.forEach = function(matrix, fn, opt_obj) {
@@ -151,8 +151,8 @@ goog.math.Matrix.isValidArray = function(arr) {
  *     takes 4 arguments (value, i, j and the matrix)
  *     and should return a number, which will be inserted into a new matrix.
  * @param {T=} opt_obj The object to be used as the value of 'this'
- *     within {@code fn}.
- * @return {!goog.math.Matrix} A new matrix with the results from {@code fn}.
+ *     within `fn`.
+ * @return {!goog.math.Matrix} A new matrix with the results from `fn`.
  * @template T
  */
 goog.math.Matrix.map = function(matrix, fn, opt_obj) {
@@ -206,7 +206,8 @@ goog.math.Matrix.prototype.size_;
  */
 goog.math.Matrix.prototype.add = function(m) {
   if (!goog.math.Size.equals(this.size_, m.getSize())) {
-    throw Error('Matrix summation is only supported on arrays of equal size');
+    throw new Error(
+        'Matrix summation is only supported on arrays of equal size');
   }
   return goog.math.Matrix.map(
       this, function(val, i, j) { return val + m.array_[i][j]; });
@@ -221,7 +222,7 @@ goog.math.Matrix.prototype.add = function(m) {
  */
 goog.math.Matrix.prototype.appendColumns = function(m) {
   if (this.size_.height != m.getSize().height) {
-    throw Error(
+    throw new Error(
         'The given matrix has height ' + m.size_.height + ', but ' +
         ' needs to have height ' + this.size_.height + '.');
   }
@@ -243,7 +244,7 @@ goog.math.Matrix.prototype.appendColumns = function(m) {
  */
 goog.math.Matrix.prototype.appendRows = function(m) {
   if (this.size_.width != m.getSize().width) {
-    throw Error(
+    throw new Error(
         'The given matrix has width ' + m.size_.width + ', but ' +
         ' needs to have width ' + this.size_.width + '.');
   }
@@ -293,7 +294,7 @@ goog.math.Matrix.prototype.equals = function(m, opt_tolerance) {
  */
 goog.math.Matrix.prototype.getDeterminant = function() {
   if (!this.isSquare()) {
-    throw Error('A determinant can only be take on a square matrix');
+    throw new Error('A determinant can only be take on a square matrix');
   }
 
   return this.getDeterminant_();
@@ -307,7 +308,7 @@ goog.math.Matrix.prototype.getDeterminant = function() {
  */
 goog.math.Matrix.prototype.getInverse = function() {
   if (!this.isSquare()) {
-    throw Error('An inverse can only be taken on a square matrix.');
+    throw new Error('An inverse can only be taken on a square matrix.');
   }
   if (this.getSize().width == 1) {
     var a = this.getValueAt(0, 0);
@@ -430,7 +431,7 @@ goog.math.Matrix.prototype.isSquare = function() {
  */
 goog.math.Matrix.prototype.setValueAt = function(i, j, value) {
   if (!this.isInBounds_(i, j)) {
-    throw Error(
+    throw new Error(
         'Index out of bounds when setting matrix value, (' + i + ',' + j +
         ') in size (' + this.size_.height + ',' + this.size_.width + ')');
   }
@@ -456,7 +457,7 @@ goog.math.Matrix.prototype.setValueAt = function(i, j, value) {
 goog.math.Matrix.prototype.multiply = function(m) {
   if (m instanceof goog.math.Matrix) {
     if (this.size_.width != m.getSize().height) {
-      throw Error(
+      throw new Error(
           'Invalid matrices for multiplication. Second matrix ' +
           'should have the same number of rows as the first has columns.');
     }
@@ -464,7 +465,7 @@ goog.math.Matrix.prototype.multiply = function(m) {
   } else if (goog.isNumber(m)) {
     return this.scalarMultiply_(/** @type {number} */ (m));
   } else {
-    throw Error(
+    throw new Error(
         'A matrix can only be multiplied by' +
         ' a number or another matrix.');
   }
@@ -478,7 +479,7 @@ goog.math.Matrix.prototype.multiply = function(m) {
  */
 goog.math.Matrix.prototype.subtract = function(m) {
   if (!goog.math.Size.equals(this.size_, m.getSize())) {
-    throw Error(
+    throw new Error(
         'Matrix subtraction is only supported on arrays of equal size.');
   }
   return goog.math.Matrix.map(

@@ -25,6 +25,7 @@ goog.require('goog.events.BrowserEvent');
 goog.require('goog.events.Event');
 goog.require('goog.events.EventTarget');
 goog.require('goog.events.KeyCodes');
+goog.require('goog.events.KeyHandler');
 goog.require('goog.functions');
 goog.require('goog.object');
 goog.require('goog.testing.MockClock');
@@ -59,7 +60,9 @@ function MockAutoCompleter() {
   this.setTokenWasCalled = false;
   this.selectHilitedWasCalled = false;
   this.dismissWasCalled = false;
-  this.getTarget = function() { return mockElement };
+  this.getTarget = function() {
+    return mockElement;
+  };
   this.setTarget = function() {};
   this.setToken = function(token) {
     this.setTokenWasCalled = true;
@@ -621,6 +624,43 @@ function testSetTokenTextLeftHandSideOfToken() {
   ih.setTokenText('bar', true /* multi-row */);
 
   assertEquals('foo bar ', mockElement.value);
+}
+
+function testSetTokenTextAppendSeparator() {
+  var ih = new MockInputHandler();
+  ih.setSeparators('\n');
+  ih.setWhitespaceWrapEntries(false);
+
+  // Set up our input handler with the necessary mocks
+  var mockAutoCompleter = new MockAutoCompleter();
+  ih.ac_ = mockAutoCompleter;
+  ih.activeElement_ = mockElement;
+  mockElement.value = 'foo bar';
+  ih.setCursorPosition(0);
+
+  // The token is 'foo bar', we replace it with 'baz'.
+  ih.setTokenText('baz', true /* multi-row */);
+
+  assertEquals('baz\n', mockElement.value);
+}
+
+function testSetTokenTextDontAppendSeparator() {
+  var ih = new MockInputHandler();
+  ih.setSeparators('\n');
+  ih.setWhitespaceWrapEntries(false);
+  ih.setEndsWithSeparatorRegExp(null);
+
+  // Set up our input handler with the necessary mocks
+  var mockAutoCompleter = new MockAutoCompleter();
+  ih.ac_ = mockAutoCompleter;
+  ih.activeElement_ = mockElement;
+  mockElement.value = 'foo bar';
+  ih.setCursorPosition(0);
+
+  // The token is 'foo bar', we replace it with 'baz'.
+  ih.setTokenText('baz', true /* multi-row */);
+
+  assertEquals('baz', mockElement.value);
 }
 
 function testEmptyTokenWithSeparator() {
