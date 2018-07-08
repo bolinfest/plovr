@@ -1,4 +1,4 @@
-{namespace org.plovr autoescape="deprecated-noncontextual"}
+{namespace org.plovr}
 
 /**
  * @param title
@@ -6,7 +6,7 @@
  * @param testJsUrl
  * @param requires
  */
-{template .test}
+{template .test autoescape="deprecated-noncontextual"}
 <!doctype html>
 <html>
 <head>
@@ -15,9 +15,9 @@
 <body>
   <script src="{$baseJsUrl}"></script>
   <script>{\n}
-    {foreach $r in $requires}
+    {for $r in $requires}
       goog.require('{$r |escapeJsString}');{\n}
-    {/foreach}
+    {/for}
   </script>
   <script src="{$testJsUrl}"></script>
 </body>
@@ -30,14 +30,14 @@
  * @param configId
  * @param tests array of paths to _test.html URLs
  */
-{template .listTests}
+{template .listTests autoescape="deprecated-noncontextual"}
 <!doctype html>
 <html>
 <head>
   <title>{$configId} Tests</title>
 </head>
 <body>
-{foreach $test in $tests}
+{for $test in $tests}
   {if isFirst($test)}
     <h3>All Tests ({length($tests)})</h3>
 
@@ -57,7 +57,7 @@
   No tests for {$configId}.
   {sp}
   <a href="/">Back to the config list.</a>
-{/foreach}
+{/for}
 </body>
 </html>
 {/template}
@@ -68,7 +68,7 @@
  * @param configId
  * @param tests array of paths to _test.html URLs
  */
-{template .all}
+{template .all autoescape="deprecated-noncontextual"}
 <!doctype html>
 <html>
 <head>
@@ -92,7 +92,7 @@
  * @param baseJsUrl
  * @param tests array of paths to _test.html URLs
  */
-{template .testRunner}
+{template .testRunner autoescape="deprecated-noncontextual"}
 {call .testRunnerCss /}
 
 <h1>{$configId} - All JsUnit Tests</h1>
@@ -125,9 +125,9 @@ goog.require('goog.testing.MultiTestRunner');
 (function() {
 {/literal}
   var allTests = [
-  {foreach $test in $tests}
+  {for $test in $tests}
     "/test/{$configId}/{$test}"{if not isLast($test)},{\n}{/if}
-  {/foreach}
+  {/for}
   ];
 {literal}
   // Add the query string to each URL so that ?mode=advanced can be used for
@@ -180,7 +180,7 @@ goog.require('goog.testing.MultiTestRunner');
 {/template}
 
 /***/
-{template .testRunnerCss}
+{template .testRunnerCss autoescape="deprecated-noncontextual"}
 {literal}
 <style>
 .goog-testrunner {

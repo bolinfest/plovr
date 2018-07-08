@@ -7,7 +7,7 @@
 {template .list}
 <h1>{$title}</h1>
 <div>
-  {foreach $item in $items}
+  {for $item in $items}
     <div class="{css task-item}">
       <div style="margin-left: {$item.indent * 24}px">
         {$item.name}
@@ -17,7 +17,7 @@
     <div class="{css tasks-complete}">
       Nothing to do!
     </div>
-  {/foreach}
+  {/for}
 </div>
 {/template}
 

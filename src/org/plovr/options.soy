@@ -1,7 +1,7 @@
-{namespace org.plovr autoescape="deprecated-noncontextual"}
+{namespace org.plovr}
 
 /***/
-{template .base}
+{template .base autoescape="deprecated-noncontextual"}
 
 {call plovr.header}
   {param title: 'plovr Config Options' /}
@@ -20,7 +20,7 @@
  * @param allNames
  * @param descriptors
  */
-{template .options}
+{template .options autoescape="deprecated-noncontextual"}
 <style>
 {literal}
 body {
@@ -73,13 +73,13 @@ will be compiled in <code>SIMPLE</code> mode rather than in{sp}
 without editing the config file or the URL in the <code>&lt;script></code> tag.
 
 <p>
-{foreach $name in $allNames}
+{for $name in $allNames}
 <a href="#{$name}">{$name}</a>{if not isLast($name)}, {/if}
-{/foreach}
+{/for}
 </p>
 
 <dl>
-{foreach $descriptor in $descriptors}
+{for $descriptor in $descriptors}
   <dt id="{$descriptor.name}">{$descriptor.name}</dt>
   <dd>
   Accepted values: <code>{$descriptor.acceptedValues}</code><br>
@@ -93,7 +93,7 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
   {call .description}{param name: $descriptor.name/}{/call}
   </p>
   </dd>
-{/foreach}
+{/for}
 </dl>
 
 {/template}
@@ -101,7 +101,7 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
 /**
  * @param name
  */
-{template .description}
+{template .description autoescape="deprecated-noncontextual"}
 {switch $name}
   {case 'id'}
     Every config must have an <code>id</code>. The id must be unique among the

@@ -1,4 +1,4 @@
-{namespace org.plovr autoescape="deprecated-noncontextual"}
+{namespace org.plovr}
 
 /**
  * @param configId
@@ -6,7 +6,7 @@
  * @param originalSize
  * @param compiledSize
  */
-{template .size}
+{template .size autoescape="deprecated-noncontextual"}
 <!doctype html>
 <html>
 <head>
@@ -24,7 +24,7 @@
   <th class="{css('compiled-header')}">Compiled Size</th>
   <th class="{css('percentage-header')}">%</th>
 </tr>
-{foreach $record in $compilationData}
+{for $record in $compilationData}
 <tr id="{$record.name}"
   class="{if index($record) % 2 == 0}{css('odd-line')}{else}{css('even-line')}{/if}">
   <td>{$record.name}</td>
@@ -32,7 +32,7 @@
   <td class="{css('measurement')}">{$record.compiledSize}</td>
   <td class="{css('measurement')}">{round(100 * $record.compiledSize / $record.originalSize, 2)}%</td>
 </tr>
-{/foreach}
+{/for}
 <tr class="{css('totals')}">
   <td>TOTAL</td>
   <td class="{css('measurement')}">{$originalSize}</td>
@@ -46,7 +46,7 @@
 {/template}
 
 /***/
-{template .css}
+{template .css autoescape="deprecated-noncontextual"}
 {literal}
 body {
   margin: 0;

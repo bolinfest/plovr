@@ -81,7 +81,7 @@ and an instance of the task list on a demo page:
 &#123;template .list}
 &lt;h1>{$title}&lt;/h1>
 &lt;div>
-  {foreach $item in $items}
+  {for $item in $items}
     &lt;div class="{css task-item}">
       &lt;div style="margin-left: {$item.indent * 24}px">
         {$item.name}
@@ -91,7 +91,7 @@ and an instance of the task list on a demo page:
     &lt;div class="{css tasks-complete}">
       Nothing to do!
     &lt;/div>
-  {/foreach}
+  {/for}
 &lt;/div>
 &#123;/template}
 

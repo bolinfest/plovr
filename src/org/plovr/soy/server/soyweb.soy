@@ -14,7 +14,7 @@
   <style>
   {literal}
   body {
-    font: 13px Arial, sans-serif;    
+    font: 13px Arial, sans-serif;
   }
 
   h3 {
@@ -27,29 +27,29 @@
 <body>
 
 <h2>
-  {foreach $part in $directoryParts}
+  {for $part in $directoryParts}
   / <a href="{$part.href}">{$part.name}</a>{sp}
-  {/foreach}
+  {/for}
   /
 </h2>
 
 <h3>Directories</h3>
 
-{foreach $dir in $directories}
+{for $dir in $directories}
   {call .showFile}
     {param file: $dir /}
     {param isDir: true /}
   {/call}
-{/foreach}
+{/for}
 
 <h3>Files</h3>
 
-{foreach $file in $files}
+{for $file in $files}
   {call .showFile}
     {param file: $file /}
     {param isDir: false /}
   {/call}
-{/foreach}
+{/for}
 
 </body>
 </html>
