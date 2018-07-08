@@ -15,7 +15,6 @@ import com.google.inject.Injector;
 import com.google.inject.Module;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.SoyModule;
-import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
 import com.google.template.soy.msgs.SoyMsgBundle;
 
@@ -47,7 +46,6 @@ public class SoyFile extends LocalFileJsInput {
     SoyJsSrcOptions value = jsSrcOptionsMap.get(options);
     if (value == null) {
       value = new SoyJsSrcOptions();
-      value.setShouldGenerateJsdoc(true);
       value.setShouldProvideRequireSoyNamespaces(options.useClosureLibrary);
       value.setShouldDeclareTopLevelNamespaces(options.useClosureLibrary);
       value.setShouldGenerateGoogMsgDefs(options.useClosureLibrary && options.msgBundle == null);
@@ -64,13 +62,9 @@ public class SoyFile extends LocalFileJsInput {
     SoyFileSet.Builder builder = injector.getInstance(SoyFileSet.Builder.class);
     builder.add(getSource());
     SoyFileSet fileSet = builder.build();
-    try {
-      String code = fileSet.compileToJsSrc(jsSrcOptions, msgBundle).get(0);
-      logger.fine(code);
-      return code;
-    } catch (SoySyntaxException e) {
-      throw new PlovrSoySyntaxException(e, this);
-    }
+    String code = fileSet.compileToJsSrc(jsSrcOptions, msgBundle).get(0);
+    logger.fine(code);
+    return code;
   }
 
   @Override

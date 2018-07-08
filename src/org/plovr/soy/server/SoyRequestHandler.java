@@ -16,6 +16,7 @@ import org.plovr.util.SoyDataUtil;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.io.Files;
 import com.google.gson.JsonElement;
@@ -25,12 +26,12 @@ import com.google.inject.Injector;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.base.internal.IncrementingIdGenerator;
 import com.google.template.soy.base.internal.SoyFileKind;
-import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.data.SoyData;
 import com.google.template.soy.data.restricted.StringData;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.soyparse.ParseException;
 import com.google.template.soy.soyparse.SoyFileParser;
+import com.google.template.soy.soyparse.PluginResolver;
 import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.tofu.SoyTofu;
 import com.google.template.soy.types.SoyTypeRegistry;
@@ -88,7 +89,7 @@ public class SoyRequestHandler implements HttpHandler {
   }
 
   private void doHandle(HttpExchange exchange) throws IOException,
-      SoySyntaxException, ParseException {
+      ParseException {
     URI uri = exchange.getRequestURI();
     String path = uri.getPath();
 
@@ -123,11 +124,15 @@ public class SoyRequestHandler implements HttpHandler {
     ErrorReporter.Checkpoint checkpoint = errorReporter.checkpoint();
     SoyFileParser parser = new SoyFileParser(
         new SoyTypeRegistry(),
+        PluginResolver.nullResolver(
+            PluginResolver.Mode.REQUIRE_DEFINITIONS,
+            errorReporter),
         new IncrementingIdGenerator(),
         Files.newReader(soyFile, Charsets.UTF_8),
         SoyFileKind.SRC,
         relativePath,
-        errorReporter);
+        errorReporter,
+        ImmutableSet.<String>of());
     SoyFileNode node = parser.parseSoyFile();
 
     if (errorReporter.errorsSince(checkpoint)) {

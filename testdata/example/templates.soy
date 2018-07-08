@@ -8,9 +8,9 @@
 <div>{msg desc="meaning"}The meaning of life is: {$meaningOfLife}.{/msg}</div>
 
 <ul>
-{foreach $weekday in $weekdays}
+{for $weekday in $weekdays}
   <li>{strSub($weekday, 0, 3)}
-{/foreach}
+{/for}
 </ul>
 
 {call .listTemplate}
@@ -26,8 +26,8 @@
 /** @param items */
 {template .listTemplate}
 <ul>
-{foreach $item in $items}
+{for $item in $items}
   <li>{$item}
-{/foreach}
+{/for}
 </ul>
 {/template}
