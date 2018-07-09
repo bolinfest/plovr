@@ -12,6 +12,16 @@
             <groupId>com.google.closure-stylesheets</groupId>
             <artifactId>closure-stylesheets</artifactId>
             <version>1.5.0</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.google.javascript</groupId>
+                    <artifactId>closure-compiler-unshaded</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.google.guava</groupId>
+                    <artifactId>guava</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.google.template</groupId>
