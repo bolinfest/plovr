@@ -9,6 +9,7 @@ import java.util.Set;
 import org.openqa.selenium.WebDriver;
 import org.plovr.Config;
 import org.plovr.ConfigParser;
+import org.plovr.ConfigParseException;
 import org.plovr.TestHandler;
 import org.plovr.webdriver.TestRunner;
 import org.plovr.webdriver.WebDriverFactory;
@@ -38,7 +39,13 @@ public class TestCommand extends AbstractCommandRunner<TestCommandOptions> {
     int exitCode = 0;
     try {
       for (String configFile: arguments) {
-        Config config = ConfigParser.parseFile(new File(configFile));
+        Config config;
+        try {
+          config = ConfigParser.parseFile(new File(configFile));
+        } catch (ConfigParseException e) {
+          e.print(System.err);
+          return 1;
+        }
 
         int timeout = options.getTimeout() * 1000;
         List<WebDriver> drivers = Lists.transform(config.getWebDriverFactories(),

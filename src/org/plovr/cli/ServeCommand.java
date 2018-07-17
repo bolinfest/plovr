@@ -7,6 +7,7 @@ import java.util.List;
 import org.plovr.CompilationServer;
 import org.plovr.Config;
 import org.plovr.ConfigParser;
+import org.plovr.ConfigParseException;
 
 public class ServeCommand extends AbstractCommandRunner<ServeCommandOptions> {
 
@@ -29,7 +30,13 @@ public class ServeCommand extends AbstractCommandRunner<ServeCommandOptions> {
     // Register all of the configs.
     for (String arg : arguments) {
       File configFile = new File(arg);
-      Config config = ConfigParser.parseFile(configFile);
+      Config config;
+      try {
+        config = ConfigParser.parseFile(configFile);
+      } catch (ConfigParseException e) {
+        e.print(System.err);
+        return 1;
+      }
       server.registerConfig(config);
     }
     server.run();

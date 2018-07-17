@@ -58,7 +58,7 @@ public final class CompilationServer implements Runnable {
     configs.put(id, config);
   }
 
-  private void reload(Config config) throws IOException {
+  private void reload(Config config) throws ConfigParseException {
     Preconditions.checkNotNull(config.getConfigFile(),
         "Can't reload a config without a file");
 
@@ -87,7 +87,7 @@ public final class CompilationServer implements Runnable {
       if (config.isOutOfDate()) {
         try {
           reload(config);
-        } catch (IOException e) {
+        } catch (ConfigParseException e) {
           throw new RuntimeException("Error reloading config: "
               + config.getId());
         }
@@ -217,10 +217,10 @@ public final class CompilationServer implements Runnable {
       host = referrer.getHost();
     }
 
-    // If the Host header doesn't include a port, getHost() gives us -1.                        
-    if (port == -1) {                                                                    
-      return String.format("%s://%s/", scheme, host);                                    
-    } 
+    // If the Host header doesn't include a port, getHost() gives us -1.
+    if (port == -1) {
+      return String.format("%s://%s/", scheme, host);
+    }
 
     return String.format("%s://%s:%d/", scheme, host, port);
   }

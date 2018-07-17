@@ -1,0 +1,6 @@
+{
+    "id": "invalid-language-out-bug",
+    "language-out": "NOT_VALID",
+    "inputs": ["in.js"],
+    "output-file": "out.js"
+}

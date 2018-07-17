@@ -11,6 +11,7 @@ import org.plovr.Compilation;
 import org.plovr.CompilationException;
 import org.plovr.Config;
 import org.plovr.ConfigParser;
+import org.plovr.ConfigParseException;
 import org.plovr.JsInput;
 import org.plovr.Manifest;
 
@@ -63,16 +64,19 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
     }
 
     String configFile = arguments.get(0);
-    Config config = ConfigParser.parseFile(new File(configFile));
+    Config config;
     Iterable<JsMessage> messages = null;
     try {
+      config = ConfigParser.parseFile(new File(configFile));
       Compilation compilation = Compilation.create(config);
       messages = compilation.extractMessages();
     } catch (CompilationException e) {
       e.print(System.err);
       return 1;
+    } catch (ConfigParseException e) {
+      e.print(System.err);
+      return 1;
     }
-
 
     if (options.getFormat() == Format.XTB) {
       System.out.println(

@@ -12,6 +12,7 @@ import org.plovr.CompileRequestHandler;
 import org.plovr.CompilerPassFactory;
 import org.plovr.Config;
 import org.plovr.ConfigParser;
+import org.plovr.ConfigParseException;
 import org.plovr.docgen.DescriptorPass;
 
 import com.google.common.collect.ArrayListMultimap;
@@ -45,7 +46,14 @@ public class JsDocCommand extends AbstractCommandRunner<JsDocCommandOptions> {
     }
 
     File configFile = new File(arguments.get(0));
-    Config.Builder builder = ConfigParser.createBuilderFromFile(configFile);
+    Config.Builder builder;
+
+    try {
+      builder = ConfigParser.createBuilderFromFile(configFile);
+    } catch (ConfigParseException e) {
+      e.print(System.err);
+      return 1;
+    }
 
     // PlovrCompilerOptions.ideMode must be set to true, or else the AST will
     // not contain all of the necessary JSDocInfo.
