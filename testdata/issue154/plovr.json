@@ -1,0 +1,7 @@
+{
+  "id": "issue-154",
+  "inputs": ["main.js"],
+  "checks": {
+    "checkTypes": "ERROR"
+  }
+}

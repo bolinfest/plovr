@@ -71,6 +71,13 @@ public final class Config implements Comparable<Config> {
 
   private static final Logger logger = Logger.getLogger("org.plovr.Config");
 
+  // Hard-code the default language modes from
+  // https://github.com/google/closure-compiler/blob/master/src/com/google/javascript/jscomp/CommandLineRunner.java
+  // because the default CompilerOptions have broken defaults. See this thread:
+  // https://github.com/google/closure-compiler/issues/3016
+  static final LanguageMode DEFAULT_LANGUAGE_IN = LanguageMode.ECMASCRIPT_2017;
+  static final LanguageMode DEFAULT_LANGUAGE_OUT = LanguageMode.ECMASCRIPT5;
+
   /**
    * This is the name of the scope that all global variables will be
    * put into if the global-scope-name argument is supplied in the
@@ -747,12 +754,8 @@ public final class Config implements Comparable<Config> {
     options.setIdGenerators(idGenerators);
     options.setAmbiguateProperties(ambiguateProperties);
     options.setDisambiguateProperties(disambiguateProperties);
-    if (languageIn != null) {
-      options.setLanguageIn(languageIn);
-    }
-    if (languageOut != null) {
-      options.setLanguageOut(languageOut);
-    }
+    options.setLanguageIn(languageIn);
+    options.setLanguageOut(languageOut);
     options.setNewTypeInference(newTypeInference);
 
     // Instantiate custom warnings guards.
@@ -1146,9 +1149,9 @@ public final class Config implements Comparable<Config> {
 
     private boolean disambiguateProperties;
 
-    private LanguageMode languageIn;
+    private LanguageMode languageIn = DEFAULT_LANGUAGE_IN;
 
-    private LanguageMode languageOut;
+    private LanguageMode languageOut = DEFAULT_LANGUAGE_OUT;
 
     private boolean newTypeInference;
 
@@ -1640,11 +1643,11 @@ public final class Config implements Comparable<Config> {
     }
 
     public void setLanguageIn(LanguageMode newVal) {
-      this.languageIn = newVal;
+      this.languageIn = Preconditions.checkNotNull(newVal);
     }
 
     public void setLanguageOut(LanguageMode newVal) {
-      this.languageOut = newVal;
+      this.languageOut = Preconditions.checkNotNull(newVal);
     }
 
     public void setNewTypeInference(boolean newVal) {

@@ -5,9 +5,11 @@ import com.google.javascript.jscomp.JsMessage;
 
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * {@link CompilationTest} is a unit test for {@Compilation}.
@@ -40,6 +42,17 @@ public class CompilationTest {
     Compilation compilation = Compilation.create(config);
     ArrayList<JsMessage> messages = Lists.newArrayList(compilation.extractMessages());
     assertEquals(1, messages.size());
+  }
+
+  @Test
+  public void testTypeCheck() throws Exception {
+    Config config = ConfigParser.parseFile(new File("testdata/issue154/plovr.json"));
+    Compilation compilation = Compilation.create(config);
+    compilation.compile();
+
+    List<CompilationError> errors = compilation.getCompilationErrors();
+    assertEquals(1, errors.size());
+    assertTrue(errors.get(0).getMessage().contains("inconsistent return type"));
   }
 
 }
