@@ -289,23 +289,23 @@ public enum ConfigOption {
 
   LANGUAGE_IN("language-in", new ConfigUpdater() {
     @Override
-    public void apply(String mode, Config.Builder builder) {
-      try {
-        builder.setLanguageIn(LanguageMode.fromString(mode));
-      } catch (IllegalArgumentException e) {
-        throw Throwables.propagate(e);
+    public void apply(String mode, Config.Builder builder) throws ConfigParseException {
+      LanguageMode m = LanguageMode.fromString(mode);
+      if (m == null) {
+        throw new ConfigParseException("Unrecognized language: " + mode);
       }
+      builder.setLanguageIn(m);
     }
   }),
 
   LANGUAGE_OUT("language-out", new ConfigUpdater() {
     @Override
-    public void apply(String mode, Config.Builder builder) {
-      try {
-        builder.setLanguageOut(LanguageMode.fromString(mode));
-      } catch (IllegalArgumentException e) {
-        throw Throwables.propagate(e);
+    public void apply(String mode, Config.Builder builder) throws ConfigParseException {
+      LanguageMode m = LanguageMode.fromString(mode);
+      if (m == null) {
+        throw new ConfigParseException("Unrecognized language: " + mode);
       }
+      builder.setLanguageOut(m);
     }
   }),
 
@@ -935,27 +935,27 @@ public enum ConfigOption {
 
   private static class ConfigUpdater {
 
-    public void apply(String json, Config.Builder builder) {
-      throw new UnsupportedOperationException();
+    public void apply(String json, Config.Builder builder) throws ConfigParseException {
+      throw new ConfigParseException("Invalid value type: string");
     }
 
-    public void apply(boolean value, Config.Builder builder) {
-      throw new UnsupportedOperationException();
+    public void apply(boolean value, Config.Builder builder) throws ConfigParseException {
+      throw new ConfigParseException("Invalid value type: boolean");
     }
 
-    public void apply(Number value, Config.Builder builder) {
-      throw new UnsupportedOperationException();
+    public void apply(Number value, Config.Builder builder) throws ConfigParseException {
+      throw new ConfigParseException("Invalid value type: number");
     }
 
-    public void apply(JsonArray value, Config.Builder builder) {
-      throw new UnsupportedOperationException();
+    public void apply(JsonArray value, Config.Builder builder) throws ConfigParseException {
+      throw new ConfigParseException("Invalid value type: array");
     }
 
-    public void apply(JsonObject value, Config.Builder builder) {
-      throw new UnsupportedOperationException();
+    public void apply(JsonObject value, Config.Builder builder) throws ConfigParseException {
+      throw new ConfigParseException("Invalid value type: object");
     }
 
-    private void apply(JsonElement json, Config.Builder builder) {
+    private void apply(JsonElement json, Config.Builder builder) throws ConfigParseException {
       if (json.isJsonPrimitive()) {
         JsonPrimitive primitive = json.getAsJsonPrimitive();
         if (primitive.isString()) {
@@ -1002,11 +1002,15 @@ public enum ConfigOption {
     return name;
   }
 
-  public void update(Config.Builder builder, JsonElement json) {
+  public void update(Config.Builder builder, JsonElement json) throws ConfigParseException {
     if (json == null) {
       return;
     }
-    configUpdater.apply(json, builder);
+    try {
+      configUpdater.apply(json, builder);
+    } catch (ConfigParseException e) {
+      throw new ConfigParseException(String.format("Error parsing option '%s': %s", getName(), e.getMessage()));
+    }
   }
 
   /**

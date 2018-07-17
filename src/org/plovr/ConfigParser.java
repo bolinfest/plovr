@@ -12,6 +12,7 @@ import com.google.common.collect.Sets;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonParseException;
 
 /**
  * {@link ConfigParser} extracts a {@link Config} from a JSON config file.
@@ -23,10 +24,21 @@ public final class ConfigParser {
   /** Utility class; do not instantiate. */
   private ConfigParser() {}
 
-  public static Config.Builder createBuilderFromFile(File file) throws IOException {
+  public static class ConfigParseError {
+  }
+
+  public static Config.Builder createBuilderFromFile(File file) throws ConfigParseException {
     JsonParser jsonParser = new JsonParser();
-    String rootConfigFileContent = Files.toString(file);
-    JsonElement root = jsonParser.parse(rootConfigFileContent);
+    String rootConfigFileContent;
+    JsonElement root;
+    try {
+      rootConfigFileContent = Files.toString(file);
+      root = jsonParser.parse(rootConfigFileContent);
+    } catch (JsonParseException e) {
+      throw new ConfigParseException(e);
+    } catch (IOException e) {
+      throw new ConfigParseException(e);
+    }
 
     Preconditions.checkNotNull(root);
     Preconditions.checkArgument(root.isJsonObject());
@@ -94,7 +106,7 @@ public final class ConfigParser {
     return builder;
   }
 
-  public static Config parseFile(File file) throws IOException {
+  public static Config parseFile(File file) throws ConfigParseException {
     return createBuilderFromFile(file).build();
   }
 

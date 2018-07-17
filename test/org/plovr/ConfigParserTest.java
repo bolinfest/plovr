@@ -2,6 +2,7 @@ package org.plovr;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.File;
@@ -38,7 +39,7 @@ public class ConfigParserTest {
    * config file in which it is referenced.
    */
   @Test
-  public void testInherits() throws IOException {
+  public void testInherits() throws IOException, ConfigParseException {
     File configFile = new File("testdata/inherits/child/childconfig.js");
     assertTrue("Could not find test config file", configFile.exists());
     Config config = ConfigParser.parseFile(configFile);
@@ -106,7 +107,7 @@ public class ConfigParserTest {
   }
 
   @Test
-  public void testInputNames() throws IOException, CompilationException {
+  public void testInputNames() throws IOException, CompilationException, ConfigParseException {
     File configFile = new File("testdata/name-collision/config.js");
     assertTrue("Could not find test config file", configFile.exists());
     Config config = ConfigParser.parseFile(configFile);
@@ -168,5 +169,33 @@ public class ConfigParserTest {
             "main/foo/bar.soy",
             "main.js"),
         inputNames);
+  }
+
+  @Test
+  public void testInvalidLanguageIn() throws Exception{
+    ConfigParseException err = null;
+    try {
+      File configFile = new File("testdata/invalid-language-in/plovr.json");
+      ConfigParser.parseFile(configFile);
+    } catch (ConfigParseException e) {
+      err = e;
+    }
+
+    assertNotNull(err);
+    assertTrue(err.getMessage().contains("Unrecognized language"));
+  }
+
+  @Test
+  public void testInvalidLanguageOut() throws Exception{
+    ConfigParseException err = null;
+    try {
+      File configFile = new File("testdata/invalid-language-out/plovr.json");
+      ConfigParser.parseFile(configFile);
+    } catch (ConfigParseException e) {
+      err = e;
+    }
+
+    assertNotNull(err);
+    assertTrue(err.getMessage().contains("Unrecognized language"));
   }
 }

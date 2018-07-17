@@ -12,6 +12,7 @@ import org.plovr.CompilationException;
 import org.plovr.CompileRequestHandler;
 import org.plovr.Config;
 import org.plovr.ConfigParser;
+import org.plovr.ConfigParseException;
 import org.plovr.CssHandler;
 import org.plovr.CssHandler.ErrorManager;
 import org.plovr.ModuleConfig;
@@ -50,20 +51,25 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
     }
 
     for (String configFile: arguments) {
-      Config.Builder builder = ConfigParser.createBuilderFromFile(new File(configFile));
-      if (options.getLanguage() != null) {
-        builder.setLanguage(options.getLanguage());
-      }
-      builder.setPrintConfig(options.getPrintConfig());
-      Config config = builder.build();
+      Config config;
       Compilation compilation;
       try {
+        Config.Builder builder = ConfigParser.createBuilderFromFile(new File(configFile));
+        if (options.getLanguage() != null) {
+          builder.setLanguage(options.getLanguage());
+        }
+        builder.setPrintConfig(options.getPrintConfig());
+        config = builder.build();
         compilation = Compilation.create(config);
         compilation.compile();
       } catch (CompilationException e) {
         e.print(System.err);
         return 1;
+      } catch (ConfigParseException e) {
+        e.print(System.err);
+        return 1;
       }
+
       boolean isSuccess = processResult(compilation, config, options.getSourceMapPath());
       if (!isSuccess) {
         return 1;
