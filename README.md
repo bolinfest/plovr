@@ -39,6 +39,30 @@ buck build plovr
 
 The output of the build will be in `buck-out/gen/plovr.jar`.
 
+### Building Plovr inside a Docker container
+
+If you want to build plovr without installing Buck on your local machine,
+we have a Docker container with Buck installed.
+
+The Plovr build is split into two Dockerfiles:
+
+- [Dockerfile](Dockerfile) builds and tests Plovr
+- [Dockerfile.base](Dockerfile.base) builds Buck and Plovr's dependencies
+
+To test:
+
+```
+docker build .
+```
+
+downloads the plovr-deps container from docker, adds Plovr source, and runs all the Plovr tests.
+
+If you want to build `plovr-deps` yourself:
+
+```
+docker build -t nicks/plovr-deps -f Dockerfile.base .
+```
+
 ### To Upgrade Closure Library
 
 To upgrade one of Closure Library, go to the official repo and find the SHA digest
