@@ -63,12 +63,12 @@ goog.require('goog.asserts');
 goog.dom.asserts.assertIsLocation = function(o) {
   if (goog.asserts.ENABLE_ASSERTS) {
     var win = goog.dom.asserts.getWindow_(o);
-    if (typeof win.Location != 'undefined' &&
-        typeof win.Element != 'undefined') {
-      goog.asserts.assert(
-          o && (o instanceof win.Location || !(o instanceof win.Element)),
-          'Argument is not a Location (or a non-Element mock); got: %s',
-          goog.dom.asserts.debugStringForType_(o));
+    if (win) {
+      if (!o || (!(o instanceof win.Location) && o instanceof win.Element)) {
+        goog.asserts.fail(
+            'Argument is not a Location (or a non-Element mock); got: %s',
+            goog.dom.asserts.debugStringForType_(o));
+      }
     }
   }
   return /** @type {!Location} */ (o);
@@ -100,15 +100,15 @@ goog.dom.asserts.assertIsLocation = function(o) {
 goog.dom.asserts.assertIsElementType_ = function(o, typename) {
   if (goog.asserts.ENABLE_ASSERTS) {
     var win = goog.dom.asserts.getWindow_(o);
-    if (typeof win[typename] != 'undefined' &&
-        typeof win.Location != 'undefined' &&
-        typeof win.Element != 'undefined') {
-      goog.asserts.assert(
-          o &&
-              (o instanceof win[typename] ||
-               !((o instanceof win.Location) || (o instanceof win.Element))),
-          'Argument is not a %s (or a non-Element, non-Location mock); got: %s',
-          typename, goog.dom.asserts.debugStringForType_(o));
+    if (win && typeof win[typename] != 'undefined') {
+      if (!o ||
+          (!(o instanceof win[typename]) &&
+           (o instanceof win.Location || o instanceof win.Element))) {
+        goog.asserts.fail(
+            'Argument is not a %s (or a non-Element, non-Location mock); ' +
+                'got: %s',
+            typename, goog.dom.asserts.debugStringForType_(o));
+      }
     }
   }
   return /** @type {!Element} */ (o);
@@ -172,6 +172,20 @@ goog.dom.asserts.assertIsHTMLImageElement = function(o) {
 };
 
 /**
+ * Asserts that a given object is a HTMLAudioElement.
+ *
+ * To permit this assertion to pass in the context of tests where elements might
+ * be mocked, also accepts objects that are not a subtype of Element.
+ *
+ * @param {?Object} o The object whose type to assert.
+ * @return {!HTMLAudioElement}
+ */
+goog.dom.asserts.assertIsHTMLAudioElement = function(o) {
+  return /** @type {!HTMLAudioElement} */ (
+      goog.dom.asserts.assertIsElementType_(o, 'HTMLAudioElement'));
+};
+
+/**
  * Asserts that a given object is a HTMLVideoElement.
  *
  * To permit this assertion to pass in the context of tests where elements might
@@ -197,6 +211,34 @@ goog.dom.asserts.assertIsHTMLVideoElement = function(o) {
 goog.dom.asserts.assertIsHTMLInputElement = function(o) {
   return /** @type {!HTMLInputElement} */ (
       goog.dom.asserts.assertIsElementType_(o, 'HTMLInputElement'));
+};
+
+/**
+ * Asserts that a given object is a HTMLTextAreaElement.
+ *
+ * To permit this assertion to pass in the context of tests where elements might
+ * be mocked, also accepts objects that are not a subtype of Element.
+ *
+ * @param {?Object} o The object whose type to assert.
+ * @return {!HTMLTextAreaElement}
+ */
+goog.dom.asserts.assertIsHTMLTextAreaElement = function(o) {
+  return /** @type {!HTMLTextAreaElement} */ (
+      goog.dom.asserts.assertIsElementType_(o, 'HTMLTextAreaElement'));
+};
+
+/**
+ * Asserts that a given object is a HTMLCanvasElement.
+ *
+ * To permit this assertion to pass in the context of tests where elements might
+ * be mocked, also accepts objects that are not a subtype of Element.
+ *
+ * @param {?Object} o The object whose type to assert.
+ * @return {!HTMLCanvasElement}
+ */
+goog.dom.asserts.assertIsHTMLCanvasElement = function(o) {
+  return /** @type {!HTMLCanvasElement} */ (
+      goog.dom.asserts.assertIsElementType_(o, 'HTMLCanvasElement'));
 };
 
 /**
@@ -292,8 +334,12 @@ goog.dom.asserts.assertIsHTMLScriptElement = function(o) {
  */
 goog.dom.asserts.debugStringForType_ = function(value) {
   if (goog.isObject(value)) {
-    return value.constructor.displayName || value.constructor.name ||
-        Object.prototype.toString.call(value);
+    try {
+      return value.constructor.displayName || value.constructor.name ||
+          Object.prototype.toString.call(value);
+    } catch (e) {
+      return '<object could not be stringified>';
+    }
   } else {
     return value === undefined ? 'undefined' :
                                  value === null ? 'null' : typeof value;
@@ -303,12 +349,24 @@ goog.dom.asserts.debugStringForType_ = function(value) {
 /**
  * Gets window of element.
  * @param {?Object} o
- * @return {!Window}
+ * @return {?Window}
  * @private
  * @suppress {strictMissingProperties} ownerDocument not defined on Object
  */
 goog.dom.asserts.getWindow_ = function(o) {
-  var doc = o && o.ownerDocument;
-  var win = doc && /** @type {?Window} */ (doc.defaultView || doc.parentWindow);
-  return win || /** @type {!Window} */ (goog.global);
+  try {
+    var doc = o && o.ownerDocument;
+    // This can throw “Blocked a frame with origin "chrome-extension://..." from
+    // accessing a cross-origin frame” in Chrome extension.
+    var win =
+        doc && /** @type {?Window} */ (doc.defaultView || doc.parentWindow);
+    win = win || /** @type {!Window} */ (goog.global);
+    // This can throw “Permission denied to access property "Element" on
+    // cross-origin object”.
+    if (win.Element && win.Location) {
+      return win;
+    }
+  } catch (ex) {
+  }
+  return null;
 };

@@ -35,6 +35,7 @@ requirement: {
   error_message: 'Only Error or Error subclass objects may be thrown. See https://google.github.io/closure-library/develop/conformance_rules.html#throwOfNonErrorTypes'
 
   whitelist_regexp: '.+/closure/goog/storage/'  # throws numbers as part of its api
+  whitelist_regexp: '.+/closure/goog/testing/mock.js'  # throws Object in $recordAndThrow
 }
 
 requirement: {
@@ -43,7 +44,6 @@ requirement: {
   java_class: 'com.google.javascript.jscomp.ConformanceRules$BanGlobalVars'
   error_message: 'Global declarations are not allowed. See https://google.github.io/closure-library/develop/conformance_rules.html#globalVars'
 
-  whitelist: 'javascript/apps/xid/xid.js' # global 'xid'
   whitelist_regexp: '.+/closure/goog/base.js' # global 'goog'
   whitelist_regexp: '.+/closure/goog/labs/testing/' # global matchers, etc
   whitelist_regexp: '.+/closure/goog/locale/locale.js' # dumb api
@@ -69,8 +69,6 @@ requirement: {
   whitelist_regexp: '.+/closure/goog/testing/'
   whitelist_regexp: '.+/closure/goog/ui/editor/bubble.js'
   whitelist_regexp: '.+/closure/goog/ui/editor/toolbarcontroller.js'
-  whitelist: 'javascript/jsaction/actionflow.js'
-  whitelist: 'javascript/jfk/activityindicator/activityindicator.js' # Compiler bug? Line 193
 }
 
 ### Browser tech requirements ###
@@ -111,6 +109,7 @@ requirement: {
   value: 'goog.globalEval'
 
   whitelist_regexp: '.+/closure/goog/base.js' # goog.module loading in uncompiled code.
+  whitelist_regexp: '.+/closure/goog/goog.js' # Forwards goog.globalEval
   whitelist_regexp: '.+/closure/goog/debug/errorhandler.js' # wraps setTimeout and similar functions
   whitelist_regexp: '.+/closure/goog/json/json.js' # used in goog.json.parse
   whitelist_regexp: '.+/closure/goog/module/loader.js'
@@ -227,7 +226,6 @@ requirement: {
   value: 'iframe'
 
   whitelist_regexp: '.+/closure/goog/async/nexttick.js'
-  whitelist: 'javascript/timing/tail.js'
 }
 
 requirement: {
@@ -486,43 +484,6 @@ requirement: {
 # These rules allow projects to have compile-time errors for legacyconversions
 # functions and to progressively move away from them by using the whitelist.
 
-requirement: {
-  rule_id: 'closure:legacyHtml'
-  type: BANNED_NAME
-  error_message: 'goog.html.legacyconversions are not allowed. See https://google.github.io/closure-library/develop/conformance_rules.html#legacyApis for details.'
-
-  value: 'goog.html.legacyconversions'
-
-  whitelist_regexp: '.+/closure/goog/html/legacyconversions.js'
-
-  whitelist_regexp: '.+/closure/goog/datasource/jsondatasource.js'
-  whitelist_regexp: '.+/closure/goog/module/loader.js'
-  whitelist_regexp: '.+/closure/goog/soy/soy.js'
-}
-
-requirement: {
-  rule_id: 'closure:soyDeprecatedAutoescaping'
-  type: RESTRICTED_NAME_CALL
-  # This allows only call sites passing strict templates (which return SanitizedContent) and not non-strict templates (which return string).
-  error_message: 'Soy may be rendered only from templates with strict autoescaping. See https://google.github.io/closure-library/develop/conformance_rules.html#soyDeprecatedAutoescaping'
-
-  value: 'goog.soy.renderAsElement:function(function(...?): goog.soy.data.SanitizedContent, ...?)'
-  value: 'goog.soy.renderAsFragment:function(function(...?): goog.soy.data.SanitizedContent, ...?)'
-  value: 'goog.soy.renderElement:function(Element, function(...?): goog.soy.data.SanitizedContent, ...?)'
-
-  whitelist_regexp: '.+/closure/goog/soy/renderer.js'
-}
-
-requirement: {
-  rule_id: 'closure:soyRendererDeprecatedAutoescaping'
-  type: RESTRICTED_METHOD_CALL
-  error_message: 'Soy may be rendered only from templates with strict autoescaping. See https://google.github.io/closure-library/develop/conformance_rules.html#soyDeprecatedAutoescaping'
-
-  value: 'goog.soy.Renderer.prototype.renderAsElement:function(function(...?): goog.soy.data.SanitizedContent, ...?)'
-  value: 'goog.soy.Renderer.prototype.renderAsFragment:function(function(...?): goog.soy.data.SanitizedContent, ...?)'
-  value: 'goog.soy.Renderer.prototype.renderElement:function(Element, function(...?): goog.soy.data.SanitizedContent, ...?)'
-}
-
 
 
 ### Closure library restrictions ###
@@ -536,7 +497,6 @@ requirement: {
 
   whitelist_regexp: '.+/closure/goog/debug/'
   whitelist_regexp: '.+/closure/goog/log/'
-  whitelist: 'javascript/apps/chat/'
 }
 
 requirement: {

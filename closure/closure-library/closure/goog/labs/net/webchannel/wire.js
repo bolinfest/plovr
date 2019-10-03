@@ -33,7 +33,7 @@ goog.labs.net.webChannel.Wire = function() {};
 
 
 goog.scope(function() {
-var Wire = goog.labs.net.webChannel.Wire;
+const Wire = goog.labs.net.webChannel.Wire;
 
 
 /**
@@ -43,6 +43,13 @@ var Wire = goog.labs.net.webChannel.Wire;
  * @type {number}
  */
 Wire.LATEST_CHANNEL_VERSION = 8;
+
+
+/**
+ * The JSON field key for the raw data wrapper object.
+ * @type {string}
+ */
+Wire.RAW_DATA_KEY = '__data__';
 
 
 
@@ -72,5 +79,21 @@ Wire.QueuedMap = function(mapId, map, opt_context) {
    * @type {Object}
    */
   this.context = opt_context || null;
+};
+
+
+/**
+ * @return {number|undefined} the size of the raw JSON message or
+ * undefined if the message is not encoded as a raw JSON message
+ */
+Wire.QueuedMap.prototype.getRawDataSize = function() {
+  if (Wire.RAW_DATA_KEY in this.map) {
+    const data = this.map[Wire.RAW_DATA_KEY];
+    if (typeof data === 'string') {
+      return data.length;
+    }
+  }
+
+  return undefined;
 };
 });  // goog.scope

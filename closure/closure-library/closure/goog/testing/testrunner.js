@@ -100,7 +100,7 @@ goog.testing.TestRunner = function() {
    * verify that the page was not reloaded.
    * @private {string}
    */
-  this.uniqueId_ = Math.random() + '-' +
+  this.uniqueId_ = ((Math.random() * 1e9) >>> 0) + '-' +
       window.location.pathname.replace(/.*\//, '').replace(/\.html.*$/, '');
 
   if (goog.userAgent.IE && !goog.userAgent.isVersionOrHigher(11)) {
@@ -362,6 +362,7 @@ goog.testing.TestRunner.prototype.onComplete_ = function() {
     if (el == null) {
       el = goog.dom.createElement(goog.dom.TagName.DIV);
       el.id = goog.testing.TestRunner.TEST_LOG_ID;
+      el.dir = 'ltr';
       document.body.appendChild(el);
     }
     this.logEl_ = el;
@@ -395,16 +396,24 @@ goog.testing.TestRunner.prototype.writeLog = function(log) {
     var line = lines[i];
     var color;
     var isPassed = /PASSED/.test(line);
+    var isSkipped = /SKIPPED/.test(line);
     var isFailOrError =
         /FAILED/.test(line) || /ERROR/.test(line) || /NO TESTS RUN/.test(line);
     if (isPassed) {
       color = 'darkgreen';
+    } else if (isSkipped) {
+      color = 'slategray';
     } else if (isFailOrError) {
       color = 'darkred';
     } else {
       color = '#333';
     }
     var div = goog.dom.createElement(goog.dom.TagName.DIV);
+    // Empty divs don't take up any space, use \n to take up space and preserve
+    // newlines when copying the logs.
+    if (line == '') {
+      line = '\n';
+    }
     if (line.substr(0, 2) == '> ') {
       // The stack trace may contain links so it has to be interpreted as HTML.
       div.innerHTML = line;

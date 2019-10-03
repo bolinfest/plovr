@@ -168,13 +168,13 @@ goog.net.ImageLoader.IMAGE_LOAD_EVENTS_ = [
  */
 goog.net.ImageLoader.prototype.addImage = function(
     id, image, opt_corsRequestType) {
-  var src = goog.isString(image) ? image : image.src;
+  var src = (typeof image === 'string') ? image : image.src;
   if (src) {
     // For now, we just store the source URL for the image.
     this.imageIdToRequestMap_[id] = {
       src: src,
-      corsRequestType: goog.isDef(opt_corsRequestType) ? opt_corsRequestType :
-                                                         null
+      corsRequestType: opt_corsRequestType !== undefined ? opt_corsRequestType :
+                                                           null
     };
   }
 };
@@ -267,6 +267,7 @@ goog.net.ImageLoader.prototype.loadImage_ = function(imageRequest, id) {
  * Handles net events (READY_STATE_CHANGE, LOAD, ABORT, and ERROR).
  * @param {goog.events.Event} evt The network event to handle.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.net.ImageLoader.prototype.onNetworkEvent_ = function(evt) {
   var image = /** @type {Element} */ (evt.currentTarget);
