@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # Set prog to be the full path of the script that's running, including
 # following symlinks. Set progDir to be its directory. Set progName
