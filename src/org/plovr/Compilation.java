@@ -17,7 +17,6 @@ import org.plovr.io.Streams;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Strings;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -27,9 +26,7 @@ import com.google.common.io.Closeables;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.Compiler;
-import com.google.javascript.jscomp.ErrorManager;
 import com.google.javascript.jscomp.GoogleJsMessageIdGenerator;
 import com.google.javascript.jscomp.JsMessage;
 import com.google.javascript.jscomp.JsMessageExtractor;
@@ -533,8 +530,8 @@ public final class Compilation {
     return normalizeErrors(result.warnings, compiler);
   }
 
-  private static List<CompilationError> normalizeErrors(JSError[] errors,
-      SourceExcerptProvider sourceExcerptProvider) {
+  private static List<CompilationError> normalizeErrors(com.google.common.collect.ImmutableList<JSError>errors,
+                                                        SourceExcerptProvider sourceExcerptProvider) {
     List<CompilationError> compilationErrors = Lists.newLinkedList();
     for (JSError error : errors) {
       compilationErrors.add(new CompilationError(error, sourceExcerptProvider));

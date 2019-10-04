@@ -1,6 +1,7 @@
 package org.plovr;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.LightweightMessageFormatter;
@@ -24,7 +25,10 @@ final class CompilationError {
     this.sourceExcerptProvider = sourceExcerptProvider;
   }
 
-  String getSourceName() {
+    public CompilationError(ImmutableList<JSError> error, SourceExcerptProvider sourceExcerptProvider) {
+    }
+
+    String getSourceName() {
     return jsError.sourceName;
   }
 
