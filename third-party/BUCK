@@ -255,9 +255,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.javascript-closure-compiler-jar',
-  out = 'com.google.javascript-closure-compiler-jar-v20190929.jar',
-  url = 'mvn:com.google.javascript:closure-compiler:jar:v20190929',
-  sha1 = '693d096c805f5ab615957445038919adec11bf50',
+  out = 'com.google.javascript-closure-compiler-jar-v20181125.jar',
+  url = 'mvn:com.google.javascript:closure-compiler:jar:v20181125',
+  sha1 = '1d13e93106574b51f361d2e73b6e0ecf345d2304',
 )
 
 prebuilt_jar(
@@ -267,9 +267,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.javascript-closure-compiler-externs-jar',
-  out = 'com.google.javascript-closure-compiler-externs-jar-v20190929.jar',
-  url = 'mvn:com.google.javascript:closure-compiler-externs:jar:v20190929',
-  sha1 = '9fb7cc59b057efc5dcd98f16630fd65d371ac383',
+  out = 'com.google.javascript-closure-compiler-externs-jar-v20181125.jar',
+  url = 'mvn:com.google.javascript:closure-compiler-externs:jar:v20181125',
+  sha1 = '6c7839867a7ee53173d69be31c70b3aa012fb90a',
 )
 
 prebuilt_jar(
