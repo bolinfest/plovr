@@ -25,7 +25,9 @@ final class CompilationError {
     this.sourceExcerptProvider = sourceExcerptProvider;
   }
 
-    public CompilationError(ImmutableList<JSError> error, SourceExcerptProvider sourceExcerptProvider) {
+    public CompilationError(ImmutableList<JSError> error, SourceExcerptProvider sourceExcerptProvider, JSError jsError, SourceExcerptProvider sourceExcerptProvider1) {
+      this.jsError = jsError;
+      this.sourceExcerptProvider = sourceExcerptProvider1;
     }
 
     String getSourceName() {

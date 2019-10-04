@@ -10,18 +10,16 @@ import com.google.javascript.jscomp.DiagnosticType;
 
 public class PlovrDiagnosticGroups extends DiagnosticGroups {
 
+  private static Map<String, DiagnosticGroup> groupsByName;
+
   private static class AbsurdHackForDiagnosticGroups extends DiagnosticGroups {
-    @Override
-    public Map<String, DiagnosticGroup> getRegisteredGroups() {
-      return super.getRegisteredGroups();
+    public static Map<String, DiagnosticGroup> getRegisteredGroups() {
+      return DiagnosticGroups.getRegisteredGroups();
     }
   }
 
   private final static Map<String, DiagnosticGroup> globalGroupsByName =
       new AbsurdHackForDiagnosticGroups().getRegisteredGroups();
-
-  private final Map<String, DiagnosticGroup> groupsByName =
-    Maps.newHashMap();
 
   public PlovrDiagnosticGroups() {
     groupsByName.putAll(globalGroupsByName);
@@ -56,8 +54,8 @@ public class PlovrDiagnosticGroups extends DiagnosticGroups {
     return group;
   }
 
-  @Override
-  public Map<String, DiagnosticGroup> getRegisteredGroups() {
+
+  public static Map<String, DiagnosticGroup> getRegisteredGroups() {
     return ImmutableMap.copyOf(groupsByName);
   }
 
