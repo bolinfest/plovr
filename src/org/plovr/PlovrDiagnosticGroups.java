@@ -1,16 +1,14 @@
 package org.plovr;
 
-import java.util.Map;
-
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.DiagnosticGroup;
 import com.google.javascript.jscomp.DiagnosticGroups;
 import com.google.javascript.jscomp.DiagnosticType;
 
-public class PlovrDiagnosticGroups extends DiagnosticGroups {
+import java.util.Map;
 
-  private static Map<String, DiagnosticGroup> groupsByName;
+public class PlovrDiagnosticGroups extends DiagnosticGroups {
 
   private static class AbsurdHackForDiagnosticGroups extends DiagnosticGroups {
     public static Map<String, DiagnosticGroup> getRegisteredGroups() {
@@ -20,6 +18,8 @@ public class PlovrDiagnosticGroups extends DiagnosticGroups {
 
   private final static Map<String, DiagnosticGroup> globalGroupsByName =
       new AbsurdHackForDiagnosticGroups().getRegisteredGroups();
+
+  private static Map<String, DiagnosticGroup> groupsByName = Maps.newHashMap();
 
   public PlovrDiagnosticGroups() {
     groupsByName.putAll(globalGroupsByName);
