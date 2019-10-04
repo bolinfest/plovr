@@ -32,6 +32,7 @@ java_library(
     ':com.google.javascript-closure-compiler-externs-jar',
     ':com.google.errorprone-error_prone_annotations-jar',
     ':com.google.jsinterop-jsinterop-annotations-jar',
+    ':com.google.re2j-re2j-jar',
     ':org.seleniumhq.selenium-selenium-java-jar',
     ':org.seleniumhq.selenium-selenium-android-driver-jar',
     ':org.seleniumhq.selenium-selenium-remote-driver-jar',
@@ -254,9 +255,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.javascript-closure-compiler-jar',
-  out = 'com.google.javascript-closure-compiler-jar-v20190325.jar',
-  url = 'mvn:com.google.javascript:closure-compiler:jar:v20190325',
-  sha1 = '626b9ab94058adffaee259004b5ba8be5dc88107',
+  out = 'com.google.javascript-closure-compiler-jar-v20190929.jar',
+  url = 'mvn:com.google.javascript:closure-compiler:jar:v20190929',
+  sha1 = '693d096c805f5ab615957445038919adec11bf50',
 )
 
 prebuilt_jar(
@@ -266,9 +267,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.javascript-closure-compiler-externs-jar',
-  out = 'com.google.javascript-closure-compiler-externs-jar-v20190325.jar',
-  url = 'mvn:com.google.javascript:closure-compiler-externs:jar:v20190325',
-  sha1 = '410c1ae0585d36fbd12503b99b783f692c455519',
+  out = 'com.google.javascript-closure-compiler-externs-jar-v20190929.jar',
+  url = 'mvn:com.google.javascript:closure-compiler-externs:jar:v20190929',
+  sha1 = '9fb7cc59b057efc5dcd98f16630fd65d371ac383',
 )
 
 prebuilt_jar(
@@ -293,6 +294,18 @@ remote_file(
   out = 'com.google.protobuf-protobuf-java-jar-3.3.0.jar',
   url = 'mvn:com.google.protobuf:protobuf-java:jar:3.3.0',
   sha1 = '9f301d1a27501b1afcb2ed16aad428337dabf9e4',
+)
+
+prebuilt_jar(
+  name = 'com.google.re2j-re2j-jar',
+  binary_jar = ':remote-com.google.re2j-re2j-jar',
+)
+
+remote_file(
+  name = 'remote-com.google.re2j-re2j-jar',
+  out = 'com.google.re2j-re2j-jar-1.3.jar',
+  url = 'mvn:com.google.re2j:re2j:jar:1.3',
+  sha1 = 'dc7de2b32fa8cc569ab44fb849abadbbc6983b91',
 )
 
 prebuilt_jar(
