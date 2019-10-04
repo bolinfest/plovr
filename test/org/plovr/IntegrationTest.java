@@ -17,10 +17,4 @@ public class IntegrationTest {
   public void testEqualResourceSubpaths() {
      PlovrRunner.run(ImmutableList.of("build", "testdata/name-collision/config.js"));
   }
-
-  /** @see https://github.com/bolinfest/plovr/issues/131 */
-  @Test
-  public void testExtractUnderstandsES6() {
-     PlovrRunner.run(ImmutableList.of("extract", "testdata/issue131/plovr.json"));
-  }
 }

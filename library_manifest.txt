@@ -17,6 +17,7 @@ async/workqueue.js
 base.js
 bootstrap/nodejs.js
 bootstrap/webworkers.js
+collections/sets.js
 color/alpha.js
 color/color.js
 color/names.js
@@ -60,7 +61,6 @@ date/daterange.js
 date/duration.js
 date/relative.js
 date/relativecommontests.js
-date/relativewithplurals.js
 date/utcdatetime.js
 db/cursor.js
 db/db.js
@@ -179,6 +179,7 @@ editor/icontent.js
 editor/link.js
 editor/node.js
 editor/plugin.js
+editor/plugin_impl.js
 editor/plugins/abstractbubbleplugin.js
 editor/plugins/abstractdialogplugin.js
 editor/plugins/abstracttabhandler.js
@@ -266,6 +267,7 @@ fx/easing.js
 fx/fx.js
 fx/transition.js
 fx/transitionbase.js
+goog.js
 graphics/abstractgraphics.js
 graphics/affinetransform.js
 graphics/canvaselement.js
@@ -316,8 +318,10 @@ html/safestylesheet.js
 html/safeurl.js
 html/safeurl_test_vectors.js
 html/sanitizer/attributewhitelist.js
+html/sanitizer/csspropertysanitizer.js
 html/sanitizer/csssanitizer.js
 html/sanitizer/elementweakmap.js
+html/sanitizer/html_test_vectors.js
 html/sanitizer/htmlsanitizer.js
 html/sanitizer/noclobber.js
 html/sanitizer/safedomtreeprocessor.js
@@ -328,6 +332,7 @@ html/silverlight.js
 html/testing.js
 html/textextractor.js
 html/trustedresourceurl.js
+html/trustedtypes.js
 html/uncheckedconversions.js
 html/utils.js
 i18n/bidi.js
@@ -351,6 +356,7 @@ i18n/datetimepatternsext.js
 i18n/datetimesymbols.js
 i18n/datetimesymbolsext.js
 i18n/graphemebreak.js
+i18n/localefeature.js
 i18n/messageformat.js
 i18n/mime.js
 i18n/numberformat.js
@@ -358,6 +364,9 @@ i18n/numberformatsymbols.js
 i18n/numberformatsymbolsext.js
 i18n/ordinalrules.js
 i18n/pluralrules.js
+i18n/relativedatetimeformat.js
+i18n/relativedatetimesymbols.js
+i18n/relativedatetimesymbolsext.js
 i18n/timezone.js
 i18n/uchar.js
 i18n/uchar/localnamefetcher.js
@@ -369,8 +378,10 @@ iter/iter.js
 json/hybrid.js
 json/json.js
 json/json_perf.js
+json/jsonable.js
 json/nativejsonprocessor.js
 json/processor.js
+labs/collections/iterables.js
 labs/dom/pagevisibilitymonitor.js
 labs/events/nondisposableeventtarget.js
 labs/events/touch.js
@@ -378,8 +389,8 @@ labs/format/csv.js
 labs/i18n/listformat.js
 labs/i18n/listsymbols.js
 labs/i18n/listsymbolsext.js
-labs/iterable/iterable.js
 labs/mock/mock.js
+labs/mock/timeoutmode.js
 labs/mock/verificationmode.js
 labs/net/image.js
 labs/net/webchannel.js
@@ -539,11 +550,8 @@ net/xmlhttpfactory.js
 net/xpc/crosspagechannel.js
 net/xpc/crosspagechannelrole.js
 net/xpc/directtransport.js
-net/xpc/frameelementmethodtransport.js
 net/xpc/iframepollingtransport.js
-net/xpc/iframerelaytransport.js
 net/xpc/nativemessagingtransport.js
-net/xpc/nixtransport.js
 net/xpc/relay.js
 net/xpc/transport.js
 net/xpc/xpc.js
@@ -557,6 +565,7 @@ positioning/menuanchoredposition.js
 positioning/positioning.js
 positioning/viewportclientposition.js
 positioning/viewportposition.js
+promise/nativeresolver.js
 promise/promise.js
 promise/resolver.js
 promise/testsuiteadapter.js
@@ -612,7 +621,19 @@ storage/mechanism/prefixedmechanism.js
 storage/richstorage.js
 storage/storage.js
 storage/storagetester.js
+streams/defines.js
+streams/full.js
+streams/full_impl.js
+streams/full_native_impl.js
+streams/full_test_cases.js
+streams/full_types.js
+streams/lite.js
+streams/lite_impl.js
+streams/lite_native_impl.js
+streams/lite_test_cases.js
+streams/lite_types.js
 string/const.js
+string/internal.js
 string/linkify.js
 string/newlines.js
 string/parser.js
@@ -818,6 +839,7 @@ ui/imagelessbuttonrenderer.js
 ui/imagelessmenubuttonrenderer.js
 ui/inputdatepicker.js
 ui/itemevent.js
+ui/keyboardeventdata.js
 ui/keyboardshortcuthandler.js
 ui/labelinput.js
 ui/linkbuttonrenderer.js
@@ -880,6 +902,7 @@ ui/style/app/menubuttonrenderer.js
 ui/style/app/primaryactionbuttonrenderer.js
 ui/submenu.js
 ui/submenurenderer.js
+ui/synthetickeyboardevent.js
 ui/tab.js
 ui/tabbar.js
 ui/tabbarrenderer.js

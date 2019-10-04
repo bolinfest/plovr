@@ -20,14 +20,16 @@ java_library(
     '//tools/imports:revs',
     ':third-party-support-libs',
     '//third-party:COMPILE',
-    '//closure/closure-library:closure-library',
+    '//closure/closure-library:closure-library'
   ],
 )
 
 java_library(
   name = 'third-party-support-libs',
   srcs = [],
-  resources = ['//third-party/javascript:soyutils_usegoog.js'],
+  resources = [
+    '//third-party/javascript:soyutils_usegoog.js'
+    ],
   resources_root = './third-party')
 
 java_test(

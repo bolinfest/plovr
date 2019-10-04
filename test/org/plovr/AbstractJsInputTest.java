@@ -66,4 +66,29 @@ public class AbstractJsInputTest {
         ImmutableList.of("example.test.Config"),
         jsInputWithSpacesAroundArgument.getRequires());
   }
+
+  @Test
+  public void testGoogModule() {
+    AbstractJsInput jsInputGoogModule = new DummyAbstractJsInput(
+        "dummy.js",
+        "goog.module('example.test.Control');\r\n" +
+        "var Control = goog.require('example.test.Config');\r\n");
+    assertEquals("Regex should thread goog.module as provide",
+        ImmutableList.of("example.test.Control"),
+        jsInputGoogModule.getProvides());
+    assertEquals("Regex should allow variable assignment with goog.require",
+        ImmutableList.of("example.test.Config"),
+        jsInputGoogModule.getRequires());
+  }
+
+  @Test
+  public void testIgnoreComments() {
+    AbstractJsInput jsInputComments = new DummyAbstractJsInput(
+        "dummy.js",
+        "goog.provide('example.test.ControlA');\r\n" +
+        "  // goog.provide('example.test.ControlB');\r\n");
+    assertEquals("Provides and requires should be ignored in comments",
+        ImmutableList.of("example.test.ControlA"),
+        jsInputComments.getProvides());
+  }
 }
