@@ -34,38 +34,40 @@ goog.require('goog.string');
 /**
  * @define {boolean} Whether we know at compile-time that the browser is IE.
  */
-goog.define('goog.userAgent.ASSUME_IE', false);
+goog.userAgent.ASSUME_IE = goog.define('goog.userAgent.ASSUME_IE', false);
 
 
 /**
  * @define {boolean} Whether we know at compile-time that the browser is EDGE.
  */
-goog.define('goog.userAgent.ASSUME_EDGE', false);
+goog.userAgent.ASSUME_EDGE = goog.define('goog.userAgent.ASSUME_EDGE', false);
 
 
 /**
  * @define {boolean} Whether we know at compile-time that the browser is GECKO.
  */
-goog.define('goog.userAgent.ASSUME_GECKO', false);
+goog.userAgent.ASSUME_GECKO = goog.define('goog.userAgent.ASSUME_GECKO', false);
 
 
 /**
  * @define {boolean} Whether we know at compile-time that the browser is WEBKIT.
  */
-goog.define('goog.userAgent.ASSUME_WEBKIT', false);
+goog.userAgent.ASSUME_WEBKIT =
+    goog.define('goog.userAgent.ASSUME_WEBKIT', false);
 
 
 /**
  * @define {boolean} Whether we know at compile-time that the browser is a
  *     mobile device running WebKit e.g. iPhone or Android.
  */
-goog.define('goog.userAgent.ASSUME_MOBILE_WEBKIT', false);
+goog.userAgent.ASSUME_MOBILE_WEBKIT =
+    goog.define('goog.userAgent.ASSUME_MOBILE_WEBKIT', false);
 
 
 /**
  * @define {boolean} Whether we know at compile-time that the browser is OPERA.
  */
-goog.define('goog.userAgent.ASSUME_OPERA', false);
+goog.userAgent.ASSUME_OPERA = goog.define('goog.userAgent.ASSUME_OPERA', false);
 
 
 /**
@@ -73,7 +75,8 @@ goog.define('goog.userAgent.ASSUME_OPERA', false);
  *     `goog.userAgent.isVersionOrHigher`
  *     function will return true for any version.
  */
-goog.define('goog.userAgent.ASSUME_ANY_VERSION', false);
+goog.userAgent.ASSUME_ANY_VERSION =
+    goog.define('goog.userAgent.ASSUME_ANY_VERSION', false);
 
 
 /**
@@ -233,52 +236,67 @@ goog.userAgent.PLATFORM = goog.userAgent.determinePlatform_();
  * @define {boolean} Whether the user agent is running on a Macintosh operating
  *     system.
  */
-goog.define('goog.userAgent.ASSUME_MAC', false);
+goog.userAgent.ASSUME_MAC = goog.define('goog.userAgent.ASSUME_MAC', false);
 
 
 /**
  * @define {boolean} Whether the user agent is running on a Windows operating
  *     system.
  */
-goog.define('goog.userAgent.ASSUME_WINDOWS', false);
+goog.userAgent.ASSUME_WINDOWS =
+    goog.define('goog.userAgent.ASSUME_WINDOWS', false);
 
 
 /**
  * @define {boolean} Whether the user agent is running on a Linux operating
  *     system.
  */
-goog.define('goog.userAgent.ASSUME_LINUX', false);
+goog.userAgent.ASSUME_LINUX = goog.define('goog.userAgent.ASSUME_LINUX', false);
 
 
 /**
  * @define {boolean} Whether the user agent is running on a X11 windowing
  *     system.
  */
-goog.define('goog.userAgent.ASSUME_X11', false);
+goog.userAgent.ASSUME_X11 = goog.define('goog.userAgent.ASSUME_X11', false);
 
 
 /**
  * @define {boolean} Whether the user agent is running on Android.
  */
-goog.define('goog.userAgent.ASSUME_ANDROID', false);
+goog.userAgent.ASSUME_ANDROID =
+    goog.define('goog.userAgent.ASSUME_ANDROID', false);
 
 
 /**
  * @define {boolean} Whether the user agent is running on an iPhone.
  */
-goog.define('goog.userAgent.ASSUME_IPHONE', false);
+goog.userAgent.ASSUME_IPHONE =
+    goog.define('goog.userAgent.ASSUME_IPHONE', false);
 
 
 /**
  * @define {boolean} Whether the user agent is running on an iPad.
  */
-goog.define('goog.userAgent.ASSUME_IPAD', false);
+goog.userAgent.ASSUME_IPAD = goog.define('goog.userAgent.ASSUME_IPAD', false);
 
 
 /**
  * @define {boolean} Whether the user agent is running on an iPod.
  */
-goog.define('goog.userAgent.ASSUME_IPOD', false);
+goog.userAgent.ASSUME_IPOD = goog.define('goog.userAgent.ASSUME_IPOD', false);
+
+
+/**
+ * @define {boolean} Whether the user agent is running on KaiOS.
+ */
+goog.userAgent.ASSUME_KAIOS = goog.define('goog.userAgent.ASSUME_KAIOS', false);
+
+/**
+ * @define {boolean} Whether the user agent is running on Go2Phone.
+ */
+goog.userAgent.ASSUME_GO2PHONE =
+    goog.define('goog.userAgent.ASSUME_GO2PHONE', false);
 
 
 /**
@@ -401,6 +419,21 @@ goog.userAgent.IOS = goog.userAgent.PLATFORM_KNOWN_ ?
     (goog.userAgent.ASSUME_IPHONE || goog.userAgent.ASSUME_IPAD ||
      goog.userAgent.ASSUME_IPOD) :
     goog.labs.userAgent.platform.isIos();
+
+/**
+ * Whether the user agent is running on KaiOS.
+ */
+goog.userAgent.KAIOS = goog.userAgent.PLATFORM_KNOWN_ ?
+    goog.userAgent.ASSUME_KAIOS :
+    goog.labs.userAgent.platform.isKaiOS();
+
+/**
+ * Whether the user agent is running on Go2Phone.
+ */
+goog.userAgent.GO2PHONE = goog.userAgent.PLATFORM_KNOWN_ ?
+    goog.userAgent.ASSUME_GO2PHONE :
+    goog.labs.userAgent.platform.isGo2Phone();
+
 
 /**
  * @return {string} The string that describes the version number of the user

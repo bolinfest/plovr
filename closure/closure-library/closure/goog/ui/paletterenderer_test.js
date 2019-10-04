@@ -36,7 +36,14 @@ var itemEls;
 var renderer;
 var palette;
 
-function setUp() {
+function setUp() {}
+
+function tearDown() {
+  palette.dispose();
+}
+
+/** @param {!Array<string>} items */
+function createPalette(items) {
   sandbox = goog.dom.getElement('sandbox');
   itemEls = goog.array.map(items, function(item, index, a) {
     return goog.dom.safeHtmlToNode(goog.html.testing.newSafeHtmlForTest(item));
@@ -46,11 +53,8 @@ function setUp() {
   palette.setSize(4, 1);
 }
 
-function tearDown() {
-  palette.dispose();
-}
-
 function testGridA11yRoles() {
+  createPalette(items);
   var grid = renderer.createDom(palette);
   assertEquals(goog.a11y.aria.Role.GRID, goog.a11y.aria.getRole(grid));
   var table = goog.dom.getElementsByTagName(goog.dom.TagName.TABLE, grid)[0];
@@ -61,6 +65,7 @@ function testGridA11yRoles() {
 }
 
 function testCellA11yLabels() {
+  createPalette(items);
   var grid = renderer.createDom(palette);
   var cells = goog.dom.getElementsByTagName(goog.dom.TagName.TD, grid);
 
@@ -79,6 +84,7 @@ function testCellA11yLabels() {
 }
 
 function testA11yActiveDescendant() {
+  createPalette(items);
   palette.render();
   var cells = goog.dom.getElementsByTagName(
       goog.dom.TagName.TD, palette.getElementStrict());
@@ -100,4 +106,87 @@ function testA11yActiveDescendant() {
       cells[1].id,
       goog.a11y.aria.getState(
           palette.getElementStrict(), goog.a11y.aria.State.ACTIVEDESCENDANT));
+}
+
+function testSetContentIncremental() {
+  var items = goog.array.repeat('<div class="item">item</div>', 6);
+  var itemEls = goog.array.map(items, function(item) {
+    return goog.dom.safeHtmlToNode(goog.html.testing.newSafeHtmlForTest(item));
+  });
+
+  createPalette([]);
+  palette.render();
+  var paletteEl = palette.getElementStrict();
+
+  var rows = goog.dom.getElementsByTagName(goog.dom.TagName.TR, paletteEl);
+  assertEquals(1, rows.length);
+  assertEquals(0, goog.dom.getElementsByClass('item', rows[0]).length);
+
+  palette.setContent(itemEls.slice(0, 1));
+  rows = goog.dom.getElementsByTagName(goog.dom.TagName.TR, paletteEl);
+  assertEquals(1, rows.length);
+  assertEquals(1, goog.dom.getElementsByClass('item', rows[0]).length);
+
+  palette.setContent(itemEls.slice(0, 3));
+  rows = goog.dom.getElementsByTagName(goog.dom.TagName.TR, paletteEl);
+  assertEquals(1, rows.length);
+  assertEquals(3, goog.dom.getElementsByClass('item', rows[0]).length);
+
+  palette.setContent(itemEls);
+  rows = goog.dom.getElementsByTagName(goog.dom.TagName.TR, paletteEl);
+  assertEquals(2, rows.length);
+  assertEquals(4, goog.dom.getElementsByClass('item', rows[0]).length);
+  assertEquals(2, goog.dom.getElementsByClass('item', rows[1]).length);
+}
+
+function testA11yLabelsSetContentIncremental() {
+  var itemEls = goog.array.map(items, function(item, index, a) {
+    return goog.dom.safeHtmlToNode(goog.html.testing.newSafeHtmlForTest(item));
+  });
+
+  createPalette([]);
+  palette.render();
+  var paletteEl = palette.getElementStrict();
+
+  palette.setContent(itemEls.slice(0, 1));
+  var cells = goog.dom.getElementsByTagName(goog.dom.TagName.TD, paletteEl);
+  assertEquals(4, cells.length);
+  assertEquals('label-0', goog.a11y.aria.getLabel(cells[0]));
+  assertEquals('', goog.a11y.aria.getLabel(cells[1]));
+  assertEquals('', goog.a11y.aria.getLabel(cells[2]));
+  assertEquals('', goog.a11y.aria.getLabel(cells[3]));
+
+  palette.setContent(itemEls);
+  cells = goog.dom.getElementsByTagName(goog.dom.TagName.TD, paletteEl);
+  assertEquals('label-0', goog.a11y.aria.getLabel(cells[0]));
+  assertEquals('title-1', goog.a11y.aria.getLabel(cells[1]));
+  assertEquals('label-2', goog.a11y.aria.getLabel(cells[2]));
+  assertEquals('child-title-3', goog.a11y.aria.getLabel(cells[3]));
+}
+
+function testA11yLabelsSetContentIncremental_ariaLabelUpdated() {
+  createPalette(items);
+  palette.render();
+  var paletteEl = palette.getElementStrict();
+  cells = goog.dom.getElementsByTagName(goog.dom.TagName.TD, paletteEl);
+  assertEquals('label-0', goog.a11y.aria.getLabel(cells[0]));
+  assertEquals('title-1', goog.a11y.aria.getLabel(cells[1]));
+  assertEquals('label-2', goog.a11y.aria.getLabel(cells[2]));
+  assertEquals('child-title-3', goog.a11y.aria.getLabel(cells[3]));
+
+  var newItems = [
+    '<div aria-label="newlabel-0"></div>', '<div title="newtitle-1"></div>',
+    '<div aria-label="newlabel-2" title="title-2"></div>',
+    '<div><span></span></div>'
+  ];
+  var newItemEls = goog.array.map(newItems, function(item, index, a) {
+    return goog.dom.safeHtmlToNode(goog.html.testing.newSafeHtmlForTest(item));
+  });
+
+  palette.setContent(newItemEls);
+
+  assertEquals('newlabel-0', goog.a11y.aria.getLabel(cells[0]));
+  assertEquals('newtitle-1', goog.a11y.aria.getLabel(cells[1]));
+  assertEquals('newlabel-2', goog.a11y.aria.getLabel(cells[2]));
+  assertEquals('', goog.a11y.aria.getLabel(cells[3]));
 }

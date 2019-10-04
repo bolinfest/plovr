@@ -14,6 +14,7 @@
 
 /**
  * @fileoverview Functions and objects for date representation and manipulation.
+ * @suppress {checkPrototypalTypes}
  *
  * @author eae@google.com (Emil A Eklund)
  */
@@ -228,7 +229,8 @@ goog.date.isSameYear = function(date, opt_now) {
 
 
 /**
- * Static function for week number calculation. ISO 8601 implementation.
+ * Static function for the day of the same week that determines the week number
+ * and year of week.
  *
  * @param {number} year Year part of date.
  * @param {number} month Month part of date (0-11).
@@ -237,9 +239,10 @@ goog.date.isSameYear = function(date, opt_now) {
  * @param {number=} opt_firstDayOfWeek First day of the week, defaults to
  *     Monday.
  *     Monday=0, Sunday=6.
- * @return {number} The week number (1-53).
+ * @return {number} the cutoff day of the same week in millis since epoch.
+ * @private
  */
-goog.date.getWeekNumber = function(
+goog.date.getCutOffSameWeek_ = function(
     year, month, date, opt_weekDay, opt_firstDayOfWeek) {
   var d = new Date(year, month, date);
 
@@ -261,16 +264,55 @@ goog.date.getWeekNumber = function(
   // Unix timestamp of the midnight of the cutoff day in the week of 'd'.
   // There might be +-1 hour shift in the result due to the daylight saving,
   // but it doesn't affect the year.
-  var cutoffSameWeek =
-      d.valueOf() + (cutoffpos - daypos) * goog.date.MS_PER_DAY;
+  return d.valueOf() + (cutoffpos - daypos) * goog.date.MS_PER_DAY;
+};
 
-  // Unix timestamp of January 1 in the year of 'cutoffSameWeek'.
+
+/**
+ * Static function for week number calculation. ISO 8601 implementation.
+ *
+ * @param {number} year Year part of date.
+ * @param {number} month Month part of date (0-11).
+ * @param {number} date Day part of date (1-31).
+ * @param {number=} opt_weekDay Cut off weekday, defaults to Thursday.
+ * @param {number=} opt_firstDayOfWeek First day of the week, defaults to
+ *     Monday.
+ *     Monday=0, Sunday=6.
+ * @return {number} The week number (1-53).
+ */
+goog.date.getWeekNumber = function(
+    year, month, date, opt_weekDay, opt_firstDayOfWeek) {
+  var cutoffSameWeek = goog.date.getCutOffSameWeek_(
+      year, month, date, opt_weekDay, opt_firstDayOfWeek);
+
+  // Unix timestamp of January 1 in the year of the week.
   var jan1 = new Date(new Date(cutoffSameWeek).getFullYear(), 0, 1).valueOf();
 
   // Number of week. The round() eliminates the effect of daylight saving.
   return Math.floor(
              Math.round((cutoffSameWeek - jan1) / goog.date.MS_PER_DAY) / 7) +
       1;
+};
+
+
+/**
+ * Static function for year of the week. ISO 8601 implementation.
+ *
+ * @param {number} year Year part of date.
+ * @param {number} month Month part of date (0-11).
+ * @param {number} date Day part of date (1-31).
+ * @param {number=} opt_weekDay Cut off weekday, defaults to Thursday.
+ * @param {number=} opt_firstDayOfWeek First day of the week, defaults to
+ *     Monday.
+ *     Monday=0, Sunday=6.
+ * @return {number} The four digit year of date.
+ */
+goog.date.getYearOfWeek = function(
+    year, month, date, opt_weekDay, opt_firstDayOfWeek) {
+  var cutoffSameWeek = goog.date.getCutOffSameWeek_(
+      year, month, date, opt_weekDay, opt_firstDayOfWeek);
+
+  return new Date(cutoffSameWeek).getFullYear();
 };
 
 
@@ -418,32 +460,57 @@ goog.date.setDateFromIso8601Week_ = function(d, week, dayOfWeek) {
  */
 goog.date.setIso8601TimeOnly_ = function(d, formatted) {
   // first strip timezone info from the end
-  var parts = formatted.match(goog.date.splitTimezoneStringRegex_);
+  var timezoneParts = formatted.match(goog.date.splitTimezoneStringRegex_);
 
-  var offset = 0;  // local time if no timezone info
-  if (parts) {
-    if (parts[0] != 'Z') {
-      offset = Number(parts[2]) * 60 + Number(parts[3]);
-      offset *= parts[1] == '-' ? 1 : -1;
+  var offsetMinutes;  // Offset from UTC if not local time
+  var formattedTime;  // The time components of the input string; no timezone.
+
+  if (timezoneParts) {
+    // Trim off the timezone characters.
+    formattedTime =
+        formatted.substring(0, formatted.length - timezoneParts[0].length);
+
+    // 'Z' indicates a UTC timestring.
+    if (timezoneParts[0] === 'Z') {
+      offsetMinutes = 0;
+    } else {
+      offsetMinutes = Number(timezoneParts[2]) * 60 + Number(timezoneParts[3]);
+      offsetMinutes *= (timezoneParts[1] == '-') ? 1 : -1;
     }
-    offset -= d.getTimezoneOffset();
-    formatted = formatted.substr(0, formatted.length - parts[0].length);
+  } else {
+    formattedTime = formatted;
   }
 
-  // then work out the time
-  parts = formatted.match(goog.date.splitTimeStringRegex_);
-  if (!parts) {
+  var timeParts = formattedTime.match(goog.date.splitTimeStringRegex_);
+  if (!timeParts) {
     return false;
   }
 
-  d.setHours(Number(parts[1]));
-  d.setMinutes(Number(parts[2]) || 0);
-  d.setSeconds(Number(parts[3]) || 0);
-  d.setMilliseconds(parts[4] ? Number(parts[4]) * 1000 : 0);
+  // We have to branch on local vs non-local times because we can't always
+  // calculate the correct UTC offset for the specified time. Specifically, the
+  // offset for daylight-savings time depends on the date being set. Therefore,
+  // when an offset is specified, we apply it verbatim.
+  if (timezoneParts) {
+    goog.asserts.assertNumber(offsetMinutes);
 
-  if (offset != 0) {
-    // adjust the date and time according to the specified timezone
-    d.setTime(d.getTime() + offset * 60000);
+    // Convert the date part into UTC. This is important because the local date
+    // can differ from the UTC date, and the date part of an ISO 8601 string is
+    // always set in terms of the local date.
+    var year = d.getYear();
+    var month = d.getMonth();
+    var day = d.getDate();
+    var hour = Number(timeParts[1]);
+    var minute = Number(timeParts[2]) || 0;
+    var second = Number(timeParts[3]) || 0;
+    var millisecond = timeParts[4] ? Number(timeParts[4]) * 1000 : 0;
+    var utc = Date.UTC(year, month, day, hour, minute, second, millisecond);
+
+    d.setTime(utc + offsetMinutes * 60000);
+  } else {
+    d.setHours(Number(timeParts[1]));
+    d.setMinutes(Number(timeParts[2]) || 0);
+    d.setSeconds(Number(timeParts[3]) || 0);
+    d.setMilliseconds(timeParts[4] ? Number(timeParts[4]) * 1000 : 0);
   }
 
   return true;
@@ -980,6 +1047,18 @@ goog.date.Date.prototype.getNumberOfDaysInMonth = function() {
  */
 goog.date.Date.prototype.getWeekNumber = function() {
   return goog.date.getWeekNumber(
+      this.getFullYear(), this.getMonth(), this.getDate(),
+      this.firstWeekCutOffDay_, this.firstDayOfWeek_);
+};
+
+
+/**
+ * Returns year in “Week of Year” based calendars in which the year transition
+ * occurs on a week boundary.
+ * @return {number} The four digit year in "Week of Year"
+ */
+goog.date.Date.prototype.getYearOfWeek = function() {
+  return goog.date.getYearOfWeek(
       this.getFullYear(), this.getMonth(), this.getDate(),
       this.firstWeekCutOffDay_, this.firstDayOfWeek_);
 };

@@ -105,7 +105,7 @@ goog.debug.ErrorReporter = function(
       /**
        * The internal error handler used to catch all errors.
        *
-       * @private {goog.debug.ErrorHandler}
+       * @private {?goog.debug.ErrorHandler}
        */
       this.errorHandler_ = null;
 
@@ -128,7 +128,8 @@ goog.inherits(goog.debug.ErrorReporter, goog.events.EventTarget);
  *     bringing in a lot of code from ErrorHandler and entryPointRegistry in
  *     compiled mode.
  */
-goog.define('goog.debug.ErrorReporter.ALLOW_AUTO_PROTECT', true);
+goog.debug.ErrorReporter.ALLOW_AUTO_PROTECT =
+    goog.define('goog.debug.ErrorReporter.ALLOW_AUTO_PROTECT', true);
 
 
 

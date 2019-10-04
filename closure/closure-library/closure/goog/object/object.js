@@ -464,7 +464,8 @@ goog.object.setIfUndefined = function(obj, key, value) {
  * object will not be changed and the function will not be called (the function
  * will be lazily evaluated -- only called if necessary).
  *
- * This function is particularly useful for use with a map used a as a cache.
+ * This function is particularly useful when used with an `Object` which is
+ * acting as a cache.
  *
  * @param {!Object<K,V>} obj The object to which to add the key-value pair.
  * @param {string} key The key to add.
@@ -600,7 +601,8 @@ goog.object.PROTOTYPE_FIELDS_ = [
  * @param {Object} target The object to modify. Existing properties will be
  *     overwritten if they are also present in one of the objects in
  *     `var_args`.
- * @param {...Object} var_args The objects from which values will be copied.
+ * @param {...(Object|null|undefined)} var_args The objects from which values
+ *     will be copied.
  */
 goog.object.extend = function(target, var_args) {
   var key, source;

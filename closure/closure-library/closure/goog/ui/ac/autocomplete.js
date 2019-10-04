@@ -139,7 +139,7 @@ goog.ui.ac.AutoComplete = function(matcher, renderer, selectionHandler) {
 
   /**
    * The target HTML node for displaying.
-   * @type {Element}
+   * @type {?Element}
    * @protected
    * @suppress {underscore|visibility}
    */
@@ -642,7 +642,9 @@ goog.ui.ac.AutoComplete.prototype.selectHilited = function() {
   var index = this.getIndexOfId(this.hiliteId_);
   if (index != -1) {
     var selectedRow = this.rows_[index];
-    var suppressUpdate = this.selectionHandler_.selectRow(selectedRow);
+    var suppressUpdate =
+        /** @type {!goog.ui.ac.InputHandler} */ (this.selectionHandler_)
+            .selectRow(selectedRow);
     if (this.triggerSuggestionsOnUpdate_) {
       this.token_ = null;
       this.dismissOnDelay();

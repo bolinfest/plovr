@@ -27,6 +27,7 @@ goog.require('goog.testing.MockRandom');
 goog.require('goog.testing.PropertyReplacer');
 goog.require('goog.testing.TestCase');
 goog.require('goog.testing.jsunit');
+goog.require('goog.userAgent');
 
 
 // Dual of fail().
@@ -321,9 +322,11 @@ function testTestCaseReturningPromise_GoogPromiseTimeout() {
     assertContains(
         'goog.testing.TestCase.getActiveTestCase().promiseTimeout',
         result.errors[0].toString());
-    assertTrue(
-        elapsedTime >= testCase.promiseTimeout - 100 &&
-        elapsedTime <= testCase.promiseTimeout + 100);
+    if (!goog.userAgent.EDGE_OR_IE) {
+      assertTrue(
+          `Expected ${elapsedTime} to be >= ${testCase.promiseTimeout}.`,
+          elapsedTime >= testCase.promiseTimeout);
+    }
   });
 }
 
@@ -368,9 +371,11 @@ function testTestCaseReturningPromise_PromiseTimeout() {
     assertContains(
         'goog.testing.TestCase.getActiveTestCase().promiseTimeout',
         result.errors[0].toString());
-    assertTrue(
-        elapsedTime >= testCase.promiseTimeout - 100 &&
-        elapsedTime <= testCase.promiseTimeout + 100);
+    if (!goog.userAgent.EDGE_OR_IE) {
+      assertTrue(
+          `Expected ${elapsedTime} to be >= ${testCase.promiseTimeout}.`,
+          elapsedTime >= testCase.promiseTimeout);
+    }
   });
 }
 
@@ -689,6 +694,42 @@ function testTearDownReturnsPromiseThatTimesOut() {
   });
 }
 
+function testTearDown_complexJsUnitExceptionIssue() {  // http://b/110796519
+  var testCase = new goog.testing.TestCase();
+
+  var getTestCase = goog.functions.constant(testCase);
+  var stubs = new goog.testing.PropertyReplacer();
+  stubs.replace(window, '_getCurrentTestCase', getTestCase);
+  stubs.replace(goog.testing.TestCase, 'getActiveTestCase', getTestCase);
+
+  testCase.tearDown = function() {
+    try {
+      fail('First error');
+    } catch (e1) {
+      try {
+        fail('Second error');
+      } catch (e2) {
+      }
+      throw e1;
+    }
+  };
+  testCase.addNewTest('test', ok);
+  return testCase.runTestsReturningPromise().then(function(result) {
+    assertFalse(testCase.isSuccess());
+    assertTrue(result.complete);
+
+    assertNotEquals(
+        'Expect the failure to be associated with the test.', 0,
+        result.resultsByName['test'].length);
+
+    assertEquals(2, result.errors.length);
+    assertContains('tearDown', result.errors[0].toString());
+
+    assertContains('First error', result.errors[1].toString());
+    assertContains('Second error', result.errors[0].toString());
+  });
+}
+
 function testFailOnUnreportedAsserts_EnabledByDefault() {
   assertTrue(new goog.testing.TestCase().failOnUnreportedAsserts);
 }
@@ -977,15 +1018,12 @@ function testSetObj() {
   testCase.setTestObj({testOk: ok, somethingElse: fail});
   assertEquals(1, testCase.getCount());
   // Make sure test count doesn't change after initializeTestCase
-  // TODO(goktug): Remove suppression when the verification is removed.
-  var suppressEnsureNoAutoDiscovery = true;
-  goog.testing.TestCase.initializeTestCase(
-      testCase, undefined, suppressEnsureNoAutoDiscovery);
+  goog.testing.TestCase.initializeTestCase(testCase, undefined);
   assertEquals(1, testCase.getCount());
 }
 
-function testSetObj_Nested() {
-  var testCase = new goog.testing.TestCase();
+async function testSetObj_Nested() {
+  const testCase = new goog.testing.TestCase();
   assertEquals(0, testCase.getCount());
   testCase.setTestObj({
     setUp: event('setUp1'),
@@ -995,6 +1033,34 @@ function testSetObj_Nested() {
       setUp: event('setUp2'),
       test: event('testNested'),
       tearDown: event('tearDown2')
+    },
+    testNestedIgnoreTests: {
+      shouldRunTests() {
+        event('shouldRunTests')();
+        return false;
+      },
+
+      // 3 tests - 1 of which is nested. shouldRunTests should only be called
+      // once.
+      testShouldNotRun: event('SHOULD NEVER HAPPEN'),
+      testAlsoShouldNotRun: event('ALSO SHOULD NEVER HAPPEN'),
+
+      testSuperNestedIgnore: {
+        testShouldNotRun: event('SHOULD NEVER HAPPEN NESTED'),
+      },
+    },
+    testThrowShouldRunTests: {
+      shouldRunTests() {
+        event('throw shouldRunTests')();
+        throw new Error('bar');
+      },
+
+      testShouldNotRun: event('SHOULD NEVER HAPPEN THROW'),
+      testAlsoShouldNotRun: event('ALSO SHOULD NEVER HAPPEN THROW'),
+
+      testSuperNestedIgnore: {
+        testShouldNotRun: event('SHOULD NEVER HAPPEN NESTED THROW'),
+      },
     },
     testNestedSuite: {
       setUp: event('setUp3'),
@@ -1009,19 +1075,28 @@ function testSetObj_Nested() {
     },
     tearDown: event('tearDown1')
   });
-  assertEquals(5, testCase.getCount());
-  var tests = testCase.getTests();
-  var names = [];
-  for (var i = 0; i < tests.length; i++) {
+  assertEquals(11, testCase.getCount());
+  const tests = testCase.getTests();
+  const names = [];
+  for (let i = 0; i < tests.length; i++) {
     names.push(tests[i].name);
   }
   assertArrayEquals(
       [
-        'testOk', 'testNested', 'testNestedSuite_A', 'testNestedSuite_B',
-        'testNestedSuite_SuperNestedSuite_C'
+        'testOk',
+        'testNested',
+        'testNestedIgnoreTests_ShouldNotRun',
+        'testNestedIgnoreTests_AlsoShouldNotRun',
+        'testNestedIgnoreTests_SuperNestedIgnore_ShouldNotRun',
+        'testThrowShouldRunTests_ShouldNotRun',
+        'testThrowShouldRunTests_AlsoShouldNotRun',
+        'testThrowShouldRunTests_SuperNestedIgnore_ShouldNotRun',
+        'testNestedSuite_A',
+        'testNestedSuite_B',
+        'testNestedSuite_SuperNestedSuite_C',
       ],
       names);
-  testCase.runTests();
+  await testCase.runTestsReturningPromise();
   assertArrayEquals(
       [
         'setUp1',
@@ -1032,6 +1107,8 @@ function testSetObj_Nested() {
         'testNested',
         'tearDown2',
         'tearDown1',
+        'shouldRunTests',
+        'throw shouldRunTests',
         'setUp1',
         'setUp3',
         'testNestedSuite_A',
@@ -1048,7 +1125,7 @@ function testSetObj_Nested() {
         'testNestedSuite_SuperNestedSuite_C',
         'tearDown4',
         'tearDown3',
-        'tearDown1'
+        'tearDown1',
       ],
       events);
 }

@@ -134,7 +134,7 @@ goog.ui.Control.prototype.renderer_;
 
 /**
  * Text caption or DOM structure displayed in the component.
- * @type {goog.ui.ControlContent}
+ * @type {?goog.ui.ControlContent}
  * @private
  */
 goog.ui.Control.prototype.content_ = null;
@@ -585,13 +585,12 @@ goog.ui.Control.prototype.enableMouseEventHandling_ = function(enable) {
   var handler = this.getHandler();
   var element = this.getElement();
   if (enable) {
-    handler
-        .listen(element, MouseEventType.MOUSEOVER, this.handleMouseOver)
-        .listen(element, MouseEventType.MOUSEDOWN, this.handleMouseDown)
+    handler.listen(element, MouseEventType.MOUSEDOWN, this.handleMouseDown)
         .listen(
             element, [MouseEventType.MOUSEUP, MouseEventType.MOUSECANCEL],
             this.handleMouseUp)
-        .listen(element, MouseEventType.MOUSEOUT, this.handleMouseOut);
+        .listen(element, goog.events.EventType.MOUSEOVER, this.handleMouseOver)
+        .listen(element, goog.events.EventType.MOUSEOUT, this.handleMouseOut);
     if (this.pointerEventsEnabled()) {
       // Prevent pointer events from capturing the target element so they behave
       // more like mouse events.
@@ -618,13 +617,13 @@ goog.ui.Control.prototype.enableMouseEventHandling_ = function(enable) {
       }
     }
   } else {
-    handler
-        .unlisten(element, MouseEventType.MOUSEOVER, this.handleMouseOver)
-        .unlisten(element, MouseEventType.MOUSEDOWN, this.handleMouseDown)
+    handler.unlisten(element, MouseEventType.MOUSEDOWN, this.handleMouseDown)
         .unlisten(
             element, [MouseEventType.MOUSEUP, MouseEventType.MOUSECANCEL],
             this.handleMouseUp)
-        .unlisten(element, MouseEventType.MOUSEOUT, this.handleMouseOut);
+        .unlisten(
+            element, goog.events.EventType.MOUSEOVER, this.handleMouseOver)
+        .unlisten(element, goog.events.EventType.MOUSEOUT, this.handleMouseOut);
     if (this.pointerEventsEnabled()) {
       handler.unlisten(
           element, goog.events.EventType.GOTPOINTERCAPTURE,
@@ -1263,7 +1262,7 @@ goog.ui.Control.prototype.handleContextMenu = goog.nullFunction;
  *     mouseout).
  * @param {Element} elem The ancestor element.
  * @return {boolean} Whether the event has a relatedTarget (the element the
- *     mouse is coming from) and it's a descendent of elem.
+ *     mouse is coming from) and it's a descendant of elem.
  * @private
  */
 goog.ui.Control.isMouseEventWithinElement_ = function(e, elem) {

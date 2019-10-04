@@ -53,14 +53,14 @@ goog.labs.testing.Environment = goog.defineClass(null, {
      */
     this.mockControl = null;
 
-    /** @type {goog.testing.MockClock} */
+    /** @type {?goog.testing.MockClock} */
     this.mockClock = null;
 
     /** @private {boolean} */
     this.shouldMakeMockControl_ = false;
 
-    /** @private {boolean} */
-    this.shouldMakeMockClock_ = false;
+    /** @protected {boolean} */
+    this.mockClockOn = false;
 
     /** @const {!goog.debug.Console} */
     this.console = goog.labs.testing.Environment.console_;
@@ -72,11 +72,11 @@ goog.labs.testing.Environment = goog.defineClass(null, {
 
   /**
    * Runs immediately before the setUpPage phase of JsUnit tests.
-   * @return {!goog.Promise<?>|undefined} An optional Promise which must be
+   * @return {!IThenable<*>|undefined} An optional Promise which must be
    *     resolved before the test is executed.
    */
   setUpPage: function() {
-    if (this.mockClock && this.mockClock.isDisposed()) {
+    if (this.mockClockOn && !this.hasMockClock()) {
       this.mockClock = new goog.testing.MockClock(true);
     }
   },
@@ -85,14 +85,14 @@ goog.labs.testing.Environment = goog.defineClass(null, {
   /** Runs immediately after the tearDownPage phase of JsUnit tests. */
   tearDownPage: function() {
     // If we created the mockClock, we'll also dispose it.
-    if (this.shouldMakeMockClock_) {
+    if (this.hasMockClock()) {
       this.mockClock.dispose();
     }
   },
 
   /**
    * Runs immediately before the setUp phase of JsUnit tests.
-   * @return {!goog.Promise<?>|undefined} An optional Promise which must be
+   * @return {!IThenable<*>|undefined} An optional Promise which must be
    *     resolved before the test case is executed.
    */
   setUp: goog.nullFunction,
@@ -106,7 +106,7 @@ goog.labs.testing.Environment = goog.defineClass(null, {
         this.mockClock.tick(1000);
       }
       // If we created the mockClock, we'll also reset it.
-      if (this.shouldMakeMockClock_) {
+      if (this.hasMockClock()) {
         this.mockClock.reset();
       }
     }
@@ -161,19 +161,26 @@ goog.labs.testing.Environment = goog.defineClass(null, {
    * @return {!goog.labs.testing.Environment} For chaining.
    */
   withMockClock: function() {
-    if (!this.shouldMakeMockClock_) {
-      this.shouldMakeMockClock_ = true;
+    if (!this.hasMockClock()) {
+      this.mockClockOn = true;
       this.mockClock = new goog.testing.MockClock(true);
     }
     return this;
   },
 
+  /**
+   * @return {boolean}
+   * @protected
+   */
+  hasMockClock: function() {
+    return this.mockClockOn && !!this.mockClock && !this.mockClock.isDisposed();
+  },
 
   /**
    * Creates a basic strict mock of a `toMock`. For more advanced mocking,
    * please use the MockControl directly.
-   * @param {Function} toMock
-   * @return {!goog.testing.StrictMock}
+   * @param {?Function} toMock
+   * @return {?}
    */
   mock: function(toMock) {
     if (!this.shouldMakeMockControl_) {
@@ -182,7 +189,11 @@ goog.labs.testing.Environment = goog.defineClass(null, {
           'Call withMockControl if this environment is expected ' +
           'to contain a MockControl.');
     }
-    return this.mockControl.createStrictMock(toMock);
+    var mock = this.mockControl.createStrictMock(toMock);
+    // Mocks are not type-checkable. To reduce burden on tests that are type
+    // checked, this is typed as "?" to turn off JSCompiler checking.
+    // TODO(b/69851971): Enable a type-checked mocking library.
+    return /** @type {?} */ (mock);
   }
 });
 
@@ -218,7 +229,8 @@ goog.labs.testing.Environment.console_.setCapturing(true);
  * @extends {goog.testing.TestCase}
  */
 goog.labs.testing.EnvironmentTestCase_ = function() {
-  goog.labs.testing.EnvironmentTestCase_.base(this, 'constructor');
+  goog.labs.testing.EnvironmentTestCase_.base(
+      this, 'constructor', document.title);
 
   /** @private {!Array<!goog.labs.testing.Environment>}> */
   this.environments_ = [];
@@ -321,13 +333,15 @@ goog.labs.testing.EnvironmentTestCase_.prototype.setUp = function() {
  * Calls a chain of methods and makes sure to properly chain them if any of the
  * methods returns a thenable.
  * @param {!Array<function()>} fns
- * @return {!goog.Thenable|undefined}
+ * @return {!IThenable<*>|undefined}
  * @private
  */
 goog.labs.testing.EnvironmentTestCase_.prototype.callAndChainPromises_ =
     function(fns) {
   return goog.array.reduce(fns, function(previousResult, fn) {
-    if (goog.Thenable.isImplementedBy(previousResult)) {
+    if (goog.Thenable.isImplementedBy(previousResult) ||
+        (typeof goog.global['Promise'] === 'function' &&
+         previousResult instanceof goog.global['Promise'])) {
       return previousResult.then(function() {
         return fn();
       });

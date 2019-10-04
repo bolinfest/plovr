@@ -20,8 +20,12 @@
 
 
 goog.provide('goog.events.EventType');
+goog.provide('goog.events.MouseAsMouseEventType');
+goog.provide('goog.events.MouseEvents');
 goog.provide('goog.events.PointerAsMouseEventType');
+goog.provide('goog.events.PointerAsTouchEventType');
 goog.provide('goog.events.PointerFallbackEventType');
+goog.provide('goog.events.PointerTouchFallbackEventType');
 
 goog.require('goog.events.BrowserFeature');
 goog.require('goog.userAgent');
@@ -51,6 +55,7 @@ goog.events.EventType = {
   CLICK: 'click',
   RIGHTCLICK: 'rightclick',
   DBLCLICK: 'dblclick',
+  AUXCLICK: 'auxclick',
   MOUSEDOWN: 'mousedown',
   MOUSEUP: 'mouseup',
   MOUSEOVER: 'mouseover',
@@ -303,22 +308,23 @@ goog.events.EventType = {
  * Returns one of the given pointer fallback event names in order of preference:
  *   1. pointerEventName
  *   2. msPointerEventName
- *   3. mouseEventName
+ *   3. fallbackEventName
  * @param {string} pointerEventName
  * @param {string} msPointerEventName
- * @param {string} mouseEventName
- * @return {string} The supported pointer or mouse event name.
+ * @param {string} fallbackEventName
+ * @return {string} The supported pointer or fallback (mouse or touch) event
+ *     name.
  * @private
  */
 goog.events.getPointerFallbackEventName_ = function(
-    pointerEventName, msPointerEventName, mouseEventName) {
+    pointerEventName, msPointerEventName, fallbackEventName) {
   if (goog.events.BrowserFeature.POINTER_EVENTS) {
     return pointerEventName;
   }
   if (goog.events.BrowserFeature.MSPOINTER_EVENTS) {
     return msPointerEventName;
   }
-  return mouseEventName;
+  return fallbackEventName;
 };
 
 
@@ -362,9 +368,47 @@ goog.events.PointerFallbackEventType = {
 
 
 /**
+ * Constants for pointer event names that fall back to corresponding touch event
+ * names on unsupported platforms. These are intended to be drop-in replacements
+ * for corresponding values in `goog.events.EventType`.
+ * @enum {string}
+ */
+goog.events.PointerTouchFallbackEventType = {
+  POINTERDOWN: goog.events.getPointerFallbackEventName_(
+      goog.events.EventType.POINTERDOWN, goog.events.EventType.MSPOINTERDOWN,
+      goog.events.EventType.TOUCHSTART),
+  POINTERUP: goog.events.getPointerFallbackEventName_(
+      goog.events.EventType.POINTERUP, goog.events.EventType.MSPOINTERUP,
+      goog.events.EventType.TOUCHEND),
+  POINTERCANCEL: goog.events.getPointerFallbackEventName_(
+      goog.events.EventType.POINTERCANCEL,
+      goog.events.EventType.MSPOINTERCANCEL, goog.events.EventType.TOUCHCANCEL),
+  POINTERMOVE: goog.events.getPointerFallbackEventName_(
+      goog.events.EventType.POINTERMOVE, goog.events.EventType.MSPOINTERMOVE,
+      goog.events.EventType.TOUCHMOVE)
+};
+
+
+/**
+ * Mapping of mouse event names to underlying browser event names.
+ * @typedef {{
+ *     MOUSEDOWN: string,
+ *     MOUSEUP: string,
+ *     MOUSECANCEL:string,
+ *     MOUSEMOVE:string,
+ *     MOUSEOVER:string,
+ *     MOUSEOUT:string,
+ *     MOUSEENTER:string,
+ *     MOUSELEAVE: string,
+ * }}
+ */
+goog.events.MouseEvents;
+
+
+/**
  * An alias for `goog.events.EventType.MOUSE*` event types that is overridden by
  * corresponding `POINTER*` event types.
- * @enum {string}
+ * @const {!goog.events.MouseEvents}
  */
 goog.events.PointerAsMouseEventType = {
   MOUSEDOWN: goog.events.PointerFallbackEventType.POINTERDOWN,
@@ -375,4 +419,34 @@ goog.events.PointerAsMouseEventType = {
   MOUSEOUT: goog.events.PointerFallbackEventType.POINTEROUT,
   MOUSEENTER: goog.events.PointerFallbackEventType.POINTERENTER,
   MOUSELEAVE: goog.events.PointerFallbackEventType.POINTERLEAVE
+};
+
+
+/**
+ * An alias for `goog.events.EventType.MOUSE*` event types that continue to use
+ * mouse events.
+ * @const {!goog.events.MouseEvents}
+ */
+goog.events.MouseAsMouseEventType = {
+  MOUSEDOWN: goog.events.EventType.MOUSEDOWN,
+  MOUSEUP: goog.events.EventType.MOUSEUP,
+  MOUSECANCEL: goog.events.EventType.MOUSECANCEL,
+  MOUSEMOVE: goog.events.EventType.MOUSEMOVE,
+  MOUSEOVER: goog.events.EventType.MOUSEOVER,
+  MOUSEOUT: goog.events.EventType.MOUSEOUT,
+  MOUSEENTER: goog.events.EventType.MOUSEENTER,
+  MOUSELEAVE: goog.events.EventType.MOUSELEAVE
+};
+
+
+/**
+ * An alias for `goog.events.EventType.TOUCH*` event types that is overridden by
+ * corresponding `POINTER*` event types.
+ * @enum {string}
+ */
+goog.events.PointerAsTouchEventType = {
+  TOUCHCANCEL: goog.events.PointerTouchFallbackEventType.POINTERCANCEL,
+  TOUCHEND: goog.events.PointerTouchFallbackEventType.POINTERUP,
+  TOUCHMOVE: goog.events.PointerTouchFallbackEventType.POINTERMOVE,
+  TOUCHSTART: goog.events.PointerTouchFallbackEventType.POINTERDOWN
 };

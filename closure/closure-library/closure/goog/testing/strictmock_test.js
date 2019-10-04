@@ -432,3 +432,71 @@ function testErrorMessageForBadArgs() {
 
   assertContains('Bad arguments to a()', e.message);
 }
+
+async function testWaitAndVerify() {
+  mock.a();
+  mock.$replay();
+
+  setTimeout(() => {
+    mock.a();
+  }, 0);
+  await mock.$waitAndVerify();
+}
+
+async function testWaitAndVerify_Multiple() {
+  mock.a().$times(2);
+  mock.$replay();
+
+  setTimeout(() => {
+    mock.a();
+  }, 0);
+  setTimeout(() => {
+    mock.a();
+  }, 50);
+  await mock.$waitAndVerify();
+}
+
+async function testWaitAndVerify_Never() {
+  mock.a().$never();
+  mock.$replay();
+
+  await mock.$waitAndVerify();
+}
+
+async function testWaitAndVerify_Synchronous() {
+  mock.a();
+  mock.$replay();
+
+  mock.a();
+  await mock.$waitAndVerify();
+}
+
+async function testWaitAndVerify_Exception() {
+  mock.a();
+  mock.$replay();
+
+  setTimeout(() => {
+    assertThrowsJsUnitException(() => {
+      mock.a(false);
+    });
+  }, 0);
+  await assertRejects(mock.$waitAndVerify());
+}
+
+async function testWaitAndVerify_Reset() {
+  mock.a();
+  mock.$replay();
+
+  setTimeout(() => {
+    mock.a();
+  }, 0);
+  await mock.$waitAndVerify();
+  mock.$reset();
+  mock.a();
+  mock.$replay();
+
+  setTimeout(() => {
+    mock.a();
+  }, 0);
+  await mock.$waitAndVerify();
+}

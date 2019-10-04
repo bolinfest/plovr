@@ -30,13 +30,14 @@ goog.require('goog.html.SafeStyle');
 goog.require('goog.html.SafeStyleSheet');
 goog.require('goog.html.SafeUrl');
 goog.require('goog.html.TrustedResourceUrl');
+goog.require('goog.html.trustedtypes');
 goog.require('goog.i18n.bidi.Dir');
 goog.require('goog.i18n.bidi.DirectionalString');
 goog.require('goog.labs.userAgent.browser');
 goog.require('goog.object');
-goog.require('goog.string');
 goog.require('goog.string.Const');
 goog.require('goog.string.TypedString');
+goog.require('goog.string.internal');
 
 
 
@@ -58,8 +59,21 @@ goog.require('goog.string.TypedString');
  * takes no parameters and the type is immutable; hence only a default instance
  * corresponding to the empty string can be obtained via constructor invocation.
  *
- * @see goog.html.SafeHtml#create
- * @see goog.html.SafeHtml#htmlEscape
+ * Note that there is no `goog.html.SafeHtml.fromConstant`. The reason is that
+ * the following code would create an unsafe HTML:
+ *
+ * ```
+ * goog.html.SafeHtml.concat(
+ *     goog.html.SafeHtml.fromConstant(goog.string.Const.from('<script>')),
+ *     goog.html.SafeHtml.htmlEscape(userInput),
+ *     goog.html.SafeHtml.fromConstant(goog.string.Const.from('<\/script>')));
+ * ```
+ *
+ * There's `goog.dom.constHtmlToNode` to create a node from constant strings
+ * only.
+ *
+ * @see goog.html.SafeHtml.create
+ * @see goog.html.SafeHtml.htmlEscape
  * @constructor
  * @final
  * @struct
@@ -71,13 +85,13 @@ goog.html.SafeHtml = function() {
    * The contained value of this SafeHtml.  The field has a purposely ugly
    * name to make (non-compiled) code that attempts to directly access this
    * field stand out.
-   * @private {string}
+   * @private {!TrustedHTML|string}
    */
   this.privateDoNotAccessOrElseSafeHtmlWrappedValue_ = '';
 
   /**
    * A type marker used to implement additional run-time type checking.
-   * @see goog.html.SafeHtml#unwrap
+   * @see goog.html.SafeHtml.unwrap
    * @const {!Object}
    * @private
    */
@@ -130,11 +144,11 @@ goog.html.SafeHtml.prototype.implementsGoogStringTypedString = true;
  * // instanceof goog.html.SafeHtml.
  * </pre>
  *
- * @see goog.html.SafeHtml#unwrap
+ * @see goog.html.SafeHtml.unwrap
  * @override
  */
 goog.html.SafeHtml.prototype.getTypedStringValue = function() {
-  return this.privateDoNotAccessOrElseSafeHtmlWrappedValue_;
+  return this.privateDoNotAccessOrElseSafeHtmlWrappedValue_.toString();
 };
 
 
@@ -145,7 +159,7 @@ if (goog.DEBUG) {
    * To obtain the actual string value wrapped in a SafeHtml, use
    * `goog.html.SafeHtml.unwrap`.
    *
-   * @see goog.html.SafeHtml#unwrap
+   * @see goog.html.SafeHtml.unwrap
    * @override
    */
   goog.html.SafeHtml.prototype.toString = function() {
@@ -165,6 +179,17 @@ if (goog.DEBUG) {
  *     `goog.asserts.AssertionError`.
  */
 goog.html.SafeHtml.unwrap = function(safeHtml) {
+  return goog.html.SafeHtml.unwrapTrustedHTML(safeHtml).toString();
+};
+
+
+/**
+ * Unwraps value as TrustedHTML if supported or as a string if not.
+ * @param {!goog.html.SafeHtml} safeHtml
+ * @return {!TrustedHTML|string}
+ * @see goog.html.SafeHtml.unwrap
+ */
+goog.html.SafeHtml.unwrapTrustedHTML = function(safeHtml) {
   // Perform additional run-time type-checking to ensure that safeHtml is indeed
   // an instance of the expected type.  This provides some additional protection
   // against security bugs due to application code that disables type checks.
@@ -215,20 +240,21 @@ goog.html.SafeHtml.htmlEscape = function(textOrHtml) {
   if (textOrHtml instanceof goog.html.SafeHtml) {
     return textOrHtml;
   }
+  var textIsObject = typeof textOrHtml == 'object';
   var dir = null;
-  if (textOrHtml.implementsGoogI18nBidiDirectionalString) {
+  if (textIsObject && textOrHtml.implementsGoogI18nBidiDirectionalString) {
     dir = /** @type {!goog.i18n.bidi.DirectionalString} */ (textOrHtml)
               .getDirection();
   }
   var textAsString;
-  if (textOrHtml.implementsGoogStringTypedString) {
+  if (textIsObject && textOrHtml.implementsGoogStringTypedString) {
     textAsString = /** @type {!goog.string.TypedString} */ (textOrHtml)
                        .getTypedStringValue();
   } else {
     textAsString = String(textOrHtml);
   }
   return goog.html.SafeHtml.createSafeHtmlSecurityPrivateDoNotAccessOrElse(
-      goog.string.htmlEscape(textAsString), dir);
+      goog.string.internal.htmlEscape(textAsString), dir);
 };
 
 
@@ -246,7 +272,7 @@ goog.html.SafeHtml.htmlEscapePreservingNewlines = function(textOrHtml) {
   }
   var html = goog.html.SafeHtml.htmlEscape(textOrHtml);
   return goog.html.SafeHtml.createSafeHtmlSecurityPrivateDoNotAccessOrElse(
-      goog.string.newLineToBr(goog.html.SafeHtml.unwrap(html)),
+      goog.string.internal.newLineToBr(goog.html.SafeHtml.unwrap(html)),
       html.getDirection());
 };
 
@@ -267,7 +293,7 @@ goog.html.SafeHtml.htmlEscapePreservingNewlinesAndSpaces = function(
   }
   var html = goog.html.SafeHtml.htmlEscape(textOrHtml);
   return goog.html.SafeHtml.createSafeHtmlSecurityPrivateDoNotAccessOrElse(
-      goog.string.whitespaceEscape(goog.html.SafeHtml.unwrap(html)),
+      goog.string.internal.whitespaceEscape(goog.html.SafeHtml.unwrap(html)),
       html.getDirection());
 };
 
@@ -650,7 +676,7 @@ goog.html.SafeHtml.createMetaRefresh = function(url, opt_secs) {
     // This is imperfect. Notice that both ' and ; are reserved characters in
     // URIs, so this could do the wrong thing, but at least it will do the wrong
     // thing in only rare cases.
-    if (goog.string.contains(unwrappedUrl, ';')) {
+    if (goog.string.internal.contains(unwrappedUrl, ';')) {
       unwrappedUrl = "'" + unwrappedUrl.replace(/'/g, '%27') + "'";
     }
   }
@@ -713,7 +739,7 @@ goog.html.SafeHtml.getAttrNameAndValue_ = function(tagName, name, value) {
       goog.isString(value) || goog.isNumber(value),
       'String or number value expected, got ' + (typeof value) +
           ' with value: ' + value);
-  return name + '="' + goog.string.htmlEscape(String(value)) + '"';
+  return name + '="' + goog.string.internal.htmlEscape(String(value)) + '"';
 };
 
 
@@ -758,14 +784,18 @@ goog.html.SafeHtml.createWithDir = function(
 
 
 /**
- * Creates a new SafeHtml object by concatenating values.
- * @param {...(!goog.html.SafeHtml.TextOrHtml_|
- *     !Array<!goog.html.SafeHtml.TextOrHtml_>)} var_args Values to concatenate.
+ * Creates a new SafeHtml object by joining the parts with separator.
+ * @param {!goog.html.SafeHtml.TextOrHtml_} separator
+ * @param {!Array<!goog.html.SafeHtml.TextOrHtml_|
+ *     !Array<!goog.html.SafeHtml.TextOrHtml_>>} parts Parts to join. If a part
+ *     contains an array then each member of this array is also joined with the
+ *     separator.
  * @return {!goog.html.SafeHtml}
  */
-goog.html.SafeHtml.concat = function(var_args) {
-  var dir = goog.i18n.bidi.Dir.NEUTRAL;
-  var content = '';
+goog.html.SafeHtml.join = function(separator, parts) {
+  var separatorHtml = goog.html.SafeHtml.htmlEscape(separator);
+  var dir = separatorHtml.getDirection();
+  var content = [];
 
   /**
    * @param {!goog.html.SafeHtml.TextOrHtml_|
@@ -776,7 +806,7 @@ goog.html.SafeHtml.concat = function(var_args) {
       goog.array.forEach(argument, addArgument);
     } else {
       var html = goog.html.SafeHtml.htmlEscape(argument);
-      content += goog.html.SafeHtml.unwrap(html);
+      content.push(goog.html.SafeHtml.unwrap(html));
       var htmlDir = html.getDirection();
       if (dir == goog.i18n.bidi.Dir.NEUTRAL) {
         dir = htmlDir;
@@ -786,9 +816,21 @@ goog.html.SafeHtml.concat = function(var_args) {
     }
   };
 
-  goog.array.forEach(arguments, addArgument);
+  goog.array.forEach(parts, addArgument);
   return goog.html.SafeHtml.createSafeHtmlSecurityPrivateDoNotAccessOrElse(
-      content, dir);
+      content.join(goog.html.SafeHtml.unwrap(separatorHtml)), dir);
+};
+
+
+/**
+ * Creates a new SafeHtml object by concatenating values.
+ * @param {...(!goog.html.SafeHtml.TextOrHtml_|
+ *     !Array<!goog.html.SafeHtml.TextOrHtml_>)} var_args Values to concatenate.
+ * @return {!goog.html.SafeHtml}
+ */
+goog.html.SafeHtml.concat = function(var_args) {
+  return goog.html.SafeHtml.join(
+      goog.html.SafeHtml.EMPTY, Array.prototype.slice.call(arguments));
 };
 
 
@@ -844,7 +886,11 @@ goog.html.SafeHtml.createSafeHtmlSecurityPrivateDoNotAccessOrElse = function(
  */
 goog.html.SafeHtml.prototype.initSecurityPrivateDoNotAccessOrElse_ = function(
     html, dir) {
-  this.privateDoNotAccessOrElseSafeHtmlWrappedValue_ = html;
+  this.privateDoNotAccessOrElseSafeHtmlWrappedValue_ =
+      goog.html.trustedtypes.PRIVATE_DO_NOT_ACCESS_OR_ELSE_POLICY ?
+      goog.html.trustedtypes.PRIVATE_DO_NOT_ACCESS_OR_ELSE_POLICY.createHTML(
+          html) :
+      html;
   this.dir_ = dir;
   return this;
 };

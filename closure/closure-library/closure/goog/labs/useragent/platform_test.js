@@ -56,6 +56,14 @@ function testAndroid() {
   assertVersionBetween('4.0.0', '4.1.0');
   assertVersionBetween('4.0', '4.1');
   assertVersionBetween('4', '5');
+
+  var uaString = goog.labs.userAgent.testAgents.GO2PHONE;
+
+  goog.labs.userAgent.util.setUserAgent(uaString);
+  assertTrue(goog.labs.userAgent.platform.isAndroid());
+  assertVersion('8.1.0');
+  assertVersionBetween('8.0', '8.2');
+  assertVersionBetween('8', '9');
 }
 
 function testKindleFire() {
@@ -104,6 +112,14 @@ function testIphone() {
   assertTrue(goog.labs.userAgent.platform.isIos());
   assertVersion('6.0');
   assertVersionBetween('5', '7');
+
+  uaString = goog.labs.userAgent.testAgents.FIREFOX_IPHONE;
+  goog.labs.userAgent.util.setUserAgent(uaString);
+  assertTrue(goog.labs.userAgent.platform.isIphone());
+  assertFalse(goog.labs.userAgent.platform.isIpad());
+  assertTrue(goog.labs.userAgent.platform.isIos());
+  assertVersion('5.1.1');
+  assertVersionBetween('4', '6');
 }
 
 function testIpad() {
@@ -243,6 +259,22 @@ function testChromecast() {
   goog.labs.userAgent.util.setUserAgent(uaString);
   assertTrue(goog.labs.userAgent.platform.isChromecast());
   assertVersion('');
+}
+
+function testKaiOS() {
+  var uaString = goog.labs.userAgent.testAgents.KAIOS;
+
+  goog.labs.userAgent.util.setUserAgent(uaString);
+  assertTrue(goog.labs.userAgent.platform.isKaiOS());
+  assertVersion('');
+}
+
+function testGo2Phone() {
+  var uaString = goog.labs.userAgent.testAgents.GO2PHONE;
+
+  goog.labs.userAgent.util.setUserAgent(uaString);
+  assertTrue(goog.labs.userAgent.platform.isGo2Phone());
+  assertVersion('8.1.0');
 }
 
 function assertVersion(version) {

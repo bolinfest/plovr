@@ -182,7 +182,7 @@ function testGetPluginByClassId() {
   var editableField = new FieldConstructor('testField');
   var plugin = new TestPlugin();
 
-  assertUndefined(
+  assertNull(
       'Must not be able to get unregistered plugins by class id.',
       editableField.getPluginByClassId(plugin.getTrogClassId()));
 
@@ -612,6 +612,39 @@ function testKeyHandlingAlt() {
   } else {
     mockPlugin.handleKeyPress(e).$returns(false);
   }
+  mockPlugin.$replay();
+
+  editableField.registerPlugin(mockPlugin);
+
+  if (goog.editor.BrowserFeature.USES_KEYDOWN) {
+    editableField.handleKeyDown_(e);
+  } else {
+    editableField.handleKeyPress_(e);
+  }
+
+  mockPlugin.$verify();
+}
+
+/**
+ * Make sure that handleKeyboardShortcut is called if alt+shift is pressed.
+ */
+function testKeyHandlingAltShift() {
+  var editableField = new FieldConstructor('testField');
+  var plugin = new TestPlugin();
+  var e = getBrowserEvent();
+  e.altKey = true;
+  e.shiftKey = true;
+
+  var mockPlugin = new goog.testing.LooseMock(plugin);
+  mockPlugin.getTrogClassId().$returns('mockPlugin');
+  mockPlugin.registerFieldObject(editableField);
+  mockPlugin.isEnabled(editableField).$anyTimes().$returns(true);
+  if (goog.editor.BrowserFeature.USES_KEYDOWN) {
+    mockPlugin.handleKeyDown(e).$returns(false);
+  } else {
+    mockPlugin.handleKeyPress(e).$returns(false);
+  }
+  mockPlugin.handleKeyboardShortcut(e, STRING_KEY, true).$returns(false);
   mockPlugin.$replay();
 
   editableField.registerPlugin(mockPlugin);

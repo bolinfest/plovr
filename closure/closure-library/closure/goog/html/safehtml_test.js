@@ -25,13 +25,23 @@ goog.require('goog.html.SafeStyleSheet');
 goog.require('goog.html.SafeUrl');
 goog.require('goog.html.TrustedResourceUrl');
 goog.require('goog.html.testing');
+goog.require('goog.html.trustedtypes');
 goog.require('goog.i18n.bidi.Dir');
 goog.require('goog.labs.userAgent.browser');
 goog.require('goog.object');
 goog.require('goog.string.Const');
+goog.require('goog.testing.PropertyReplacer');
 goog.require('goog.testing.jsunit');
 
 goog.setTestOnly('goog.html.safeHtmlTest');
+
+
+var stubs = new goog.testing.PropertyReplacer();
+var policy = goog.createTrustedTypesPolicy('closure_test');
+
+function tearDown() {
+  stubs.reset();
+}
 
 
 function testSafeHtml() {
@@ -76,6 +86,21 @@ function testUnwrap() {
 }
 
 
+function testUnwrapTrustedHTML() {
+  var safeValue = goog.html.SafeHtml.htmlEscape('HTML');
+  var trustedValue = goog.html.SafeHtml.unwrapTrustedHTML(safeValue);
+  assertEquals(safeValue.getTypedStringValue(), trustedValue);
+  stubs.set(
+      goog.html.trustedtypes, 'PRIVATE_DO_NOT_ACCESS_OR_ELSE_POLICY', policy);
+  safeValue = goog.html.SafeHtml.htmlEscape('HTML');
+  trustedValue = goog.html.SafeHtml.unwrapTrustedHTML(safeValue);
+  assertEquals(safeValue.getTypedStringValue(), trustedValue.toString());
+  assertTrue(
+      goog.global.TrustedHTML ? trustedValue instanceof TrustedHTML :
+                                goog.isString(trustedValue));
+}
+
+
 function testHtmlEscape() {
   // goog.html.SafeHtml passes through unchanged.
   var safeHtmlIn = goog.html.SafeHtml.htmlEscape('<b>in</b>');
@@ -87,6 +112,26 @@ function testHtmlEscape() {
   assertEquals(
       'SafeHtml{Hello &lt;em&gt;&quot;&#39;&amp;World&lt;/em&gt;}',
       String(safeHtml));
+
+  // Primitives with properties that wrongly indicate that the text is of a type
+  // that implements `goog.i18n.bidi.DirectionalString` and
+  // `goog.string.TypedString` are escaped. This simulates a property renaming
+  // collision with a String, Number or Boolean property set externally.
+  var stringWithProperties = 'Hello <em>"\'&World</em>';
+  stringWithProperties.implementsGoogI18nBidiDirectionalString = true;
+  stringWithProperties.implementsGoogStringTypedString = true;
+  safeHtml = goog.html.SafeHtml.htmlEscape(stringWithProperties);
+  assertSameHtml('Hello &lt;em&gt;&quot;&#39;&amp;World&lt;/em&gt;', safeHtml);
+  var numberWithProperties = 123;
+  numberWithProperties.implementsGoogI18nBidiDirectionalString = true;
+  numberWithProperties.implementsGoogStringTypedString = true;
+  safeHtml = goog.html.SafeHtml.htmlEscape(numberWithProperties);
+  assertSameHtml('123', safeHtml);
+  var booleanWithProperties = true;
+  booleanWithProperties.implementsGoogI18nBidiDirectionalString = true;
+  booleanWithProperties.implementsGoogStringTypedString = true;
+  safeHtml = goog.html.SafeHtml.htmlEscape(booleanWithProperties);
+  assertSameHtml('true', safeHtml);
 
   // Creating from a SafeUrl escapes and retains the known direction (which is
   // fixed to RTL for URLs).
@@ -540,6 +585,21 @@ function testSafeHtmlCreateWithDir() {
   var ltr = goog.i18n.bidi.Dir.LTR;
 
   assertEquals(ltr, goog.html.SafeHtml.createWithDir(ltr, 'br').getDirection());
+}
+
+
+function testSafeHtmlJoin() {
+  var br = goog.html.SafeHtml.BR;
+  assertSameHtml(
+      'Hello<br>World', goog.html.SafeHtml.join(br, ['Hello', 'World']));
+  assertSameHtml(
+      'Hello<br>World', goog.html.SafeHtml.join(br, ['Hello', ['World']]));
+  assertSameHtml('Hello<br>', goog.html.SafeHtml.join('Hello', ['', br]));
+
+  var ltr = goog.html.testing.newSafeHtmlForTest('', goog.i18n.bidi.Dir.LTR);
+  assertEquals(
+      goog.i18n.bidi.Dir.LTR,
+      goog.html.SafeHtml.join(br, [ltr, ltr]).getDirection());
 }
 
 

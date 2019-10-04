@@ -65,16 +65,6 @@ function testFromConstant_allowsEmptyString() {
       goog.html.SafeStyle.fromConstant(goog.string.Const.from('')));
 }
 
-function testFromConstant_throwsOnForbiddenCharacters() {
-  assertThrows(function() {
-    goog.html.SafeStyle.fromConstant(goog.string.Const.from('width: x<;'));
-  });
-  assertThrows(function() {
-    goog.html.SafeStyle.fromConstant(goog.string.Const.from('width: x>;'));
-  });
-}
-
-
 function testFromConstant_throwsIfNoFinalSemicolon() {
   assertThrows(function() {
     goog.html.SafeStyle.fromConstant(goog.string.Const.from('width: 1em'));
@@ -142,6 +132,34 @@ function testCreate_allowsRgba() {
   assertCreateEquals(
       'color:rgba(10%, 20%, 30%, .5);',  // expected
       {'color': 'rgba(10%, 20%, 30%, .5)'});
+}
+
+
+function testCreate_allowsCalc() {
+  assertCreateEquals(
+      'height:calc(100% * 0.8 - 20px + 3vh);',  // expected
+      {'height': 'calc(100% * 0.8 - 20px + 3vh)'});
+}
+
+
+function testCreate_allowsRepeat() {
+  assertCreateEquals(
+      'grid-template-columns:repeat(3, [start] 100px [end]);',
+      {'grid-template-columns': 'repeat(3, [start] 100px [end])'});
+}
+
+
+function testCreate_allowsMinmax() {
+  assertCreateEquals(
+      'grid-template-columns:minmax(max-content, 50px) 20px;',
+      {'grid-template-columns': 'minmax(max-content, 50px) 20px'});
+}
+
+
+function testCreate_allowsFitContent() {
+  assertCreateEquals(
+      'grid-template-columns:fit-content(50px) 20px;',
+      {'grid-template-columns': 'fit-content(50px) 20px'});
 }
 
 
@@ -238,8 +256,47 @@ function testCreate_allowsUrl() {
 
 function testCreate_throwsOnForbiddenCharacters() {
   assertThrows(function() { goog.html.SafeStyle.create({'<': '0'}); });
+}
+
+
+function testCreate_allowsNestedFunctions() {
+  assertCreateEquals(
+      'grid-template-columns:repeat(3, minmax(100px, 200px));',
+      {'grid-template-columns': 'repeat(3, minmax(100px, 200px))'});
   assertThrows(function() {
-    goog.html.SafeStyle.create({'color': goog.string.Const.from('<')});
+    goog.html.SafeStyle.create({
+      'grid-template-columns': 'repeat(3, minmax(100px, minmax(200px, 300px)))'
+    });
+  });
+}
+
+
+function testCreate_disallowsComments() {
+  assertThrows(function() {
+    goog.html.SafeStyle.create({'color': 'rgb(/*)'});
+  });
+}
+
+
+function testCreate_allowBalancedSquareBrackets() {
+  assertCreateEquals(
+      'grid-template-columns:[trackName] 20px [other_track-name];',
+      {'grid-template-columns': '[trackName] 20px [other_track-name]'});
+  assertThrows(function() {
+    goog.html.SafeStyle.create({'grid-template-columns': '20px ["trackName"]'});
+  });
+  assertThrows(function() {
+    goog.html.SafeStyle.create({'grid-template-columns': '20px [tra[ckName]'});
+  });
+  assertThrows(function() {
+    goog.html.SafeStyle.create({'grid-template-columns': '20px [tra'});
+  });
+  assertThrows(function() {
+    goog.html.SafeStyle.create({'grid-template-columns': '20px [tra ckName]'});
+  });
+  assertThrows(function() {
+    goog.html.SafeStyle.create(
+        {'grid-template-columns': '20px [trackName] 20px]'});
   });
 }
 

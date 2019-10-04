@@ -89,6 +89,46 @@ function testSetInnerHtml_doesntAllowStyle() {
   assertThrows(function() { goog.dom.safe.setInnerHtml(style, safeHtml); });
 }
 
+/**
+ * When innerHTML is assigned on an element in IE, IE recursively severs all
+ * parent-children links in the removed content. This test ensures that that
+ * doesn't happen when re-rendering an element with soy.
+ */
+function testSetInnerHtml_leavesChildrenInIE() {
+  // Given a div with existing content.
+  var grandchildDiv = goog.dom.createElement(goog.dom.TagName.DIV);
+  var childDiv =
+      goog.dom.createDom(goog.dom.TagName.DIV, null, [grandchildDiv]);
+  var testDiv = goog.dom.createDom(goog.dom.TagName.DIV, null, [childDiv]);
+  // Expect parent/children links.
+  assertArrayEquals(
+      'Expect testDiv to contain childDiv.', [childDiv],
+      Array.from(testDiv.children));
+  assertEquals(
+      'Expect childDiv to be contained in testDiv.', testDiv,
+      childDiv.parentElement);
+  assertArrayEquals(
+      'Expect childDiv to contain grandchildDiv.', [grandchildDiv],
+      Array.from(childDiv.children));
+  assertEquals(
+      'Expect grandchildDiv to be contained in childDiv.', childDiv,
+      grandchildDiv.parentElement);
+
+  // When the div's content is re-rendered.
+  var safeHtml = goog.html.testing.newSafeHtmlForTest('<a></a>');
+  goog.dom.safe.setInnerHtml(testDiv, safeHtml);
+  assertEquals(
+      `Expect testDiv's contents to complete change`, '<a></a>',
+      testDiv.innerHTML.toLowerCase());
+  // Expect the previous childDiv tree to retain its parent-child connections.
+  assertArrayEquals(
+      'Expect childDiv to still contain grandchildDiv.', [grandchildDiv],
+      Array.from(childDiv.children));
+  assertEquals(
+      'Expect grandchildDiv to still be contained in childDiv.', childDiv,
+      grandchildDiv.parentElement);
+}
+
 function testSetStyle() {
   var style =
       goog.html.SafeStyle.fromConstant(goog.string.Const.from('color: red;'));
@@ -239,6 +279,43 @@ function testReplaceLocationSafeUrl() {
     mockLoc.$verify();
     mockLoc.$reset();
   }
+}
+
+function testAssignLocationSafeString() {
+  var location;
+  var fakeLoc = /** @type {!Location} */ ({
+    assign: function(value) {
+      location = value;
+    }
+  });
+  goog.dom.safe.assignLocation(fakeLoc, 'http://example.com/');
+  assertEquals(location, 'http://example.com/');
+}
+
+function testAssignLocationEvilString() {
+  var location;
+  var fakeLoc = /** @type {!Location} */ ({
+    assign: function(value) {
+      location = value;
+    }
+  });
+  withAssertionFailure(function() {
+    goog.dom.safe.assignLocation(fakeLoc, 'javascript:evil();');
+  });
+  assertEquals(location, 'about:invalid#zClosurez');
+}
+
+function testAssignLocationSafeUrl() {
+  var location;
+  var fakeLoc = /** @type {!Location} */ ({
+    assign: function(value) {
+      location = value;
+    }
+  });
+  var safeUrl = goog.html.SafeUrl.fromConstant(
+      goog.string.Const.from('javascript:trusted();'));
+  goog.dom.safe.assignLocation(fakeLoc, safeUrl);
+  assertEquals(location, 'javascript:trusted();');
 }
 
 function testSetAnchorHref() {
@@ -400,6 +477,59 @@ function testSetImageSrc_withHttpsUrl() {
   assertEquals(safeUrl, mockImageElement.src);
 }
 
+function testSetImageSrc_withDataUrl() {
+  var mockImageElement = /** @type {!HTMLImageElement} */ ({'src': 'blarg'});
+  var safeUrl = 'data:image/gif;base64,a';
+  goog.dom.safe.setImageSrc(mockImageElement, safeUrl);
+  assertEquals(safeUrl, mockImageElement.src);
+  assertThrows(function() {
+    goog.dom.safe.setImageSrc(mockImageElement, 'data:text/plain;base64,a');
+  });
+  assertThrows(function() {
+    goog.dom.safe.setImageSrc(mockImageElement, 'data:image/gif;bad');
+  });
+}
+
+function testSetAudioSrc() {
+  var mockAudioElement = /** @type {!HTMLAudioElement} */ ({'src': 'blarg'});
+  var safeUrl = 'https://trusted_url';
+  goog.dom.safe.setAudioSrc(mockAudioElement, safeUrl);
+  assertEquals(safeUrl, mockAudioElement.src);
+
+  mockAudioElement = /** @type {!HTMLAudioElement} */ ({'src': 'blarg'});
+  withAssertionFailure(function() {
+    goog.dom.safe.setAudioSrc(mockAudioElement, 'javascript:evil();');
+  });
+  assertEquals('about:invalid#zClosurez', mockAudioElement.src);
+
+  mockAudioElement = /** @type {!HTMLAudioElement} */ ({'src': 'blarg'});
+  safeUrl = goog.html.SafeUrl.fromConstant(
+      goog.string.Const.from('javascript:trusted();'));
+  goog.dom.safe.setAudioSrc(mockAudioElement, safeUrl);
+  assertEquals('javascript:trusted();', mockAudioElement.src);
+
+  // Asserts correct runtime type.
+  if (!goog.userAgent.IE || goog.userAgent.isVersionOrHigher(10)) {
+    var otherElement = document.createElement('SCRIPT');
+    var ex = assertThrows(function() {
+      goog.dom.safe.setAudioSrc(
+          /** @type {!HTMLAudioElement} */ (otherElement), safeUrl);
+    });
+    assert(
+        goog.string.contains(ex.message, 'Argument is not a HTMLAudioElement'));
+  }
+}
+
+function testSetAudioSrc_withDataUrl() {
+  var mockAudioElement = /** @type {!HTMLAudioElement} */ ({'src': 'blarg'});
+  var safeUrl = 'data:audio/mp3;base64,a';
+  goog.dom.safe.setAudioSrc(mockAudioElement, safeUrl);
+  assertEquals(safeUrl, mockAudioElement.src);
+  assertThrows(function() {
+    goog.dom.safe.setAudioSrc(mockAudioElement, 'data:image/gif;base64,a');
+  });
+}
+
 function testSetVideoSrc() {
   var mockVideoElement = /** @type {!HTMLVideoElement} */ ({'src': 'blarg'});
   var safeUrl = 'https://trusted_url';
@@ -413,7 +543,7 @@ function testSetVideoSrc() {
   assertEquals('about:invalid#zClosurez', mockVideoElement.src);
 
   mockVideoElement = /** @type {!HTMLVideoElement} */ ({'src': 'blarg'});
-  var safeUrl = goog.html.SafeUrl.fromConstant(
+  safeUrl = goog.html.SafeUrl.fromConstant(
       goog.string.Const.from('javascript:trusted();'));
   goog.dom.safe.setVideoSrc(mockVideoElement, safeUrl);
   assertEquals('javascript:trusted();', mockVideoElement.src);
@@ -428,6 +558,16 @@ function testSetVideoSrc() {
     assert(
         goog.string.contains(ex.message, 'Argument is not a HTMLVideoElement'));
   }
+}
+
+function testSetVideoSrc_withDataUrl() {
+  var mockVideoElement = /** @type {!HTMLVideoElement} */ ({'src': 'blarg'});
+  var safeUrl = 'data:video/mp4;base64,a';
+  goog.dom.safe.setVideoSrc(mockVideoElement, safeUrl);
+  assertEquals(safeUrl, mockVideoElement.src);
+  assertThrows(function() {
+    goog.dom.safe.setVideoSrc(mockVideoElement, 'data:image/gif;base64,a');
+  });
 }
 
 function testSetEmbedSrc() {
@@ -527,9 +667,15 @@ function testSetObjectData() {
 function testSetScriptSrc() {
   var url = goog.html.TrustedResourceUrl.fromConstant(
       goog.string.Const.from('javascript:trusted();'));
-  var mockElement = /** @type {!HTMLScriptElement} */ ({'src': 'blarg'});
+  var mockElement = /** @type {!HTMLScriptElement} */ ({
+    'src': 'blarg',
+    /** @suppress {globalThis} */
+    'setAttribute': function(attr, value) {
+      this[attr] = value;
+    }
+  });
   // clear nonce cache for test.
-  goog.cspNonce_ = null;
+  /** @type {?} */ (goog).cspNonce_ = null;
 
   // Place a nonced script in the page.
   var nonce = 'ThisIsANonceThisIsANonceThisIsANonce';
@@ -557,9 +703,14 @@ function testSetScriptSrc() {
 }
 
 function testSetScriptContent() {
-  var mockScriptElement = /** @type {!HTMLScriptElement} */ ({});
+  var mockScriptElement = /** @type {!HTMLScriptElement} */ ({
+    /** @suppress {globalThis} */
+    'setAttribute': function(attr, value) {
+      this[attr] = value;
+    }
+  });
   // clear nonce cache for test.
-  goog.cspNonce_ = null;
+  /** @type {?} */ (goog).cspNonce_ = null;
 
   // Place a nonced script in the page.
   var nonce = 'ThisIsANonceThisIsANonceThisIsANonce';
@@ -608,6 +759,68 @@ function testOpenInWindow() {
   mockWindowOpen.$verify();
   assertEquals(
       'openInWindow should return the created window', fakeWindow, retVal);
+}
+
+function testParseFromStringHtml() {
+  if (goog.userAgent.IE && !goog.userAgent.isVersionOrHigher('10')) {
+    return;
+  }
+  var html = goog.html.SafeHtml.create('A', {'class': 'b'}, 'c');
+  var node =
+      goog.dom.safe.parseFromStringHtml(new DOMParser(), html).body.firstChild;
+  assertEquals('A', node.tagName);
+  assertEquals('b', node.className);
+  assertEquals('c', node.textContent);
+}
+
+function testParseFromString() {
+  if (goog.userAgent.IE && !goog.userAgent.isVersionOrHigher('10')) {
+    return;
+  }
+  var html = goog.html.SafeHtml.create('a', {'class': 'b'}, 'c');
+  var node =
+      goog.dom.safe.parseFromString(new DOMParser(), html, 'application/xml')
+          .firstChild;
+  assertEquals('a', node.tagName);
+  assertEquals('b', node.getAttribute('class'));
+  assertEquals('c', node.textContent);
+}
+
+function testCreateImageFromBlob() {
+  // Skip unsupported test if IE9 or lower.
+  if (goog.userAgent.IE && !goog.userAgent.isVersionOrHigher('10')) {
+    return;
+  }
+  var blob = new Blob(['data'], {type: 'image/svg+xml'});
+  var fakeObjectUrl = 'blob:http://fakeurl.com';
+  var mockCreateObject = /** @type {?} */ (
+      goog.testing.createMethodMock(window.URL, 'createObjectURL'));
+  var mockRevokeObject = /** @type {?} */ (
+      goog.testing.createMethodMock(window.URL, 'revokeObjectURL'));
+  mockCreateObject(blob).$returns(fakeObjectUrl);
+  mockRevokeObject(fakeObjectUrl);
+  mockCreateObject.$replay();
+  mockRevokeObject.$replay();
+
+  var image = goog.dom.safe.createImageFromBlob(blob);
+
+  mockCreateObject.$verify();
+  assertEquals('function', typeof image.onload);
+  image.onload(null);  // Trigger image load.
+  mockRevokeObject.$verify();
+  assertEquals(fakeObjectUrl, image.src);
+  assertTrue(image instanceof HTMLImageElement);
+}
+
+function testCreateImageFromBlobBadMimeType() {
+  // Skip unsupported test if IE9 or lower.
+  if (goog.userAgent.IE && !goog.userAgent.isVersionOrHigher('10')) {
+    return;
+  }
+  var blob = new Blob(['data'], {type: 'badmimetype'});
+  assertThrows(function() {
+    goog.dom.safe.createImageFromBlob(blob);
+  });
 }
 
 /**

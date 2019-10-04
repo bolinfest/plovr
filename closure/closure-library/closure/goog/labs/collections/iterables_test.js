@@ -19,10 +19,9 @@
 goog.module('goog.labs.iterableTest');
 goog.setTestOnly('goog.labs.iterableTest');
 
-var iterable = goog.require('goog.labs.iterable');
-var recordFunction = goog.require('goog.testing.recordFunction');
-var testSuite = goog.require('goog.testing.testSuite');
-goog.require('goog.testing.jsunit');
+const iterables = goog.require('goog.labs.collections.iterables');
+const recordFunction = goog.require('goog.testing.recordFunction');
+const testSuite = goog.require('goog.testing.testSuite');
 
 
 /**
@@ -30,8 +29,8 @@ goog.require('goog.testing.jsunit');
  * (but not including) "stop".
  */
 function createRangeIterator(start, stop) {
-  var value = start;
-  var next = function() {
+  let value = start;
+  const next = () => {
     if (value < stop) {
       return {value: value++, done: false};
     }
@@ -43,13 +42,11 @@ function createRangeIterator(start, stop) {
 }
 
 function createRangeIterable(start, stop) {
-  var obj = {};
+  const obj = {};
 
   // Refer to goog.global['Symbol'] because otherwise this
   // is a parse error in earlier IEs.
-  obj[goog.global['Symbol'].iterator] = function() {
-    return createRangeIterator(start, stop);
-  };
+  obj[goog.global['Symbol'].iterator] = () => createRangeIterator(start, stop);
   return obj;
 }
 
@@ -58,57 +55,59 @@ function isSymbolDefined() {
 }
 
 testSuite({
-  testCreateRangeIterable: function() {
+  testCreateRangeIterable() {
     // Do not run if Symbol does not exist in this browser.
     if (!isSymbolDefined()) {
       return;
     }
 
-    var rangeIterator = createRangeIterator(0, 3);
+    const rangeIterator = createRangeIterator(0, 3);
 
-    for (var i = 0; i < 3; i++) {
+    for (let i = 0; i < 3; i++) {
       assertObjectEquals({value: i, done: false}, rangeIterator.next());
     }
 
-    for (var i = 0; i < 3; i++) {
+    for (let i = 0; i < 3; i++) {
       assertObjectEquals({value: undefined, done: true}, rangeIterator.next());
     }
   },
 
-  testForEach: function() {
+  testForEach() {
     // Do not run if Symbol does not exist in this browser.
     if (!isSymbolDefined()) {
       return;
     }
 
-    var range = createRangeIterable(0, 3);
+    const range = createRangeIterable(0, 3);
 
-    var callback = recordFunction();
-    iterable.forEach(callback, range, self);
+    const callback = recordFunction();
+    iterables.forEach(range, callback);
 
     callback.assertCallCount(3);
 
-    var calls = callback.getCalls();
-    for (var i = 0; i < calls.length; i++) {
-      var call = calls[i];
+    const calls = callback.getCalls();
+    for (let i = 0; i < calls.length; i++) {
+      const call = calls[i];
       assertArrayEquals([i], call.getArguments());
     }
   },
 
-  testMap: function() {
+  testMap() {
     // Do not run if Symbol does not exist in this browser.
     if (!isSymbolDefined()) {
       return;
     }
 
-    var range = createRangeIterable(0, 3);
+    const range = createRangeIterable(0, 3);
 
-    function addTwo(i) { return i + 2; }
+    function addTwo(i) {
+      return i + 2;
+    }
 
-    var newIterable = iterable.map(addTwo, range);
-    var newIterator = iterable.getIterator(newIterable);
+    const newIterable = iterables.map(range, addTwo);
+    const newIterator = iterables.getIterator(newIterable);
 
-    var nextObj = newIterator.next();
+    let nextObj = newIterator.next();
     assertEquals(2, nextObj.value);
     assertFalse(nextObj.done);
 
@@ -121,7 +120,36 @@ testSuite({
     assertFalse(nextObj.done);
 
     // Check that the iterator repeatedly signals done.
-    for (var i = 0; i < 3; i++) {
+    for (let i = 0; i < 3; i++) {
+      nextObj = newIterator.next();
+      assertUndefined(nextObj.value);
+      assertTrue(nextObj.done);
+    }
+  },
+
+  testFilter() {
+    function isEven(val) {
+      return val % 2 == 0;
+    }
+
+    const range = createRangeIterable(0, 6);
+    const newIterable = iterables.filter(range, isEven);
+    const newIterator = iterables.getIterator(newIterable);
+
+    let nextObj = newIterator.next();
+    assertEquals(0, nextObj.value);
+    assertFalse(nextObj.done);
+
+    nextObj = newIterator.next();
+    assertEquals(2, nextObj.value);
+    assertFalse(nextObj.done);
+
+    nextObj = newIterator.next();
+    assertEquals(4, nextObj.value);
+    assertFalse(nextObj.done);
+
+    // Check that the iterator repeatedly signals done.
+    for (let i = 0; i < 3; i++) {
       nextObj = newIterator.next();
       assertUndefined(nextObj.value);
       assertTrue(nextObj.done);

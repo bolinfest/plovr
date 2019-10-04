@@ -19,11 +19,21 @@
 goog.provide('goog.html.safeScriptTest');
 
 goog.require('goog.html.SafeScript');
+goog.require('goog.html.trustedtypes');
 goog.require('goog.object');
 goog.require('goog.string.Const');
+goog.require('goog.testing.PropertyReplacer');
 goog.require('goog.testing.jsunit');
 
 goog.setTestOnly('goog.html.safeScriptTest');
+
+
+var stubs = new goog.testing.PropertyReplacer();
+var policy = goog.createTrustedTypesPolicy('closure_test');
+
+function tearDown() {
+  stubs.reset();
+}
 
 
 function testSafeScript() {
@@ -55,6 +65,23 @@ function testUnwrap() {
   var exception =
       assertThrows(function() { goog.html.SafeScript.unwrap(evil); });
   assertContains('expected object of type SafeScript', exception.message);
+}
+
+
+function testUnwrapTrustedScript() {
+  var safeValue =
+      goog.html.SafeScript.fromConstant(goog.string.Const.from('script'));
+  var trustedValue = goog.html.SafeScript.unwrapTrustedScript(safeValue);
+  assertEquals(safeValue.getTypedStringValue(), trustedValue);
+  stubs.set(
+      goog.html.trustedtypes, 'PRIVATE_DO_NOT_ACCESS_OR_ELSE_POLICY', policy);
+  safeValue =
+      goog.html.SafeScript.fromConstant(goog.string.Const.from('script'));
+  trustedValue = goog.html.SafeScript.unwrapTrustedScript(safeValue);
+  assertEquals(safeValue.getTypedStringValue(), trustedValue.toString());
+  assertTrue(
+      goog.global.TrustedScript ? trustedValue instanceof TrustedScript :
+                                  goog.isString(trustedValue));
 }
 
 
@@ -99,4 +126,10 @@ function testFromConstantAndArgs_eval() {
       21, 2);
   var result = eval(goog.html.SafeScript.unwrap(script));
   assertEquals(42, result);
+}
+
+
+function testFromJson() {
+  var json = goog.html.SafeScript.fromJson({'a': 1, 'b': testFromJson});
+  assertEquals('{"a":1}', goog.html.SafeScript.unwrap(json));
 }

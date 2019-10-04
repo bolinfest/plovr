@@ -62,14 +62,14 @@ goog.window.createFakeWindow_ = function() {
 /**
  * Opens a new window.
  *
- * @param {goog.html.SafeUrl|string|Object|null} linkRef If an Object with an 'href'
- *     attribute (such as HTMLAnchorElement) is passed then the value of 'href'
- *     is used, otherwise its toString method is called. Note that if a
+ * @param {!goog.html.SafeUrl|string|!Object|null} linkRef If an Object with an
+ *     'href' attribute (such as HTMLAnchorElement) is passed then the value of
+ *     'href' is used, otherwise its toString method is called. Note that if a
  *     string|Object is used, it will be sanitized with SafeUrl.sanitize().
  *
  * @param {?Object=} opt_options supports the following options:
  *  'target': (string) target (window name). If null, linkRef.target will
- *          be used.
+ *      be used.
  *  'width': (number) window width.
  *  'height': (number) window height.
  *  'top': (number) distance from top of screen
@@ -83,6 +83,10 @@ goog.window.createFakeWindow_ = function() {
  *  'noreferrer': (boolean) whether to attempt to remove the referrer header
  *      from the request headers. Does this by opening a blank window that
  *      then redirects to the target url, so users may see some flickering.
+ *  'noopener': (boolean) whether to remove the `opener` property from the
+ *      window object of the newly created window. The property contains a
+ *      reference to the original window, and can be used to launch a
+ *      reverse tabnabbing attack.
  *
  * @param {?Window=} opt_parentWin Parent window that should be used to open the
  *                 new window.
@@ -119,7 +123,8 @@ goog.window.open = function(linkRef, opt_options, opt_parentWin) {
     safeLinkRef = goog.html.SafeUrl.sanitize(url);
   }
 
-
+  /** @suppress {missingProperties} loose references to 'target' */
+  /** @suppress {strictMissingProperties} */
   var target = opt_options.target || linkRef.target;
 
   var sb = [];
@@ -157,7 +162,8 @@ goog.window.open = function(linkRef, opt_options, opt_parentWin) {
     if (opt_options['noreferrer']) {
       a.setAttribute('rel', 'noreferrer');
     }
-    var click = document.createEvent('MouseEvent');
+
+    var click = /** @type {!MouseEvent} */ (document.createEvent('MouseEvent'));
     click.initMouseEvent(
         'click',
         true,  // canBubble
@@ -172,11 +178,17 @@ goog.window.open = function(linkRef, opt_options, opt_parentWin) {
     // is the most appropriate return value.
     newWin = goog.window.createFakeWindow_();
   } else if (opt_options['noreferrer']) {
-    // Use a meta-refresh to stop the referrer from being included in the
-    // request headers. This seems to be the only cross-browser way to
-    // remove the referrer. It also allows for the opener to be set to null
-    // in the new window, thus disallowing the opened window from navigating
-    // its opener.
+    // This code used to use meta-refresh to stop the referrer from being
+    // included in the request headers. This was the only cross-browser way
+    // to remove the referrer circa 2009. However, this never worked in Chrome,
+    // and, instead newWin.opener had to be set to null on this browser. This
+    // behavior is slated to be removed in Chrome and should not be relied
+    // upon. Referrer Policy is the only spec'd and supported way of stripping
+    // referrers and works across all current browsers. This is used in
+    // addition to the aforementioned tricks.
+    //
+    // We also set the opener to be set to null in the new window, thus
+    // disallowing the opened window from navigating its opener.
     //
     // Detecting user agent and then using a different strategy per browser
     // would allow the referrer to leak in case of an incorrect/missing user
@@ -221,10 +233,6 @@ goog.window.open = function(linkRef, opt_options, opt_parentWin) {
               .safeHtmlFromStringKnownToSatisfyTypeContract(
                   goog.string.Const.from(
                       'b/12014412, meta tag with sanitized URL'),
-                  // The referrer policy meta tag below works around a bug in
-                  // Chrome where the meta-refresh alone fails to clear the
-                  // the referrer under certain circumstances
-                  // (crbug.com/791216).
                   '<meta name="referrer" content="no-referrer">' +
                       '<meta http-equiv="refresh" content="0; url=' +
                       goog.string.htmlEscape(sanitizedLinkRef) + '">');

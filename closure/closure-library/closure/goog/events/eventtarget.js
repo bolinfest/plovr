@@ -89,7 +89,7 @@ goog.events.EventTarget = function() {
    * currently breaks people who expect getParentEventTarget to return
    * goog.events.EventTarget.
    *
-   * @private {goog.events.EventTarget}
+   * @private {?goog.events.EventTarget}
    */
   this.parentEventTarget_ = null;
 };
@@ -203,6 +203,7 @@ goog.events.EventTarget.prototype.dispatchEvent = function(e) {
  * need to override this method in order to remove references to DOM Elements
  * and additional listeners.
  * @override
+ * @protected
  */
 goog.events.EventTarget.prototype.disposeInternal = function() {
   goog.events.EventTarget.superClass_.disposeInternal.call(this);

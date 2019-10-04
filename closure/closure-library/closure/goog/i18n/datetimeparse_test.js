@@ -189,6 +189,12 @@ function testYearParsing() {
 
   var parser2 = new goog.i18n.DateTimeParse('yyyyMMdd');
   assertParsedDateEquals(2005, 12 - 1, 2, parser2, '20051202', date);
+
+  var parser3 = new goog.i18n.DateTimeParse('MM/y');
+  assertParsedDateEquals(1999, 12 - 1, 2, parser3, '12/1999', date);
+
+  var parser4 = new goog.i18n.DateTimeParse('MM-y');
+  assertParsedDateEquals(1999, 12 - 1, 2, parser4, '12-1999', date);
 }
 
 function testGoogDateParsing() {
@@ -309,7 +315,7 @@ function testEnglishDate() {
 function testChineseDate() {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_zh;
 
-  // Javascript month start from 0, July is 7 - 1
+  // JavaScript month start from 0, July is 7 - 1
   var date = new Date(2006, 7 - 1, 24, 12, 12, 12, 0);
   var formatter =
       new goog.i18n.DateTimeFormat(goog.i18n.DateTimeFormat.Format.FULL_DATE);
@@ -349,7 +355,7 @@ function testDatesWithNativeDigits() {
   // goog.i18n.DateTimeSymbols.ZERODIGIT defined.
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_fa;
 
-  // Javascript month starts from 0, July is 7 - 1
+  // JavaScript month starts from 0, July is 7 - 1
   var date = new Date(2006, 7 - 1, 24, 12, 12, 12, 0);
   var formatter =
       new goog.i18n.DateTimeFormat(goog.i18n.DateTimeFormat.Format.FULL_DATE);

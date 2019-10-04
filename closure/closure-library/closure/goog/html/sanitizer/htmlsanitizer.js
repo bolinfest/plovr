@@ -20,9 +20,9 @@
  * This package provides html sanitizing functions. It does not enforce string
  * to string conversion, instead returning a dom-like element when possible.
  *
- * Examples of usage of the static `goog.goog.html.sanitizer.sanitize`:
+ * Examples of usage of the static `HtmlSanitizer.sanitize`:
  * <pre>
- *   var safeHtml = goog.html.sanitizer.sanitize('<script src="xss.js" />');
+ *   var safeHtml = HtmlSanitizer.sanitize('<script src="xss.js" />');
  *   goog.dom.safe.setInnerHtml(el, safeHtml);
  * </pre>
  *
@@ -173,9 +173,16 @@ goog.html.sanitizer.HtmlSanitizer = function(opt_builder) {
   // with a default cleanUpAttribute function. data-* attributes are inert as
   // per HTML5 specs, so not much sanitization needed.
   goog.array.forEach(builder.dataAttributeWhitelist_, function(dataAttr) {
-    goog.asserts.assert(goog.string.startsWith(dataAttr, 'data-'));
-    goog.asserts.assert(!goog.string.startsWith(
-        dataAttr, goog.html.sanitizer.HTML_SANITIZER_BOOKKEEPING_PREFIX_));
+    if (!goog.string.startsWith(dataAttr, 'data-')) {
+      throw new goog.asserts.AssertionError(
+          'Only "data-" attributes allowed, got: %s.', [dataAttr]);
+    }
+    if (goog.string.startsWith(
+            dataAttr, goog.html.sanitizer.HTML_SANITIZER_BOOKKEEPING_PREFIX_)) {
+      throw new goog.asserts.AssertionError(
+          'Attributes with "%s" prefix are not allowed, got: %s.',
+          [goog.html.sanitizer.HTML_SANITIZER_BOOKKEEPING_PREFIX_, dataAttr]);
+    }
 
     this.attributeHandlers_['* ' + dataAttr.toUpperCase()] =
         /** @type {!goog.html.sanitizer.HtmlSanitizerPolicy} */ (
@@ -469,6 +476,7 @@ goog.html.sanitizer.HtmlSanitizer.Builder.prototype
     .alsoAllowTagsPrivateDoNotAccessOrElse = function(tags) {
   goog.array.forEach(tags, function(tag) {
     this.tagWhitelist_[tag.toUpperCase()] = true;
+    delete this.tagBlacklist_[tag.toUpperCase()];
   }, this);
   return this;
 };
