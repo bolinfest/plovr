@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="JAVA_MODULE" version="4">
+  <component name="NewModuleRootManager" inherit-compiler-output="true">
+    <exclude-output />
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/test" isTestSource="true" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="library" name="com.google.code.findbugs-jsr305-jar-3.0.13" level="project" />
+    <orderEntry type="library" name="com.google.closure-stylesheets-closure-stylesheets-jar-1.5.04" level="project" />
+    <orderEntry type="library" name="com.google.code.findbugs-jsr305-jar-3.0.11" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-java-jar-2.21.02" level="project" />
+    <orderEntry type="library" name="com.google.javascript-closure-compiler-jar-v201811252" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-java-jar-abi" level="project" />
+    <orderEntry type="library" name="args4j-args4j-jar-2.0.26" level="project" />
+    <orderEntry type="library" name="javax.annotation-jsr250-api-jar-1.01" level="project" />
+    <orderEntry type="library" name="com.google.template-soy-jar-2018-03-143" level="project" />
+    <orderEntry type="library" name="xml-apis-xml-apis-jar-1.3.043" level="project" />
+    <orderEntry type="library" name="com.google.javascript-closure-compiler-jar-v20181125" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-htmlunit-driver-jar-2.21.01" level="project" />
+    <orderEntry type="library" name="xml-apis-xml-apis-jar-1.3.041" level="project" />
+    <orderEntry type="library" name="com.google.code.gson-gson-jar-2.72" level="project" />
+    <orderEntry type="library" name="com.google.closure-stylesheets-closure-stylesheets-jar-abi" level="project" />
+    <orderEntry type="library" name="com.google.inject.extensions-guice-multibindings-jar-4.1.03" level="project" />
+    <orderEntry type="library" name="com.google.javascript-closure-compiler-jar-v20181210" level="project" />
+    <orderEntry type="library" name="plovr-lib" level="project" />
+    <orderEntry type="library" name="com.google.code.gson-gson-jar-2.7" level="project" />
+    <orderEntry type="library" name="args4j-args4j-jar-2.0.262" level="project" />
+    <orderEntry type="library" name="com.google.closure-stylesheets-closure-stylesheets-jar-1.5.0" level="project" />
+    <orderEntry type="library" name="junit-junit-jar-4.103" level="project" />
+    <orderEntry type="library" name="com.google.template-soy-jar-abi" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-htmlunit-driver-jar-2.21.03" level="project" />
+    <orderEntry type="library" name="com.google.inject.extensions-guice-multibindings-jar-abi" level="project" />
+    <orderEntry type="library" name="com.google.javascript-closure-compiler-jar-v201811251" level="project" />
+    <orderEntry type="library" name="org.mockito-mockito-core-jar-1.10.193" level="project" />
+    <orderEntry type="library" name="com.google.closure-stylesheets-closure-stylesheets-jar-1.5.02" level="project" />
+    <orderEntry type="library" name="xml-apis-xml-apis-jar-1.3.042" level="project" />
+    <orderEntry type="library" name="com.google.inject-guice-jar-4.1.0" level="project" />
+    <orderEntry type="library" name="com.google.inject-guice-jar-4.1.02" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-htmlunit-driver-jar-abi" level="project" />
+    <orderEntry type="library" name="com.google.template-soy-jar-2018-03-144" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-api-jar-2.21.02" level="project" />
+    <orderEntry type="library" name="com.google.javascript-closure-compiler-jar-abi" level="project" />
+    <orderEntry type="library" name="com.google.code.gson-gson-jar-2.74" level="project" />
+    <orderEntry type="library" name="org.mockito-mockito-core-jar-1.10.192" level="project" />
+    <orderEntry type="library" name="com.google.guava-guava-jar-abi" level="project" />
+    <orderEntry type="library" name="javax.annotation-jsr250-api-jar-1.03" level="project" />
+    <orderEntry type="library" name="xml-apis-xml-apis-jar-abi" level="project" />
+    <orderEntry type="library" name="com.google.code.findbugs-jsr305-jar-abi" level="project" />
+    <orderEntry type="library" name="com.google.inject-guice-jar-4.1.04" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-java-jar-2.21.03" level="project" />
+    <orderEntry type="library" name="org.mockito-mockito-core-jar-1.10.191" level="project" />
+    <orderEntry type="library" name="args4j-args4j-jar-2.0.261" level="project" />
+    <orderEntry type="library" name="com.google.inject.extensions-guice-multibindings-jar-4.1.01" level="project" />
+    <orderEntry type="library" name="com.google.javascript-closure-compiler-jar-v201812101" level="project" />
+    <orderEntry type="library" name="javax.annotation-jsr250-api-jar-abi" level="project" />
+    <orderEntry type="library" name="com.google.code.findbugs-jsr305-jar-3.0.1" level="project" />
+    <orderEntry type="library" name="com.google.closure-stylesheets-closure-stylesheets-jar-1.5.03" level="project" />
+    <orderEntry type="library" name="args4j-args4j-jar-2.0.264" level="project" />
+    <orderEntry type="library" name="com.google.inject-guice-jar-4.1.01" level="project" />
+    <orderEntry type="library" name="com.google.closure-stylesheets-closure-stylesheets-jar-1.5.01" level="project" />
+    <orderEntry type="library" name="com.google.code.gson-gson-jar-2.73" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-api-jar-2.21.01" level="project" />
+    <orderEntry type="library" name="com.google.inject.extensions-guice-multibindings-jar-4.1.0" level="project" />
+    <orderEntry type="library" name="javax.annotation-jsr250-api-jar-1.02" level="project" />
+    <orderEntry type="library" name="junit-junit-jar-4.101" level="project" />
+    <orderEntry type="library" name="plovr" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-api-jar-abi" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-java-jar-2.21.01" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-api-jar-2.21.0" level="project" />
+    <orderEntry type="library" name="plovr1" level="project" />
+    <orderEntry type="library" name="junit-junit-jar-4.102" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-htmlunit-driver-jar-2.21.0" level="project" />
+    <orderEntry type="library" name="xml-apis-xml-apis-jar-1.3.04" level="project" />
+    <orderEntry type="library" name="args4j-args4j-jar-2.0.263" level="project" />
+    <orderEntry type="library" name="com.google.inject-guice-jar-abi" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-api-jar-2.21.03" level="project" />
+    <orderEntry type="library" name="com.google.code.gson-gson-jar-2.71" level="project" />
+    <orderEntry type="library" name="com.google.guava-guava-jar-21.02" level="project" />
+    <orderEntry type="library" name="com.google.template-soy-jar-2018-03-14" level="project" />
+    <orderEntry type="library" name="com.google.guava-guava-jar-21.0" level="project" />
+    <orderEntry type="library" name="com.google.template-soy-jar-2018-03-141" level="project" />
+    <orderEntry type="library" name="com.google.code.findbugs-jsr305-jar-3.0.14" level="project" />
+    <orderEntry type="library" name="org.mockito-mockito-core-jar-1.10.19" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-api-jar-2.21.04" level="project" />
+    <orderEntry type="library" name="com.google.code.gson-gson-jar-abi" level="project" />
+    <orderEntry type="library" name="args4j-args4j-jar-abi" level="project" />
+    <orderEntry type="library" name="com.google.template-soy-jar-2018-03-142" level="project" />
+    <orderEntry type="library" name="javax.annotation-jsr250-api-jar-1.04" level="project" />
+    <orderEntry type="library" name="xml-apis-xml-apis-jar-1.3.044" level="project" />
+    <orderEntry type="library" name="com.google.guava-guava-jar-21.03" level="project" />
+    <orderEntry type="library" name="com.google.inject.extensions-guice-multibindings-jar-4.1.02" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-htmlunit-driver-jar-2.21.02" level="project" />
+    <orderEntry type="library" name="com.google.guava-guava-jar-21.04" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-java-jar-2.21.0" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-java-jar-2.21.04" level="project" />
+    <orderEntry type="library" name="com.google.inject.extensions-guice-multibindings-jar-4.1.04" level="project" />
+    <orderEntry type="library" name="com.google.inject-guice-jar-4.1.03" level="project" />
+    <orderEntry type="library" name="com.google.code.findbugs-jsr305-jar-3.0.12" level="project" />
+    <orderEntry type="library" name="junit-junit-jar-4.10" level="project" />
+    <orderEntry type="library" name="com.google.guava-guava-jar-21.01" level="project" />
+    <orderEntry type="library" name="javax.annotation-jsr250-api-jar-1.0" level="project" />
+    <orderEntry type="library" name="org.seleniumhq.selenium-selenium-htmlunit-driver-jar-2.21.04" level="project" />
+  </component>
+</module>
