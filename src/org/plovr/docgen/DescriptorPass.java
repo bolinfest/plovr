@@ -1,15 +1,5 @@
 package org.plovr.docgen;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.Map;
-import java.util.Set;
-import java.util.logging.Logger;
-
-import javax.annotation.Nullable;
-
-import org.plovr.Config;
-
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
@@ -18,12 +8,20 @@ import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.AbstractCompiler;
 import com.google.javascript.jscomp.CompilerPass;
 import com.google.javascript.jscomp.NodeTraversal;
-import com.google.javascript.jscomp.NodeUtil;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.jscomp.NodeUtil;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
+import org.plovr.Config;
+
+import javax.annotation.Nullable;
+import java.io.File;
+import java.io.IOException;
+import java.util.Map;
+import java.util.Set;
+import java.util.logging.Logger;
 
 public class DescriptorPass implements CompilerPass {
 
@@ -66,7 +64,7 @@ public class DescriptorPass implements CompilerPass {
   @Override
   public void process(Node externs, Node root) {
     DescriptorPassCallback callback = new DescriptorPassCallback(compiler);
-    NodeTraversal.traverseEs6(compiler, root, callback);
+    NodeTraversal.traverse(compiler, root, callback);
 
     try {
       ImmutableMap.Builder<String, ClassDescriptor> classMapBuilder =

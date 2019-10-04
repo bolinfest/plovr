@@ -21,9 +21,8 @@ public final class DiagnosticGroupUtil {
   }
 
   private static class BackdoorDiagnosticGroups extends DiagnosticGroups {
-    @Override
-    public DiagnosticGroup forName(String name) {
-      return super.forName(name);
+    public static DiagnosticGroup forName(String name) {
+      return forName(name);
     }
   }
 }
