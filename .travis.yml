@@ -3,7 +3,7 @@ jdk:
   - openjdk8
 
 # Enable container-based architecture.
-sudo: false
+sudo: true
 
 addons:
   apt:
