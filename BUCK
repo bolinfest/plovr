@@ -29,7 +29,7 @@ java_library(
   srcs = [],
   resources = [
     '//third-party/javascript:soyutils_usegoog.js'
-    ],
+  ],
   resources_root = './third-party')
 
 java_test(
