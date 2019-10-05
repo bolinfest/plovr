@@ -194,9 +194,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.errorprone-error_prone_annotations-jar',
-  out = 'com.google.errorprone-error_prone_annotations-jar-2.0.18.jar',
-  url = 'mvn:com.google.errorprone:error_prone_annotations:jar:2.0.18',
-  sha1 = '5f65affce1684999e2f4024983835efc3504012e',
+  out = 'com.google.errorprone-error_prone_annotations-jar-2.3.1.jar',
+  url = 'mvn:com.google.errorprone:error_prone_annotations:jar:2.3.1',
+  sha1 = 'a6a2b2df72fd13ec466216049b303f206bd66c5d',
 )
 
 prebuilt_jar(
@@ -254,9 +254,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.javascript-closure-compiler-jar',
-  out = 'com.google.javascript-closure-compiler-jar-v20180610.jar',
-  url = 'mvn:com.google.javascript:closure-compiler:jar:v20180610',
-  sha1 = '3b34b3d07c394781ac4fd9eeb5e1d31099bc58ca',
+  out = 'com.google.javascript-closure-compiler-jar-v20181125.jar',
+  url = 'mvn:com.google.javascript:closure-compiler:jar:v20181125',
+  sha1 = '1d13e93106574b51f361d2e73b6e0ecf345d2304',
 )
 
 prebuilt_jar(
@@ -266,9 +266,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.javascript-closure-compiler-externs-jar',
-  out = 'com.google.javascript-closure-compiler-externs-jar-v20180610.jar',
-  url = 'mvn:com.google.javascript:closure-compiler-externs:jar:v20180610',
-  sha1 = '68f704c2f71c62fb4c35c865e98e95630f23233c',
+  out = 'com.google.javascript-closure-compiler-externs-jar-v20181125.jar',
+  url = 'mvn:com.google.javascript:closure-compiler-externs:jar:v20181125',
+  sha1 = '6c7839867a7ee53173d69be31c70b3aa012fb90a',
 )
 
 prebuilt_jar(

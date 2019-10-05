@@ -19,7 +19,7 @@ public class PlovrClosureCompiler extends Compiler {
   public PlovrClosureCompiler(PrintStream errorStream) { super(errorStream); }
 
   @Override
-  protected PlovrDiagnosticGroups getDiagnosticGroups() {
+  public PlovrDiagnosticGroups getDiagnosticGroups() {
     return diagnosticGroups;
   }
 }
