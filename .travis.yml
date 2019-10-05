@@ -1,0 +1,26 @@
+language: java
+jdk:
+  - oraclejdk8
+
+# Enable container-based architecture.
+sudo: false
+
+addons:
+  apt:
+    packages:
+      - oracle-java8-installer
+      - ant
+
+before_install:
+  # Limit Ant's and Buck's memory usage to avoid the OOM killer.
+  - export ANT_OPTS='-Xmx500m'
+  - export BUCK_EXTRA_JAVA_ARGS='-Xmx500m'
+  # Set up the BUCK BUILD environment.
+  - git clone https://github.com/facebook/buck.git $HOME/buck
+  - ant -f $HOME/buck/build.xml
+  - export PATH=$HOME/buck/bin:$PATH
+
+script:
+  - buck clean 2>/dev/null
+  - buck fetch ... 2>/dev/null
+  - buck test --all 2>/dev/null
