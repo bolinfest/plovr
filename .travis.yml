@@ -20,5 +20,5 @@ before_install:
 
 script:
   - buck clean 2>/dev/null
-  - buck fetch plovr
-  - buck test plovr
+  - buck fetch ...
+  - buck test --all
