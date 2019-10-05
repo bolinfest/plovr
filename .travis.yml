@@ -16,7 +16,7 @@ before_install:
   - export BUCK_EXTRA_JAVA_ARGS='-Xmx500m'
   # Set up the BUCK BUILD environment.
   - wget https://github.com/facebook/buck/releases/download/v2017.11.16.01/buck_2017.07.24_all.deb
-  - dpkg -i buck_*.deb
+  - sudo dpkg -i buck_*.deb
 
 script:
   - buck clean 2>/dev/null
