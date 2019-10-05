@@ -110,6 +110,7 @@ goog.events.WheelHandler.getDomEventType = function() {
 /**
  * Handles the events on the element.
  * @param {!goog.events.BrowserEvent} e The underlying browser event.
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.events.WheelHandler.prototype.handleEvent = function(e) {
   var deltaMode = goog.events.WheelEvent.DeltaMode.PIXEL;
@@ -125,7 +126,7 @@ goog.events.WheelHandler.prototype.handleEvent = function(e) {
   } else if (be.type == 'mousewheel') {
     // Assume that these are still comparable to pixels. This may not be true
     // for all old browsers.
-    if (goog.isDef(be.wheelDeltaX)) {
+    if (be.wheelDeltaX !== undefined) {
       deltaX = -be.wheelDeltaX;
       deltaY = -be.wheelDeltaY;
     } else {
@@ -135,7 +136,7 @@ goog.events.WheelHandler.prototype.handleEvent = function(e) {
     // Gecko returns multiple of 3 (representing the number of lines)
     deltaMode = goog.events.WheelEvent.DeltaMode.LINE;
     // Firefox 3.1 adds an axis field to the event to indicate axis.
-    if (goog.isDef(be.axis) && be.axis === be.HORIZONTAL_AXIS) {
+    if (be.axis !== undefined && be.axis === be.HORIZONTAL_AXIS) {
       deltaX = be.detail;
     } else {
       deltaY = be.detail;

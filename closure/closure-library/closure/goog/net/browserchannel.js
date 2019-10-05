@@ -138,9 +138,8 @@ goog.net.BrowserChannel = function(
    * the results are not available.
    * @private
    */
-  this.secondTestResults_ = goog.isDefAndNotNull(opt_secondTestResults) ?
-      opt_secondTestResults :
-      null;
+  this.secondTestResults_ =
+      (opt_secondTestResults != null) ? opt_secondTestResults : null;
 
   /**
    * Whether to perform the test requests asynchronously. While the test is
@@ -184,7 +183,7 @@ goog.net.BrowserChannel.QueuedMap = function(mapId, map, opt_context) {
 
 /**
  * Extra HTTP headers to add to all the requests sent to the server.
- * @type {Object}
+ * @type {?Object}
  * @private
  */
 goog.net.BrowserChannel.prototype.extraHeaders_ = null;
@@ -192,7 +191,7 @@ goog.net.BrowserChannel.prototype.extraHeaders_ = null;
 
 /**
  * Extra parameters to add to all the requests sent to the server.
- * @type {Object}
+ * @type {?Object}
  * @private
  */
 goog.net.BrowserChannel.prototype.extraParams_ = null;
@@ -225,7 +224,7 @@ goog.net.BrowserChannel.prototype.path_ = null;
 
 /**
  * The absolute URI for the forwardchannel request.
- * @type {goog.Uri}
+ * @type {?goog.Uri}
  * @private
  */
 goog.net.BrowserChannel.prototype.forwardChannelUri_ = null;
@@ -233,7 +232,7 @@ goog.net.BrowserChannel.prototype.forwardChannelUri_ = null;
 
 /**
  * The absolute URI for the backchannel request.
- * @type {goog.Uri}
+ * @type {?goog.Uri}
  * @private
  */
 goog.net.BrowserChannel.prototype.backChannelUri_ = null;
@@ -283,7 +282,7 @@ goog.net.BrowserChannel.prototype.failFast_ = false;
 
 /**
  * The handler that receive callbacks for state changes and data.
- * @type {goog.net.BrowserChannel.Handler}
+ * @type {?goog.net.BrowserChannel.Handler}
  * @private
  */
 goog.net.BrowserChannel.prototype.handler_ = null;
@@ -853,7 +852,7 @@ goog.net.BrowserChannel.prototype.getChannelDebug = function() {
  * @param {goog.net.ChannelDebug} channelDebug The channel debug object.
  */
 goog.net.BrowserChannel.prototype.setChannelDebug = function(channelDebug) {
-  if (goog.isDefAndNotNull(channelDebug)) {
+  if (channelDebug != null) {
     this.channelDebug_ = channelDebug;
   }
 };
@@ -939,7 +938,7 @@ goog.net.BrowserChannel.prototype.connect = function(
   this.extraParams_ = opt_extraParams || {};
 
   // Attach parameters about the previous session if reconnecting.
-  if (opt_oldSessionId && goog.isDef(opt_oldArrayId)) {
+  if (opt_oldSessionId && opt_oldArrayId !== undefined) {
     this.extraParams_['OSID'] = opt_oldSessionId;
     this.extraParams_['OAID'] = opt_oldArrayId;
   }
@@ -1940,7 +1939,7 @@ goog.net.BrowserChannel.prototype.correctHostPrefix = function(
  * @private
  */
 goog.net.BrowserChannel.prototype.onBackChannelDead_ = function() {
-  if (goog.isDefAndNotNull(this.deadBackChannelTimerId_)) {
+  if (this.deadBackChannelTimerId_ != null) {
     this.deadBackChannelTimerId_ = null;
     this.backChannelRequest_.cancel();
     this.backChannelRequest_ = null;
@@ -1957,7 +1956,7 @@ goog.net.BrowserChannel.prototype.onBackChannelDead_ = function() {
  * @private
  */
 goog.net.BrowserChannel.prototype.clearDeadBackchannelTimer_ = function() {
-  if (goog.isDefAndNotNull(this.deadBackChannelTimerId_)) {
+  if (this.deadBackChannelTimerId_ != null) {
     goog.global.clearTimeout(this.deadBackChannelTimerId_);
     this.deadBackChannelTimerId_ = null;
   }
@@ -2120,7 +2119,7 @@ goog.net.BrowserChannel.prototype.onInput_ = function(respArray) {
         this.sid_ = nextArray[1];
         this.hostPrefix_ = this.correctHostPrefix(nextArray[2]);
         var negotiatedVersion = nextArray[3];
-        if (goog.isDefAndNotNull(negotiatedVersion)) {
+        if (negotiatedVersion != null) {
           this.channelVersion_ = negotiatedVersion;
         } else {
           // Servers prior to version 7 did not send this, so assume version 6.
@@ -2356,7 +2355,7 @@ goog.net.BrowserChannel.prototype.createDataUri = function(
       hostName = locationPage.hostname;
     }
 
-    var port = opt_overridePort || locationPage.port;
+    var port = opt_overridePort || +locationPage.port;
 
     uri = goog.Uri.create(locationPage.protocol, null, hostName, port, path);
   }

@@ -59,14 +59,14 @@ goog.crypt.BlobHasher = function(hashFn, opt_blockSize) {
 
   /**
    * The blob being processed or null if no blob is being processed.
-   * @type {Blob}
+   * @type {?Blob}
    * @private
    */
   this.blob_ = null;
 
   /**
    * Computed hash value.
-   * @type {Array<number>}
+   * @type {?Array<number>}
    * @private
    */
   this.hashVal_ = null;
@@ -94,7 +94,7 @@ goog.crypt.BlobHasher = function(hashFn, opt_blockSize) {
 
   /**
    * File reader object. Will be null if no chunk is currently being read.
-   * @type {FileReader}
+   * @type {?FileReader}
    * @private
    */
   this.fileReader_ = null;
@@ -251,7 +251,7 @@ goog.crypt.BlobHasher.prototype.onLoad_ = function() {
 
   var array = null;
   if (this.fileReader_.result instanceof Array ||
-      goog.isString(this.fileReader_.result)) {
+      typeof this.fileReader_.result === 'string') {
     array = this.fileReader_.result;
   } else if (
       goog.global['ArrayBuffer'] && goog.global['Uint8Array'] &&

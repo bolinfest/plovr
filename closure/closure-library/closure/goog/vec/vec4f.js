@@ -39,7 +39,7 @@ goog.provide('goog.vec.vec4f.Type');
 /** @suppress {extraRequire} */
 goog.require('goog.vec');
 
-/** @typedef {goog.vec.Float32} */ goog.vec.vec4f.Type;
+/** @typedef {!goog.vec.Float32} */ goog.vec.vec4f.Type;
 
 
 /**
@@ -353,7 +353,7 @@ goog.vec.vec4f.lerp = function(v0, v1, f, resultVec) {
  *     chained together.
  */
 goog.vec.vec4f.max = function(vec0, limit, resultVec) {
-  if (goog.isNumber(limit)) {
+  if (typeof limit === 'number') {
     resultVec[0] = Math.max(vec0[0], limit);
     resultVec[1] = Math.max(vec0[1], limit);
     resultVec[2] = Math.max(vec0[2], limit);
@@ -380,7 +380,7 @@ goog.vec.vec4f.max = function(vec0, limit, resultVec) {
  *     chained together.
  */
 goog.vec.vec4f.min = function(vec0, limit, resultVec) {
-  if (goog.isNumber(limit)) {
+  if (typeof limit === 'number') {
     resultVec[0] = Math.min(vec0[0], limit);
     resultVec[1] = Math.min(vec0[1], limit);
     resultVec[2] = Math.min(vec0[2], limit);
