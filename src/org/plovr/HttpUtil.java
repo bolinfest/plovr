@@ -8,7 +8,9 @@ import java.net.URISyntaxException;
 
 import com.google.common.io.Resources;
 import com.google.template.soy.SoyFileSet;
+import com.google.template.soy.data.SanitizedContent;
 import com.google.template.soy.data.SoyMapData;
+import com.google.template.soy.data.UnsafeSanitizedContentOrdainer;
 import com.google.template.soy.tofu.SoyTofu;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -91,7 +93,9 @@ public final class HttpUtil {
     Headers responseHeaders = exchange.getResponseHeaders();
     responseHeaders.set("Content-Type", "text/html");
 
-    SoyMapData mapData = new SoyMapData("htmlMessage", htmlMessage);
+    SanitizedContent htmlMsgContent = UnsafeSanitizedContentOrdainer.ordainAsSafe(
+        htmlMessage, SanitizedContent.ContentKind.HTML);
+    SoyMapData mapData = new SoyMapData("htmlMessage", htmlMsgContent);
     String message = TOFU.newRenderer("org.plovr.errorPage").
         setData(mapData).render();
 

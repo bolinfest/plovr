@@ -1,10 +1,8 @@
 {namespace example.templates}
 
-/**
- * @param meaningOfLife
- * @param weekdays
- */
 {template .base}
+{@param meaningOfLife: ?}
+{@param weekdays: ?}
 <div>{msg desc="meaning"}The meaning of life is: {$meaningOfLife}.{/msg}</div>
 
 <ul>
@@ -23,8 +21,8 @@
 //   <li>{$item}
 // {/for}
 
-/** @param items */
 {template .listTemplate}
+{@param items: ?}
 <ul>
 {for $item in $items}
   <li>{$item}
