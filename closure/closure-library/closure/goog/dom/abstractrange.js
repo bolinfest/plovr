@@ -24,6 +24,7 @@ goog.provide('goog.dom.AbstractRange');
 goog.provide('goog.dom.RangeIterator');
 goog.provide('goog.dom.RangeType');
 
+goog.forwardDeclare('goog.dom.TextRange');
 goog.require('goog.dom');
 goog.require('goog.dom.NodeType');
 goog.require('goog.dom.SavedCaretRange');

@@ -337,7 +337,7 @@ goog.ui.ac.InputHandler.prototype.activeTimeoutId_ = null;
 
 /**
  * The element that is currently active.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.ui.ac.InputHandler.prototype.activeElement_ = null;
@@ -526,7 +526,7 @@ goog.ui.ac.InputHandler.prototype.detachInputs = function(var_args) {
 
 /**
  * Selects the given row.  Implements the SelectionHandler interface.
- * @param {Object} row The row to select.
+ * @param {?} row The row to select.
  * @param {boolean=} opt_multi Should this be treated as a single or multi-token
  *     auto-complete?  Overrides previous setting of opt_multi on constructor.
  * @return {boolean} Whether to suppress the update event.
@@ -549,7 +549,7 @@ goog.ui.ac.InputHandler.prototype.selectRow = function(row, opt_multi) {
  */
 goog.ui.ac.InputHandler.prototype.setTokenText = function(
     tokenText, opt_multi) {
-  if (goog.isDef(opt_multi) ? opt_multi : this.multi_) {
+  if (opt_multi !== undefined ? opt_multi : this.multi_) {
     var index = this.getTokenIndex_(this.getValue(), this.getCursorPosition());
 
     // Break up the current input string.
@@ -643,7 +643,7 @@ goog.ui.ac.InputHandler.prototype.disposeInternal = function() {
 goog.ui.ac.InputHandler.prototype.setSeparators = function(
     separators, opt_defaultSeparators) {
   this.separators_ = separators;
-  this.defaultSeparator_ = goog.isDefAndNotNull(opt_defaultSeparators) ?
+  this.defaultSeparator_ = (opt_defaultSeparators != null) ?
       opt_defaultSeparators :
       this.separators_.substring(0, 1);
 

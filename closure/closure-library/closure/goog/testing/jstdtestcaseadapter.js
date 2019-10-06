@@ -38,6 +38,7 @@ goog.require('goog.testing.jsunit');
  *     JSTD testing queue.
  * @return {!Function}
  * @private
+ * @suppress {checkPrototypalTypes}
  */
 goog.testing.JsTdTestCaseAdapter.TestCaseFactory_ = function(
     testCaseName, condition, opt_proto, opt_isAsync) {
@@ -55,10 +56,7 @@ goog.testing.JsTdTestCaseAdapter.TestCaseFactory_ = function(
     testCase.shouldRunTests = condition;
     testCase.setTestObj(t);
     testCase.autoDiscoverTests();
-    // TODO(goktug): Remove suppression when the verification is removed.
-    var suppressEnsureNoAutoDiscovery = true;
-    goog.testing.TestCase.initializeTestRunner(
-        testCase, undefined, suppressEnsureNoAutoDiscovery);
+    goog.testing.TestCase.initializeTestRunner(testCase, undefined);
   });
 
   return T;

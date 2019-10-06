@@ -62,7 +62,7 @@ goog.tagUnsealableClass(goog.ui.AttachableMenu);
 
 /**
  * The currently selected element (mouse was moved over it or keyboard arrows)
- * @type {HTMLElement}
+ * @type {?HTMLElement}
  * @private
  */
 goog.ui.AttachableMenu.prototype.selectedElement_ = null;
@@ -208,8 +208,9 @@ goog.ui.AttachableMenu.prototype.showPopupElement = function() {
 
 /**
  * Called after the menu is shown.
- * @protected
  * @override
+ * @protected
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.AttachableMenu.prototype.onShow = function() {
   goog.ui.AttachableMenu.superClass_.onShow.call(this);
@@ -246,7 +247,7 @@ goog.ui.AttachableMenu.prototype.getNextPrevItem = function(prev) {
   }
 
   // if no selected element, start from beginning or end
-  if (!goog.isDef(index)) {
+  if (index === undefined) {
     index = prev ? elementCount - 1 : 0;
   }
 

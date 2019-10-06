@@ -24,6 +24,8 @@
 
 goog.provide('goog.labs.net.webChannel.ChannelRequest');
 
+goog.forwardDeclare('goog.Uri');
+goog.forwardDeclare('goog.net.XhrIo');
 goog.require('goog.Timer');
 goog.require('goog.async.Throttle');
 goog.require('goog.events.EventHandler');
@@ -38,9 +40,6 @@ goog.require('goog.net.XmlHttp');
 goog.require('goog.object');
 goog.require('goog.string');
 goog.require('goog.userAgent');
-
-goog.forwardDeclare('goog.Uri');
-goog.forwardDeclare('goog.net.XhrIo');
 
 
 
@@ -113,7 +112,7 @@ goog.labs.net.webChannel.ChannelRequest = function(
 
   /**
    * Extra HTTP headers to add to all the requests sent to the server.
-   * @private {Object}
+   * @private {?Object}
    */
   this.extraHeaders_ = null;
 
@@ -154,13 +153,13 @@ goog.labs.net.webChannel.ChannelRequest = function(
   /**
    * The base Uri for the request. The includes all the parameters except the
    * one that indicates the retry number.
-   * @private {goog.Uri}
+   * @private {?goog.Uri}
    */
   this.baseUri_ = null;
 
   /**
    * The request Uri that was actually used for the most recent request attempt.
-   * @private {goog.Uri}
+   * @private {?goog.Uri}
    */
   this.requestUri_ = null;
 
@@ -180,7 +179,7 @@ goog.labs.net.webChannel.ChannelRequest = function(
 
   /**
    * The XhrLte request if the request is using XMLHTTP
-   * @private {goog.net.XhrIo}
+   * @private {?goog.net.XhrIo}
    */
   this.xmlHttp_ = null;
 
@@ -229,7 +228,7 @@ goog.labs.net.webChannel.ChannelRequest = function(
   /**
    * The throttle for readystatechange events for the current request, or null
    * if there is none.
-   * @private {goog.async.Throttle}
+   * @private {?goog.async.Throttle}
    */
   this.readyStateChangeThrottle_ = null;
 
@@ -656,13 +655,27 @@ ChannelRequest.prototype.onXmlHttpReadyStateChanged_ = function() {
     return;
   }
 
-  var initialResponse = this.checkInitialResponse_();
-  if (initialResponse) {
-    this.channelDebug_.xmlHttpChannelResponseText(
-        this.rid_, initialResponse,
-        'Initial handshake response via ' + WebChannel.X_HTTP_INITIAL_RESPONSE);
-    this.initialResponseDecoded_ = true;
-    this.safeOnRequestData_(initialResponse);
+  if (this.shouldCheckInitialResponse_()) {
+    var initialResponse = this.getInitialResponse_();
+    if (initialResponse) {
+      this.channelDebug_.xmlHttpChannelResponseText(
+          this.rid_, initialResponse,
+          'Initial handshake response via ' +
+              WebChannel.X_HTTP_INITIAL_RESPONSE);
+      this.initialResponseDecoded_ = true;
+      this.safeOnRequestData_(initialResponse);
+    } else {
+      this.successful_ = false;
+      this.lastError_ = ChannelRequest.Error.UNKNOWN_SESSION_ID;  // fail-fast
+      requestStats.notifyStatEvent(
+          requestStats.Stat.REQUEST_UNKNOWN_SESSION_ID);
+      this.channelDebug_.warning(
+          'XMLHTTP Missing X_HTTP_INITIAL_RESPONSE' +
+          ' (' + this.rid_ + ')');
+      this.cleanup_();
+      this.dispatchFailure_();
+      return;
+    }
   }
 
   if (this.decodeChunks_) {
@@ -700,16 +713,24 @@ ChannelRequest.prototype.onXmlHttpReadyStateChanged_ = function() {
 
 
 /**
- * Checks the initial response header that is sent during the handshake.
+ * Whether we need check the initial-response header that is sent during the
+ * fast handshake.
+ *
+ * @return {boolean} true if the initial-response header is yet to be processed.
+ * @private
+ */
+ChannelRequest.prototype.shouldCheckInitialResponse_ = function() {
+  return this.decodeInitialResponse_ && !this.initialResponseDecoded_;
+};
+
+
+/**
+ * Queries the initial response header that is sent during the handshake.
  *
  * @return {?string} The non-empty header value or null.
  * @private
  */
-ChannelRequest.prototype.checkInitialResponse_ = function() {
-  if (!this.decodeInitialResponse_ || this.initialResponseDecoded_) {
-    return null;
-  }
-
+ChannelRequest.prototype.getInitialResponse_ = function() {
   if (this.xmlHttp_) {
     var value = this.xmlHttp_.getStreamingResponseHeader(
         WebChannel.X_HTTP_INITIAL_RESPONSE);
