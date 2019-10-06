@@ -98,7 +98,7 @@ goog.Promise = function(resolver, opt_context) {
 
   /**
    * For Promises created by calling `then()`, the originating parent.
-   * @private {goog.Promise}
+   * @private {?goog.Promise}
    */
   this.parent_ = null;
 
@@ -203,7 +203,8 @@ goog.Promise = function(resolver, opt_context) {
  * @define {boolean} Whether traces of `then` calls should be included in
  * exceptions thrown
  */
-goog.define('goog.Promise.LONG_STACK_TRACES', false);
+goog.Promise.LONG_STACK_TRACES =
+    goog.define('goog.Promise.LONG_STACK_TRACES', false);
 
 
 /**
@@ -215,7 +216,8 @@ goog.define('goog.Promise.LONG_STACK_TRACES', false);
  * Rejections are rethrown as quickly as possible by default. A negative value
  * disables rejection handling entirely.
  */
-goog.define('goog.Promise.UNHANDLED_REJECTION_DELAY', 0);
+goog.Promise.UNHANDLED_REJECTION_DELAY =
+    goog.define('goog.Promise.UNHANDLED_REJECTION_DELAY', 0);
 
 
 /**
@@ -250,9 +252,9 @@ goog.Promise.State_ = {
 goog.Promise.CallbackEntry_ = function() {
   /** @type {?goog.Promise} */
   this.child = null;
-  /** @type {Function} */
+  /** @type {?Function} */
   this.onFulfilled = null;
-  /** @type {Function} */
+  /** @type {?Function} */
   this.onRejected = null;
   /** @type {?} */
   this.context = null;
@@ -284,7 +286,8 @@ goog.Promise.CallbackEntry_.prototype.reset = function() {
  * @define {number} The number of currently unused objects to keep around for
  *    reuse.
  */
-goog.define('goog.Promise.DEFAULT_MAX_UNUSED', 100);
+goog.Promise.DEFAULT_MAX_UNUSED =
+    goog.define('goog.Promise.DEFAULT_MAX_UNUSED', 100);
 
 
 /** @const @private {goog.async.FreeList<!goog.Promise.CallbackEntry_>} */
@@ -663,15 +666,16 @@ goog.Promise.prototype.thenAlways = function(onSettled, opt_context) {
 
 /**
  * Adds a callback that will be invoked only if the Promise is rejected. This
- * is equivalent to {@code then(null, onRejected)}.
+ * is equivalent to `then(null, onRejected)`.
  *
  * @param {function(this:THIS, *): *} onRejected A function that will be
- *     invoked with the rejection reason if the Promise is rejected.
+ *     invoked with the rejection reason if this Promise is rejected.
  * @param {THIS=} opt_context An optional context object that will be the
  *     execution context for the callbacks. By default, functions are executed
  *     in the global scope.
- * @return {!goog.Promise} A new Promise that will receive the result of the
- *     callback.
+ * @return {!goog.Promise} A new Promise that will resolve either to the
+ *     value of this promise, or if this promise is rejected, the result of
+ *     `onRejected`. The returned Promise will reject if `onRejected` throws.
  * @template THIS
  */
 goog.Promise.prototype.thenCatch = function(onRejected, opt_context) {
@@ -696,8 +700,10 @@ goog.Promise.prototype.thenCatch = function(onRejected, opt_context) {
  */
 goog.Promise.prototype.cancel = function(opt_message) {
   if (this.state_ == goog.Promise.State_.PENDING) {
+    // Instantiate Error object synchronously. This ensures Error::stack points
+    // to the cancel() callsite.
+    var err = new goog.Promise.CancellationError(opt_message);
     goog.async.run(function() {
-      var err = new goog.Promise.CancellationError(opt_message);
       this.cancelInternal_(err);
     }, this);
   }
@@ -836,7 +842,7 @@ goog.Promise.prototype.addChildPromise_ = function(
     callbackEntry.onRejected = onRejected ? function(reason) {
       try {
         var result = onRejected.call(opt_context, reason);
-        if (!goog.isDef(result) &&
+        if (result === undefined &&
             reason instanceof goog.Promise.CancellationError) {
           // Propagate cancellation to children if no other result is returned.
           reject(reason);
@@ -1180,7 +1186,7 @@ goog.Promise.invokeCallback_ = function(callbackEntry, state, result) {
  * @private
  */
 goog.Promise.prototype.addStackTrace_ = function(err) {
-  if (goog.Promise.LONG_STACK_TRACES && goog.isString(err.stack)) {
+  if (goog.Promise.LONG_STACK_TRACES && typeof err.stack === 'string') {
     // Extract the third line of the stack trace, which is the entry for the
     // user function that called into Promise code.
     var trace = err.stack.split('\n', 4)[3];
@@ -1199,11 +1205,11 @@ goog.Promise.prototype.addStackTrace_ = function(err) {
  * trace information is recorded in {@see #addStackTrace_}, and appended to
  * rethrown errors when `LONG_STACK_TRACES` is enabled.
  *
- * @param {*} err An unhandled exception captured during callback execution.
+ * @param {?} err An unhandled exception captured during callback execution.
  * @private
  */
 goog.Promise.prototype.appendLongStack_ = function(err) {
-  if (goog.Promise.LONG_STACK_TRACES && err && goog.isString(err.stack) &&
+  if (goog.Promise.LONG_STACK_TRACES && err && typeof err.stack === 'string' &&
       this.stack_.length) {
     var longTrace = ['Promise trace:'];
 

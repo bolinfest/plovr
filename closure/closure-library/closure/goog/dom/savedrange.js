@@ -21,10 +21,9 @@
 
 goog.provide('goog.dom.SavedRange');
 
+goog.forwardDeclare('goog.dom.AbstractRange');
 goog.require('goog.Disposable');
 goog.require('goog.log');
-
-goog.forwardDeclare('goog.dom.AbstractRange');
 
 
 
@@ -72,5 +71,6 @@ goog.dom.SavedRange.prototype.restore = function(opt_stayAlive) {
 /**
  * Internal method to restore the saved range.
  * @return {goog.dom.AbstractRange} The restored range.
+ * @protected
  */
 goog.dom.SavedRange.prototype.restoreInternal = goog.abstractMethod;

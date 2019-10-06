@@ -173,7 +173,7 @@ completely new window such as a popup or an iframe.
 
 If you need to use it, use the type-safe [`goog.dom.safe.documentWrite`]
 wrapper, or directly render a Strict Soy template using
-`goog.soy.Renderer.prototype.renderElement` (or similar).
+[`goog.soy.Renderer.prototype.renderElement`] \(or similar\).
 
 
 {: #innerHtml}
@@ -187,7 +187,7 @@ vulnerabilities.
 
 Instead, use the type-safe [`goog.dom.safe.setInnerHtml`] wrapper, or directly
 render a Strict Soy template using [`goog.soy.Renderer.prototype.renderElement`]
-(or similar).
+\(or similar\).
 
 Note: Reads of these properties are permitted.
 
@@ -211,19 +211,6 @@ For this reason, we ban creating untyped `'script'`, `'iframe'`, `'frame'`,
 `goog.dom.TagName` with them.
 
 
-{: #soyDeprecatedAutoescaping}
-### Non-strict escaping in Soy templates 
-
-Rendering non-strict templates is prohibited for security reasons. We check if
-functions `soy.renderAsElement`, `soy.renderAsFragment` and `soy.renderElement`
-plus their versions in `goog.soy` and `goog.soy.Renderer` are called with
-strict-autoescaping templates. Calling them with non-strict templates is banned.
-
-This violation might be a false positive if you pass strict templates around
-with type `{Function}` or `function(): *`. Pass them with type
-`{goog.soy.StrictTemplate}` instead.
-
-
 {: #location}
 ### Assignment to Location.prototype.href and Window.prototype.location 
 
@@ -236,7 +223,7 @@ Instead of directly assigning to Location.prototype.href or
 Window.prototype.location, use the safe wrapper function
 [`goog.dom.safe.setLocationHref`]. When passed
 a string, this wrapper sanitizes the URL before passing it to the underlying DOM
-property. If passed a value of type`goog.html.SafeUrl`, the value is assigned
+property. If passed a value of type `goog.html.SafeUrl`, the value is assigned
 without further sanitization.
 
 Note: Reads of this property are permitted.
@@ -253,7 +240,7 @@ via "javascript:evil()" URLs.
 Instead of directly assigning to the href property, use safe wrapper functions
 such as [`goog.dom.safe.setAnchorHref`]. When passed a
 string, this wrapper sanitizes the URL before passing it to the underlying DOM
-property. If passed a value of type goog.html.SafeUrl, the value is assigned
+property. If passed a value of type `goog.html.SafeUrl`, the value is assigned
 without further sanitization.
 
 Note: Reads of this property are permitted.
@@ -373,7 +360,7 @@ Closure (as well as some libraries built on top of
 Closure)
 include several APIs that consume plain strings, and pass them on to an API that
 process that string in an injection-vulnerability-prone way (most commonly, an
-assigmnent to `.innerHTML`). Thus, use of such APIs incurs similar risks of
+assignment to `.innerHTML`). Thus, use of such APIs incurs similar risks of
 injection vulnerabilities as the underlying DOM API (e.g., `innerHTML`
 assignment). Due to these risks, conformance rules disallow the use of such
 APIs. The respective conformance rules' error message refers to the equivalent,

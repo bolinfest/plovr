@@ -437,7 +437,7 @@ goog.math.Rect.prototype.round = function() {
 /**
  * Translates this rectangle by the given offsets. If a
  * `goog.math.Coordinate` is given, then the left and top values are
- * translated by the coordinate's x and y values. Otherwise, top and left are
+ * translated by the coordinate's x and y values. Otherwise, left and top are
  * translated by `tx` and `opt_ty` respectively.
  * @param {number|goog.math.Coordinate} tx The value to translate left by or the
  *     the coordinate to translate this rect by.
@@ -450,7 +450,7 @@ goog.math.Rect.prototype.translate = function(tx, opt_ty) {
     this.top += tx.y;
   } else {
     this.left += goog.asserts.assertNumber(tx);
-    if (goog.isNumber(opt_ty)) {
+    if (typeof opt_ty === 'number') {
       this.top += opt_ty;
     }
   }
@@ -468,7 +468,7 @@ goog.math.Rect.prototype.translate = function(tx, opt_ty) {
  * @return {!goog.math.Rect} This rectangle after scaling.
  */
 goog.math.Rect.prototype.scale = function(sx, opt_sy) {
-  var sy = goog.isNumber(opt_sy) ? opt_sy : sx;
+  var sy = (typeof opt_sy === 'number') ? opt_sy : sx;
   this.left *= sx;
   this.width *= sx;
   this.top *= sy;

@@ -20,13 +20,13 @@ See also the
 ## Using with Node.js
 Install the [official package](https://www.npmjs.com/package/google-closure-library) from npm.
 
-```
+```bash
 npm install google-closure-library
 ```
 
 Require the package and use goog.require normally.
 
-```
+```js
 require("google-closure-library");
 
 goog.require("goog.crypt.Sha1");
@@ -35,4 +35,9 @@ var sha1 = new goog.crypt.Sha1();
 sha1.update("foobar");
 var hash = sha1.digest();
 ```
+
+## Contributing
+Please read the [CONTRIBUTING] for details on how to contribute to this project.
+
+[CONTRIBUTING]: https://github.com/google/closure-library/blob/master/CONTRIBUTING
 

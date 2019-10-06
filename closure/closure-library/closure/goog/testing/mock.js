@@ -39,8 +39,11 @@ goog.setTestOnly('goog.testing.Mock');
 goog.provide('goog.testing.Mock');
 goog.provide('goog.testing.MockExpectation');
 
+goog.require('goog.Promise');
 goog.require('goog.array');
+goog.require('goog.asserts');
 goog.require('goog.object');
+goog.require('goog.promise.Resolver');
 goog.require('goog.testing.JsUnitException');
 goog.require('goog.testing.MockInterface');
 goog.require('goog.testing.mockmatchers');
@@ -193,6 +196,9 @@ goog.testing.Mock = function(
     this.$initializeFunctions_(objectToMock);
   }
   this.$argumentListVerifiers_ = {};
+
+  /** @protected {?goog.promise.Resolver<undefined>} */
+  this.waitingForExpectations = null;
 };
 
 
@@ -214,6 +220,33 @@ goog.testing.Mock.LOOSE = 1;
  * @type {number}
  */
 goog.testing.Mock.STRICT = 0;
+
+
+/**
+ * Asserts that a mock object is in record mode.  This avoids type system errors
+ * from mock expectations.
+ *
+ * Usage:
+ *
+ * ```
+ * const record = goog.require('goog.testing.Mock.record');
+ *
+ * record(mockObject).someMethod(ignoreArgument).$returns(42);
+ * record(mockFunction)(ignoreArgument).$returns(42);
+ * ```
+ *
+ * @param {?} obj A mock in record mode.
+ * @return {?} The same object.
+ */
+goog.testing.Mock.record = function(obj) {
+  goog.asserts.assert(
+      obj.$recording_ !== undefined,
+      obj + ' is not a mock.  Did you pass a real object to record()?');
+  goog.asserts.assert(
+      obj.$recording_,
+      'Your mock is in replay mode.  You can only call record(mock) before mock.$replay()');
+  return obj;
+};
 
 
 /**
@@ -244,7 +277,7 @@ goog.testing.Mock.FUNCTION_PROTOTYPE_FIELDS_ = ['apply', 'bind', 'call'];
 /**
  * A proxy for the mock.  This can be used for dependency injection in lieu of
  * the mock if the test requires a strict instanceof check.
- * @type {Object}
+ * @type {?Object}
  */
 goog.testing.Mock.prototype.$proxy = null;
 
@@ -276,7 +309,7 @@ goog.testing.Mock.prototype.$pendingExpectation;
 
 /**
  * First exception thrown by this mock; used in $verify.
- * @type {Object}
+ * @type {?Object}
  * @private
  */
 goog.testing.Mock.prototype.$threwException_ = null;
@@ -543,6 +576,9 @@ goog.testing.Mock.prototype.$reset = function() {
   this.$recording_ = true;
   this.$threwException_ = null;
   delete this.$pendingExpectation;
+  if (this.waitingForExpectations) {
+    this.waitingForExpectations = null;
+  }
 };
 
 
@@ -569,6 +605,14 @@ goog.testing.Mock.prototype.$throwException = function(comment, opt_message) {
  * @protected
  */
 goog.testing.Mock.prototype.$recordAndThrow = function(ex, rethrow) {
+  if (this.waitingForExpectations) {
+    this.waitingForExpectations.resolve();
+  }
+  if (this.$recording_) {
+    ex = new goog.testing.JsUnitException(
+        'Threw an exception while in record mode, did you $replay?',
+        ex.toString());
+  }
   // If it's an assert exception, record it.
   if (ex['isJsUnitException']) {
     if (!this.$threwException_) {
@@ -587,6 +631,28 @@ goog.testing.Mock.prototype.$recordAndThrow = function(ex, rethrow) {
     }
   }
   throw ex;
+};
+
+
+/** @override */
+goog.testing.Mock.prototype.$waitAndVerify = function() {
+  goog.asserts.assert(
+      !this.$recording_,
+      '$waitAndVerify should be called after recording calls.');
+  this.waitingForExpectations = goog.Promise.withResolver();
+  var verify = goog.bind(this.$verify, this);
+  return this.waitingForExpectations.promise.then(function() {
+    return new goog.Promise(function(resolve, reject) {
+      setTimeout(function() {
+        try {
+          verify();
+        } catch (e) {
+          reject(e);
+        }
+        resolve();
+      }, 0);
+    });
+  });
 };
 
 
@@ -662,7 +728,9 @@ goog.testing.Mock.prototype.$throwCallException = function(
         'Expected: ', expectedArgsString, '\n',
         opt_expectation.getErrorMessage());
   } else {
-    errorStringBuffer.push('Unexpected call to ', name, actualArgsString, '.');
+    errorStringBuffer.push(
+        'Unexpected call to ', name, actualArgsString, '.',
+        '\nDid you forget to $replay?');
     if (opt_expectation) {
       errorStringBuffer.push(
           '\nNext expected call was to ', opt_expectation.name,

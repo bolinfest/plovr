@@ -162,14 +162,14 @@ goog.testing.TestCase = function(opt_name) {
    * <li>[1,3,5]
    * <li>[testName1, testName2, 3, 5] - will work
    * <ul>
-   * @type {Object}
+   * @type {?Object}
    * @private
    */
   this.testsToRun_ = null;
 
   /**
    * A call back for each test.
-   * @private {?function(goog.testing.TestCase.Test, !Array<string>)}
+   * @private {?function(?goog.testing.TestCase.Test, !Array<string>)}
    */
   this.testDone_ = null;
 
@@ -203,13 +203,6 @@ goog.testing.TestCase = function(opt_name) {
   this.thrownAssertionExceptions_ = [];
 
   /**
-   * Whether the test should fail if exceptions arising from an assert statement
-   * never bubbled up to the testing framework.
-   * @type {boolean}
-   */
-  this.failOnUnreportedAsserts = true;
-
-  /**
    * The maximum time in milliseconds a promise returned from a test function
    * may remain pending before the test fails due to timeout.
    * @type {number}
@@ -221,6 +214,12 @@ goog.testing.TestCase = function(opt_name) {
    * @private {!Array<function()>}
    */
   this.onCompletedCallbacks_ = [];
+
+  /** @type {number|undefined} */
+  this.endTime_;
+
+  /** @private {number} */
+  this.testsRanSoFar_ = 0;
 };
 
 
@@ -300,8 +299,10 @@ goog.testing.TestCase.protectedDate_ = Date;
  * @type {?Performance}
  * @private
  */
-goog.testing.TestCase.protectedPerformance_ =
-    window.performance && window.performance.now ? performance : null;
+goog.testing.TestCase.protectedPerformance_ = typeof window !== 'undefined' &&
+        window.performance && window.performance.now ?
+    performance :
+    null;
 
 
 /**
@@ -518,6 +519,7 @@ goog.testing.TestCase.prototype.execute = function() {
   if (!this.prepareForRun_()) {
     return;
   }
+  this.groupLogsStart();
   this.log('Starting tests: ' + this.name_);
   this.cycleTests();
 };
@@ -551,13 +553,19 @@ goog.testing.TestCase.prototype.prepareForRun_ = function() {
 goog.testing.TestCase.prototype.finalize = function() {
   this.saveMessage('Done');
 
-  this.tearDownPage();
+  try {
+    this.tearDownPage();
+  } catch (e) {
+    // Report the error and continue with tests.
+    window['onerror'](e.toString(), document.location.href, 0, 0, e);
+  }
 
   this.endTime_ = this.now();
   this.running = false;
   this.result_.runTime = this.endTime_ - this.startTime_;
   this.result_.numFilesLoaded = this.countNumFilesLoaded_();
   this.result_.complete = true;
+  this.testsRanSoFar_++;
 
   this.log(this.result_.getSummary());
   if (this.result_.isSuccess()) {
@@ -569,6 +577,7 @@ goog.testing.TestCase.prototype.finalize = function() {
     cb();
   });
   this.onCompletedCallbacks_ = [];
+  this.groupLogsEnd();
 };
 
 
@@ -590,13 +599,20 @@ goog.testing.TestCase.prototype.isInsideMultiTestRunner = function() {
   return top && typeof top['_allTests'] != 'undefined';
 };
 
+/**
+ * @return {boolean} Whether the test-progress should be logged to the console.
+ */
+goog.testing.TestCase.prototype.shouldLogTestProgress = function() {
+  return !goog.global['skipClosureTestProgress'] &&
+      !this.isInsideMultiTestRunner();
+};
 
 /**
  * Logs an object to the console, if available.
  * @param {*} val The value to log. Will be ToString'd.
  */
 goog.testing.TestCase.prototype.log = function(val) {
-  if (!this.isInsideMultiTestRunner() && goog.global.console) {
+  if (this.shouldLogTestProgress() && goog.global.console) {
     if (typeof val == 'string') {
       val = this.getTimeStamp_() + ' : ' + val;
     }
@@ -605,6 +621,29 @@ goog.testing.TestCase.prototype.log = function(val) {
     } else {
       goog.global.console.log(val);
     }
+  }
+};
+
+
+/**
+ * Groups the upcoming logs in the same log group
+ */
+goog.testing.TestCase.prototype.groupLogsStart = function() {
+  if (!this.isInsideMultiTestRunner() && goog.global.console &&
+      goog.global.console.group) {
+    goog.global.console.group(
+        'Test #' + (this.testsRanSoFar_ + 1) + ': ' + this.name_);
+  }
+};
+
+
+/**
+ * Closes the group of the upcoming logs
+ */
+goog.testing.TestCase.prototype.groupLogsEnd = function() {
+  if (!this.isInsideMultiTestRunner() && goog.global.console &&
+      goog.global.console.groupEnd) {
+    goog.global.console.groupEnd();
   }
 };
 
@@ -743,6 +782,7 @@ goog.testing.TestCase.prototype.runTestsReturningPromise = function() {
         resolve(this.result_);
         return;
       }
+      this.groupLogsStart();
       this.log('Starting tests: ' + this.name_);
       this.saveMessage('Start');
       this.batchTime_ = this.now();
@@ -791,6 +831,21 @@ goog.testing.TestCase.prototype.runNextTest_ = function() {
     return new goog.testing.Continuation_(
         goog.bind(this.runNextTestCallback_, this, this.result_));
   }
+
+  var shouldRunTest = true;
+  try {
+    shouldRunTest = this.shouldRunTestsHelper_();
+  } catch (error) {
+    this.curTest_.name = 'shouldRunTests for ' + this.curTest_.name;
+    return new goog.testing.Continuation_(
+        goog.bind(this.finishTestInvocation_, this, error));
+  }
+
+  if (!shouldRunTest) {
+    return new goog.testing.Continuation_(
+        goog.bind(this.finishTestInvocation_, this));
+  }
+
   this.curTest_.started();
   this.result_.runCount++;
   this.log('Running test: ' + this.curTest_.name);
@@ -800,6 +855,56 @@ goog.testing.TestCase.prototype.runNextTest_ = function() {
   }
   goog.testing.TestCase.currentTestName = this.curTest_.name;
   return this.safeSetUp_();
+};
+
+
+/**
+ * @return {boolean}
+ * @private
+ */
+goog.testing.TestCase.prototype.shouldRunTestsHelper_ = function() {
+  var objChain =
+      this.curTest_.objChain.length ? this.curTest_.objChain : [this];
+
+  for (var i = 0; i < objChain.length; i++) {
+    var obj = objChain[i];
+
+    if (!goog.isFunction(obj.shouldRunTests)) {
+      return true;
+    }
+
+    if (goog.isFunction(obj.shouldRunTests['$cachedResult'])) {
+      if (!obj.shouldRunTests['$cachedResult']()) {
+        return false;
+      }
+    }
+
+    var result;
+    (function() {
+      // Cache the result by storing a function. This way we only call
+      // shouldRunTests once per object in the chain. This enforces that people
+      // do not attempt to suppress some tests and not others with the same
+      // shouldRunTests function.
+      try {
+        var cached = result = obj.shouldRunTests.call(obj);
+        obj.shouldRunTests['$cachedResult'] = function() {
+          return cached;
+        };
+      } catch (error) {
+        obj.shouldRunTests['$cachedResult'] = function() {
+          throw error;
+        };
+        throw error;
+      }
+    })();
+
+    if (!result) {
+      this.result_.suppressedTests.push(this.curTest_.name);
+      return false;
+    }
+  }
+
+  return true;
 };
 
 /**
@@ -893,15 +998,15 @@ goog.testing.TestCase.prototype.safeTearDownHelper_ = function(tearDowns) {
  * the TestCase instance as the method receiver.
  *
  * @param {function()} fn The function to call.
- * @param {function(): (?goog.testing.Continuation_|undefined)} onSuccess
- * @param {function(*): (?goog.testing.Continuation_|undefined)} onFailure
+ * @param {function(this:goog.testing.TestCase): (?goog.testing.Continuation_|undefined)} onSuccess
+ * @param {function(this:goog.testing.TestCase, *): (?goog.testing.Continuation_|undefined)} onFailure
  * @param {string} fnName Name of the function being invoked e.g. 'setUp'.
  * @return {?goog.testing.Continuation_}
  * @private
  */
 goog.testing.TestCase.prototype.invokeFunction_ = function(
     fn, onSuccess, onFailure, fnName) {
-  var testCase = this;
+  var self = this;
   this.thrownAssertionExceptions_ = [];
   try {
     var retval = fn.call(this);
@@ -910,7 +1015,6 @@ goog.testing.TestCase.prototype.invokeFunction_ = function(
       // Resolve Thenable into a proper Promise to avoid hard to debug
       // problems.
       var promise = goog.Promise.resolve(retval);
-      var self = this;
       promise = this.rejectIfPromiseTimesOut_(
           promise, self.promiseTimeout,
           'Timed out while waiting for a promise returned from ' + fnName +
@@ -919,12 +1023,11 @@ goog.testing.TestCase.prototype.invokeFunction_ = function(
       promise.then(
           function() {
             self.resetBatchTimeAfterPromise_();
-            if (testCase.thrownAssertionExceptions_.length == 0) {
+            if (self.thrownAssertionExceptions_.length == 0) {
               goog.testing.Continuation_.run(onSuccess.call(self));
             } else {
               goog.testing.Continuation_.run(onFailure.call(
-                  self,
-                  testCase.reportUnpropagatedAssertionExceptions_(fnName)));
+                  self, self.reportUnpropagatedAssertionExceptions_(fnName)));
             }
           },
           function(e) {
@@ -980,7 +1083,7 @@ goog.testing.TestCase.prototype.reportUnpropagatedAssertionExceptions_ =
 
 
   for (var i = 0; i < numExceptions; i++) {
-    this.recordError(testName, this.thrownAssertionExceptions_[i]);
+    this.recordError(testName, extraExceptions[i]);
   }
 
   // Mark the test as failed.
@@ -1016,7 +1119,12 @@ goog.testing.TestCase.prototype.finishTestInvocation_ = function(opt_error) {
   // If no errors have been recorded for the test, it is a success.
   if (!(this.curTest_.name in this.result_.resultsByName) ||
       !this.result_.resultsByName[this.curTest_.name].length) {
-    this.doSuccess(this.curTest_);
+    if (goog.array.indexOf(this.result_.suppressedTests, this.curTest_.name) >=
+        0) {
+      this.doSkipped(this.curTest_);
+    } else {
+      this.doSuccess(this.curTest_);
+    }
   } else {
     this.doError(this.curTest_);
   }
@@ -1279,8 +1387,22 @@ goog.testing.TestCase.prototype.setLifecycleObj = function(obj) {
 goog.testing.TestCase.prototype.setTestObj = function(obj) {
   // Check any previously added (likely auto-discovered) tests, only one source
   // of discovered test and life-cycle methods is allowed.
-  goog.asserts.assert(
-      this.tests_.length == 0, 'Test methods have already been configured.');
+  if (this.tests_.length > 0) {
+    fail(
+        'Test methods have already been configured.\n' +
+        'Tests previously found:\n' +
+        this.tests_
+            .map(function(test) {
+              return test.name;
+            })
+            .join('\n') +
+        '\nNew tests found:\n' +
+        Object.keys(obj)
+            .filter(function(name) {
+              return name.startsWith('test');
+            })
+            .join('\n'));
+  }
   this.shouldAutoDiscoverTests_ = false;
   if (obj['getTestName']) {
     this.name_ = obj['getTestName']();
@@ -1322,6 +1444,7 @@ goog.testing.TestCase.prototype.addTestObj_ = function(obj, name, objChain) {
       } else if (goog.isObject(testProperty)) {
         // To prevent infinite loops.
         if (!goog.array.contains(objChain, testProperty)) {
+          goog.asserts.assertObject(testProperty);
           var newObjChain = objChain.slice();
           newObjChain.push(testProperty);
           this.addTestObj_(testProperty, fullTestName, newObjChain);
@@ -1524,6 +1647,48 @@ goog.testing.TestCase.prototype.doSuccess = function(test) {
 
 
 /**
+ * Handles a test that was skipped.
+ * @param {!goog.testing.TestCase.Test} test The test that was skipped.
+ * @protected
+ */
+goog.testing.TestCase.prototype.doSkipped = function(test) {
+  this.result_.skipCount++;
+  // An empty list of error messages indicates that the test passed.
+  // If we already have a failure for this test, do not set to empty list.
+  if (!(test.name in this.result_.resultsByName)) {
+    this.result_.resultsByName[test.name] = [];
+  }
+  var message = test.name + ' : SKIPPED';
+  this.saveMessage(message);
+  this.log(message);
+  if (this.testDone_) {
+    this.doTestDone_(test, []);
+  }
+};
+
+
+/**
+ * Records an error that fails the current test, without throwing it.
+ *
+ * Use this function to implement expect()-style assertion libraries that fail a
+ * test without breaking execution (so you can see further failures). Do not use
+ * this from normal test code.
+ *
+ * Please contact js-core-libraries-team@ before using this method.  If it grows
+ * popular, we may add an expect() API to Closure.
+ *
+ * NOTE: If there is no active TestCase, you must throw an error.
+ * @param {!Error} error The error to log.  If it is a JsUnitException which has
+ *     already been logged, nothing will happen.
+ */
+goog.testing.TestCase.prototype.recordTestError = function(error) {
+  this.recordError(
+      this.curTest_ ? this.curTest_.name : '<No active test>', error);
+};
+
+
+
+/**
  * Records and logs an error from or related to a test.
  * @param {string} testName The name of the test that failed.
  * @param {*} error The exception object associated with the
@@ -1582,9 +1747,7 @@ goog.testing.TestCase.prototype.doError = function(test) {
  * @package
  */
 goog.testing.TestCase.prototype.raiseAssertionException = function(e) {
-  if (this.failOnUnreportedAsserts) {
-    this.thrownAssertionExceptions_.push(e);
-  }
+  this.thrownAssertionExceptions_.push(e);
   throw e;
 };
 
@@ -1598,9 +1761,7 @@ goog.testing.TestCase.prototype.raiseAssertionException = function(e) {
  * @package
  */
 goog.testing.TestCase.prototype.invalidateAssertionException = function(e) {
-  if (this.failOnUnreportedAsserts) {
-    goog.array.remove(this.thrownAssertionExceptions_, e);
-  }
+  goog.array.remove(this.thrownAssertionExceptions_, e);
 };
 
 
@@ -1609,13 +1770,14 @@ goog.testing.TestCase.prototype.invalidateAssertionException = function(e) {
  * @param {*} error The exception object associated with the
  *     failure or a string.
  * @return {!goog.testing.TestCase.Error} Error object.
+ * @suppress {missingProperties} message and stack properties
  */
 goog.testing.TestCase.prototype.logError = function(name, error) {
   var errMsg = null;
   var stack = null;
   if (error) {
     this.log(error);
-    if (goog.isString(error)) {
+    if (typeof error === 'string') {
       errMsg = error;
     } else {
       errMsg = error.message || error.description || error.toString();
@@ -1627,7 +1789,7 @@ goog.testing.TestCase.prototype.logError = function(name, error) {
 
   if (stack) {
     // The Error class includes the message in the stack. Don't duplicate it.
-    stack = stack.replace('Error: ' + errMsg + '\n', '');
+    stack = stack.replace('Error: ' + errMsg + '\n', 'Error\n');
 
     // Remove extra goog.testing.TestCase frames from the end.
     stack = stack.replace(
@@ -1647,7 +1809,7 @@ goog.testing.TestCase.prototype.logError = function(name, error) {
  * @param {?function()} ref Reference to the test function or test object.
  * @param {?Object=} scope Optional scope that the test function should be
  *     called in.
- * @param {!Array<!Object>=} objChain A chain of objects used to populate setUps
+ * @param {!Array<?>=} objChain A chain of objects used to populate setUps
  *     and tearDowns.
  * @constructor
  */
@@ -1681,6 +1843,11 @@ goog.testing.TestCase.Test = function(name, ref, scope, objChain) {
    */
   this.tearDowns = [];
 
+  /**
+   * @type {!Array<?>}
+   */
+  this.objChain = objChain || [];
+
   if (objChain) {
     for (var i = 0; i < objChain.length; i++) {
       if (goog.isFunction(objChain[i].setUp)) {
@@ -1706,6 +1873,9 @@ goog.testing.TestCase.Test = function(name, ref, scope, objChain) {
    * @private
    */
   this.stoppedTime_;
+
+  /** @package {boolean|undefined} */
+  this.waiting;
 };
 
 /**
@@ -1771,6 +1941,12 @@ goog.testing.TestCase.Result = function(testCase) {
   this.successCount = 0;
 
   /**
+   * Number of tests skipped due to nested shouldRunTests.
+   * @type {number}
+   */
+  this.skipCount = 0;
+
+  /**
    * The amount of time the tests took to run.
    * @type {number}
    */
@@ -1783,11 +1959,16 @@ goog.testing.TestCase.Result = function(testCase) {
   this.numFilesLoaded = 0;
 
   /**
-   * Whether this test case was suppressed by shouldRunTests() returning
-   * false.
+   * Whether all tests were suppressed from a top-level shouldRunTests().
    * @type {boolean}
    */
   this.testSuppressed = false;
+
+  /**
+   * Which tests were suppressed by shouldRunTests() returning false.
+   * @type {!Array<string>}
+   */
+  this.suppressedTests = [];
 
   /**
    * Test results for each test that was run. The test name is always added
@@ -1836,13 +2017,18 @@ goog.testing.TestCase.Result.prototype.getSummary = function() {
   if (this.testSuppressed) {
     summary += 'Tests not run because shouldRunTests() returned false.';
   } else {
-    var failures = this.totalCount - this.successCount;
+    var failures = this.totalCount - this.successCount - this.skipCount;
     var suppressionMessage = '';
+
+    if (this.skipCount) {
+      suppressionMessage +=
+          ', ' + this.skipCount + ' skipped by shouldRunTests()';
+    }
 
     var countOfRunTests = this.testCase_.getActuallyRunCount();
     if (countOfRunTests) {
-      failures = countOfRunTests - this.successCount;
-      suppressionMessage = ', ' + (this.totalCount - countOfRunTests) +
+      failures = countOfRunTests - this.successCount - this.skipCount;
+      suppressionMessage += ', ' + (this.totalCount - countOfRunTests) +
           ' suppressed by querystring';
     }
     summary += this.successCount + ' passed, ' + failures + ' failed' +
@@ -1873,35 +2059,12 @@ goog.testing.TestCase.prototype.doTestDone_ = function(test, errMsgs) {
 };
 
 /**
- * A temporary verifier to check if any tests autdo-discovered when a test suite
- * is used. This exists to make sure we don't silently stop executing tests that
- * was accidentally discovered and executed earlier. This will be be removed
- * soon after migration is completed.
- * @private
- */
-goog.testing.TestCase.prototype.ensureNoAutoDiscovery_ = function() {
-  var oldTestCount = this.getCount();
-  var prefix = this.getAutoDiscoveryPrefix();
-  var testSources = this.getGlobals(prefix);
-  for (var i = 0; i < testSources.length; i++) {
-    this.addTestObj_(testSources[i], '', [this]);
-  }
-  var autoDiscoverTestCount = this.getCount() - oldTestCount;
-  if (autoDiscoverTestCount > 0) {
-    throw new Error('Discovered tests: ' + autoDiscoverTestCount);
-  }
-};
-
-/**
  * Initializes the TestCase.
  * @param {goog.testing.TestCase} testCase The test case to install.
  * @param {function(goog.testing.TestCase.Test, Array<string>)=} opt_testDone
  *     Called when each test completes.
- * @param {boolean=} opt_suppressEnsureNoAutoDiscovery temporary flag to supress
- *     checks of accidental discovery. Will be removed after migration.
  */
-goog.testing.TestCase.initializeTestCase = function(
-    testCase, opt_testDone, opt_suppressEnsureNoAutoDiscovery) {
+goog.testing.TestCase.initializeTestCase = function(testCase, opt_testDone) {
   if (opt_testDone) {
     testCase.setTestDoneCallback(opt_testDone);
   }
@@ -1909,10 +2072,6 @@ goog.testing.TestCase.initializeTestCase = function(
   if (testCase.shouldAutoDiscoverTests_) {
     testCase.autoDiscoverTests();
   } else {
-    // TODO(goktug): Remove after google3 migration
-    if (!opt_suppressEnsureNoAutoDiscovery) {
-      testCase.ensureNoAutoDiscovery_();
-    }
     // Make sure the tests are still ordered based on provided order.
     testCase.orderTests_();
   }
@@ -1930,13 +2089,9 @@ goog.testing.TestCase.initializeTestCase = function(
  * @param {goog.testing.TestCase} testCase The test case to install.
  * @param {function(goog.testing.TestCase.Test, Array<string>)=} opt_testDone
  *     Called when each test completes.
- * @param {boolean=} opt_suppressEnsureNoAutoDiscovery temporary flag to supress
- *     checks of accidental discovery. Will be removed after migration.
  */
-goog.testing.TestCase.initializeTestRunner = function(
-    testCase, opt_testDone, opt_suppressEnsureNoAutoDiscovery) {
-  goog.testing.TestCase.initializeTestCase(
-      testCase, opt_testDone, opt_suppressEnsureNoAutoDiscovery);
+goog.testing.TestCase.initializeTestRunner = function(testCase, opt_testDone) {
+  goog.testing.TestCase.initializeTestCase(testCase, opt_testDone);
 
   var gTestRunner = goog.global['G_testRunner'];
   if (gTestRunner) {
