@@ -1,7 +1,4 @@
 base.js
-caja/string/html/htmlparser.js
-dojo/dom/query.js
-loremipsum/text/loremipsum.js
 mochikit/async/deferred.js
 mochikit/async/deferredlist.js
 svgpan/svgpan.js
