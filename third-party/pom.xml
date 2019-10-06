@@ -31,7 +31,7 @@
         <dependency>
             <groupId>com.google.javascript</groupId>
             <artifactId>closure-compiler</artifactId>
-            <version>v20190215</version>
+            <version>v20190929</version>
         </dependency>
         <dependency>
             <groupId>org.seleniumhq.selenium</groupId>

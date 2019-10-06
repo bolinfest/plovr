@@ -533,7 +533,7 @@ public final class Compilation {
     return normalizeErrors(result.warnings, compiler);
   }
 
-  private static List<CompilationError> normalizeErrors(JSError[] errors,
+  private static List<CompilationError> normalizeErrors(List<JSError> errors,
       SourceExcerptProvider sourceExcerptProvider) {
     List<CompilationError> compilationErrors = Lists.newLinkedList();
     for (JSError error : errors) {
