@@ -20,13 +20,12 @@
 
 goog.provide('goog.storage.CollectableStorage');
 
+goog.forwardDeclare('goog.storage.mechanism.IterableMechanism');
 goog.require('goog.array');
 goog.require('goog.iter');
 goog.require('goog.storage.ErrorCode');
 goog.require('goog.storage.ExpiringStorage');
 goog.require('goog.storage.RichStorage');
-
-goog.forwardDeclare('goog.storage.mechanism.IterableMechanism');
 
 
 
@@ -75,7 +74,7 @@ goog.storage.CollectableStorage.prototype.getExpiredKeys_ = function(
       // Unknown error, escalate.
       throw ex;
     }
-    if (!goog.isDef(wrapper)) {
+    if (wrapper === undefined) {
       // A value for a given key is no longer available. Clean it up.
       keysToRemove.push(key);
       return;

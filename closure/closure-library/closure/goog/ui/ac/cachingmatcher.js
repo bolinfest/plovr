@@ -83,7 +83,7 @@ goog.ui.ac.CachingMatcher = function(baseMatcher) {
   /** @private {string} */
   this.mostRecentToken_ = '';
 
-  /** @private {Function} */
+  /** @private {?Function} */
   this.mostRecentMatchHandler_ = null;
 
   /** @private {number} */
@@ -224,6 +224,7 @@ goog.ui.ac.CachingMatcher.prototype.clearCacheIfTooLarge_ = function() {
  * unthrottled, so don't call it directly; instead use
  * this.throttledTriggerBaseMatch_.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.ac.CachingMatcher.prototype.triggerBaseMatch_ = function() {
   this.baseMatcher_.requestMatchingRows(

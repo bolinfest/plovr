@@ -85,6 +85,7 @@ goog.provide('goog.testing.ContinuationTestCase.Step');
 
 goog.require('goog.array');
 goog.require('goog.events.EventHandler');
+goog.require('goog.events.EventTarget');
 goog.require('goog.testing.TestCase');
 goog.require('goog.testing.asserts');
 
@@ -127,12 +128,12 @@ goog.testing.ContinuationTestCase.MAX_TIMEOUT = 1000;
  * @type {boolean}
  * @private
  */
-goog.testing.ContinuationTestCase.locked_ = false;
+goog.testing.ContinuationTestCase.prototype.locked_;
 
 
 /**
  * The current test being run.
- * @type {goog.testing.ContinuationTestCase.ContinuationTest}
+ * @type {?goog.testing.ContinuationTestCase.ContinuationTest}
  * @private
  */
 goog.testing.ContinuationTestCase.prototype.currentTest_ = null;
@@ -496,7 +497,7 @@ goog.inherits(
 
 /**
  * The first error encountered during the test run, if any.
- * @type {Error}
+ * @type {?Error}
  * @private
  */
 goog.testing.ContinuationTestCase.ContinuationTest.prototype.error_ = null;
@@ -525,7 +526,7 @@ goog.testing.ContinuationTestCase.ContinuationTest.prototype.setError =
 
 
 /**
- * @return {Array<goog.testing.TestCase.Test>} The current phase of steps
+ * @return {Array<!goog.testing.TestCase.Test>} The current phase of steps
  *    being processed. Returns null if all steps have been completed.
  */
 goog.testing.ContinuationTestCase.ContinuationTest.prototype.getCurrentPhase =
@@ -549,7 +550,7 @@ goog.testing.ContinuationTestCase.ContinuationTest.prototype.getCurrentPhase =
 /**
  * Adds a new test step to the end of the current phase. The new step will wait
  * for a condition to be met before running, or will fail after a timeout.
- * @param {goog.testing.ContinuationTestCase.Step} step The test step to add.
+ * @param {!goog.testing.ContinuationTestCase.Step} step The test step to add.
  */
 goog.testing.ContinuationTestCase.ContinuationTest.prototype.addStep = function(
     step) {
@@ -622,7 +623,7 @@ goog.inherits(
 /**
  * Whether the step is currently waiting for a condition to continue. All new
  * steps begin in wait state.
- * @type {boolean}
+ * @override
  */
 goog.testing.ContinuationTestCase.Step.prototype.waiting = true;
 

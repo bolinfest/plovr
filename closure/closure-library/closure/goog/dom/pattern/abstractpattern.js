@@ -20,6 +20,7 @@
 
 goog.provide('goog.dom.pattern.AbstractPattern');
 
+goog.require('goog.dom.TagWalkType');
 goog.require('goog.dom.pattern.MatchType');
 
 
@@ -32,7 +33,7 @@ goog.require('goog.dom.pattern.MatchType');
 goog.dom.pattern.AbstractPattern = function() {
   /**
    * The first node matched by this pattern.
-   * @type {Node}
+   * @type {?Node}
    */
   this.matchedNode = null;
 };

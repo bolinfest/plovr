@@ -26,15 +26,14 @@
 
 goog.provide('goog.net.BrowserTestChannel');
 
+goog.forwardDeclare('goog.net.BrowserChannel');
+goog.forwardDeclare('goog.net.BrowserChannel.ServerReachability');
+goog.forwardDeclare('goog.net.XhrIo');
 goog.require('goog.json.NativeJsonProcessor');
 goog.require('goog.net.ChannelRequest');
 goog.require('goog.net.ChannelRequest.Error');
 goog.require('goog.net.tmpnetwork');
 goog.require('goog.string.Parser');
-
-goog.forwardDeclare('goog.net.BrowserChannel');
-goog.forwardDeclare('goog.net.BrowserChannel.ServerReachability');
-goog.forwardDeclare('goog.net.XhrIo');
 
 
 
@@ -74,7 +73,7 @@ goog.net.BrowserTestChannel = function(channel, channelDebug) {
 
 /**
  * Extra HTTP headers to add to all the requests sent to the server.
- * @type {Object}
+ * @type {?Object}
  * @private
  */
 goog.net.BrowserTestChannel.prototype.extraHeaders_ = null;
@@ -82,7 +81,7 @@ goog.net.BrowserTestChannel.prototype.extraHeaders_ = null;
 
 /**
  * The test request.
- * @type {goog.net.ChannelRequest}
+ * @type {?goog.net.ChannelRequest}
  * @private
  */
 goog.net.BrowserTestChannel.prototype.request_ = null;
@@ -265,7 +264,7 @@ goog.net.BrowserTestChannel.prototype.connect = function(path) {
 
   // If the channel already has the result of the first test, then skip it.
   var firstTestResults = this.channel_.getFirstTestResults();
-  if (goog.isDefAndNotNull(firstTestResults)) {
+  if (firstTestResults != null) {
     this.hostPrefix_ = this.channel_.correctHostPrefix(firstTestResults[0]);
     this.blockedPrefix_ = firstTestResults[1];
     if (this.blockedPrefix_) {
@@ -354,7 +353,7 @@ goog.net.BrowserTestChannel.prototype.connectStage2_ = function() {
 
   // If the second test results are available, skip its execution.
   var secondTestResults = this.channel_.getSecondTestResults();
-  if (goog.isDefAndNotNull(secondTestResults)) {
+  if (secondTestResults != null) {
     this.channelDebug_.debug(
         'TestConnection: skipping stage 2, precomputed result is ' +
                 secondTestResults ?

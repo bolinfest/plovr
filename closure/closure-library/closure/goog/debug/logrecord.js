@@ -84,7 +84,7 @@ goog.debug.LogRecord.prototype.sequenceNumber_ = 0;
 
 /**
  * Exception associated with the record
- * @type {Object}
+ * @type {?Object}
  * @private
  */
 goog.debug.LogRecord.prototype.exception_ = null;
@@ -93,7 +93,8 @@ goog.debug.LogRecord.prototype.exception_ = null;
 /**
  * @define {boolean} Whether to enable log sequence numbers.
  */
-goog.define('goog.debug.LogRecord.ENABLE_SEQUENCE_NUMBERS', true);
+goog.debug.LogRecord.ENABLE_SEQUENCE_NUMBERS =
+    goog.define('goog.debug.LogRecord.ENABLE_SEQUENCE_NUMBERS', true);
 
 
 /**
