@@ -168,6 +168,7 @@ public class ConfigParserTest {
             "/closure/goog/uri/utils.js",
             "/closure/goog/uri/uri.js",
             "/closure/goog/soy/data.js",
+            "../../third-party/javascript/checks.js",
             "../../third-party/javascript/soyutils_usegoog.js",
             "custom/foo/bar.soy",
             "main/foo/bar.soy",

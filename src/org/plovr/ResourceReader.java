@@ -66,6 +66,7 @@ class ResourceReader {
             "/closure/goog/", INPUT_TO_JS_INPUT));
         allInputs.addAll(loadFromManifest("/third_party_manifest.txt",
             "/third_party/closure/goog/", INPUT_TO_JS_INPUT));
+        allInputs.add(new ResourceJsInput("/javascript/checks.js"));
         allInputs.add(new ResourceJsInput("/javascript/soyutils_usegoog.js"));
 
         inputs = ImmutableList.copyOf(allInputs);

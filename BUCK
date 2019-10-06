@@ -28,7 +28,8 @@ java_library(
   name = 'third-party-support-libs',
   srcs = [],
   resources = [
-    '//third-party/javascript:soyutils_usegoog.js'
+    '//third-party/javascript:checks.js',
+    '//third-party/javascript:soyutils_usegoog.js',
   ],
   resources_root = './third-party')
 

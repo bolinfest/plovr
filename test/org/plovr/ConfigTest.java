@@ -38,7 +38,6 @@ public class ConfigTest {
 
     JsonParser parser = new JsonParser();
     JsonObject experimentalOptions = parser.parse("{" +
-        "\"processObjectPropertyString\": true, " +
         "\"externExports\": true, " +
         "\"checkMissingGetCssNameBlacklist\": \"hello world\", " +
         "\"outputCharset\": \"UTF-8\", " +
