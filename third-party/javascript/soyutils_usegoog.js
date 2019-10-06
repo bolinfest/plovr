@@ -60,7 +60,7 @@ goog.require('goog.soy.data.SanitizedUri');
 goog.require('goog.string');
 goog.require('goog.string.Const');
 goog.require('soy.checks');
-goog.requireType('goog.soy');
+goog.require('goog.soy');
 
 
 // -----------------------------------------------------------------------------

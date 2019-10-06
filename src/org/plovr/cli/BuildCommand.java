@@ -88,7 +88,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       String sourceMapPath) throws IOException {
     Preconditions.checkNotNull(compilation);
     Result result = compilation.getResult();
-    boolean success = (result.success && result.errors.length == 0);
+    boolean success = (result.success && result.errors.size() == 0);
     if (success) {
       // write mapping files if requested
       if (config.getVariableMapOutputFile() != null) {

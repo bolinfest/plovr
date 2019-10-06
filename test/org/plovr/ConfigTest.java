@@ -34,7 +34,7 @@ public class ConfigTest {
     assertFalse(options.isExternExportsEnabled());
     assertNull(options.checkMissingGetCssNameBlacklist);
     assertNull(options.getOutputCharset());
-    assertEquals(LanguageMode.ECMASCRIPT_2017, options.getLanguageIn());
+    assertEquals(LanguageMode.ECMASCRIPT_2019, options.getLanguageIn());
 
     JsonParser parser = new JsonParser();
     JsonObject experimentalOptions = parser.parse("{" +

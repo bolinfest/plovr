@@ -7,15 +7,11 @@ To update `closure-compiler`, `closure-templates`, or `closure-spreadsheets`, fi
 Then update the maven version in the pom.xml. Then run:
 
 ```
-mvn de.evosec:export-dependencies-maven-plugin:buck
+mvn de.evosec:export-dependencies-maven-plugin:buck && mv target/BUCK ./BUCK
 ```
 
-Maven will resolve all the transitive dependencies and write the output to `target/BUCK`.
-Manually inspect the file and copy it over the BUCK file in this dir.
-
-```
-mv target/BUCK ./BUCK
-```
+Maven will resolve all the transitive dependencies and write the output to
+`target/BUCK`.  Then we move it over the BUCK file in this dir.
 
 Extra Steps for Closure Templates
 ---------------------------------

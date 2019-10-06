@@ -9,31 +9,16 @@ import com.google.javascript.jscomp.DiagnosticGroups;
 import com.google.javascript.jscomp.DiagnosticType;
 
 public class PlovrDiagnosticGroups extends DiagnosticGroups {
+  private final static Map<String, DiagnosticGroup> groupsByName =
+    Maps.newHashMap(DiagnosticGroups.getRegisteredGroups());
 
-  private static class AbsurdHackForDiagnosticGroups extends DiagnosticGroups {
-    @Override
-    public Map<String, DiagnosticGroup> getRegisteredGroups() {
-      return super.getRegisteredGroups();
-    }
-  }
-
-  private final static Map<String, DiagnosticGroup> globalGroupsByName =
-      new AbsurdHackForDiagnosticGroups().getRegisteredGroups();
-
-  private final Map<String, DiagnosticGroup> groupsByName =
-    Maps.newHashMap();
-
-  public PlovrDiagnosticGroups() {
-    groupsByName.putAll(globalGroupsByName);
-  }
-
-  public DiagnosticGroup registerGroup(String name,
+  public static DiagnosticGroup registerGroup(String name,
       DiagnosticGroup group) {
     groupsByName.put(name, group);
     return group;
   }
 
-  public DiagnosticGroup registerGroup(String name,
+  public static DiagnosticGroup registerGroup(String name,
       DiagnosticType ... types) {
     // For some reason, this constructor is not visible to plovr:
     //
@@ -49,20 +34,18 @@ public class PlovrDiagnosticGroups extends DiagnosticGroups {
     return group;
   }
 
-  public DiagnosticGroup registerGroup(String name,
+  public static DiagnosticGroup registerGroup(String name,
       DiagnosticGroup ... groups) {
     DiagnosticGroup group = new DiagnosticGroup(name, groups);
     groupsByName.put(name, group);
     return group;
   }
 
-  @Override
-  public Map<String, DiagnosticGroup> getRegisteredGroups() {
+  public static Map<String, DiagnosticGroup> getRegisteredGroups() {
     return ImmutableMap.copyOf(groupsByName);
   }
 
-  @Override
-  public DiagnosticGroup forName(String name) {
+  public static DiagnosticGroup forName(String name) {
     return groupsByName.get(name);
   }
 }
