@@ -31,7 +31,6 @@ import com.google.template.soy.data.restricted.StringData;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.soyparse.ParseException;
 import com.google.template.soy.soyparse.SoyFileParser;
-import com.google.template.soy.soyparse.PluginResolver;
 import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.tofu.SoyTofu;
 import com.google.template.soy.types.SoyTypeRegistry;
@@ -123,16 +122,10 @@ public class SoyRequestHandler implements HttpHandler {
     ErrorReporter errorReporter = ErrorReporter.explodeOnErrorsAndIgnoreWarnings();
     ErrorReporter.Checkpoint checkpoint = errorReporter.checkpoint();
     SoyFileParser parser = new SoyFileParser(
-        new SoyTypeRegistry(),
-        PluginResolver.nullResolver(
-            PluginResolver.Mode.REQUIRE_DEFINITIONS,
-            errorReporter),
         new IncrementingIdGenerator(),
         Files.newReader(soyFile, Charsets.UTF_8),
-        SoyFileKind.SRC,
         relativePath,
-        errorReporter,
-        ImmutableSet.<String>of());
+        errorReporter);
     SoyFileNode node = parser.parseSoyFile();
 
     if (errorReporter.errorsSince(checkpoint)) {

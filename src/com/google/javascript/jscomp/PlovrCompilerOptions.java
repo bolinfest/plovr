@@ -24,11 +24,6 @@ import java.nio.charset.Charset;
  */
 @SuppressWarnings("serial")
 public class PlovrCompilerOptions extends CompilerOptions {
-
-  public boolean getProcessObjectPropertyString() {
-    return processObjectPropertyString;
-  }
-
   /** Expand the visibility of this method from package-private to public. */
   @Override
   public Charset getOutputCharset() {

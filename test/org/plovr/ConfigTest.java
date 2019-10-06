@@ -31,7 +31,6 @@ public class ConfigTest {
   @Test
   public void testApplyExperimentalCompilerOptions() {
     PlovrCompilerOptions options = new PlovrCompilerOptions();
-    assertFalse(options.getProcessObjectPropertyString());
     assertFalse(options.isExternExportsEnabled());
     assertNull(options.checkMissingGetCssNameBlacklist);
     assertNull(options.getOutputCharset());
@@ -39,7 +38,6 @@ public class ConfigTest {
 
     JsonParser parser = new JsonParser();
     JsonObject experimentalOptions = parser.parse("{" +
-        "\"processObjectPropertyString\": true, " +
         "\"externExports\": true, " +
         "\"checkMissingGetCssNameBlacklist\": \"hello world\", " +
         "\"outputCharset\": \"UTF-8\", " +
@@ -47,7 +45,6 @@ public class ConfigTest {
         "}").getAsJsonObject();
     Config.applyExperimentalCompilerOptions(experimentalOptions, options);
 
-    assertTrue(options.getProcessObjectPropertyString());
     assertTrue(options.isExternExportsEnabled());
     assertEquals("hello world", options.checkMissingGetCssNameBlacklist);
     assertEquals(Charsets.UTF_8, options.getOutputCharset());

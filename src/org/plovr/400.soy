@@ -1,16 +1,14 @@
 {namespace org.plovr}
 
-/**
- * @param htmlMessage
- */
-{template .errorPage autoescape="deprecated-noncontextual"}
+{template .errorPage}
+{@param htmlMessage: ?}
 <!doctype html>
 <html>
 <head>
   <title>400 - Server Error</title>
 </head>
 <body>
-{$htmlMessage|noAutoescape}
+{$htmlMessage}
 </body>
 </html>
 {/template}

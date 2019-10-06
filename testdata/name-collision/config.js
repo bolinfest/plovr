@@ -3,7 +3,7 @@
   "paths": [
     "main",
     "custom",
-    "../../third-party/javascript/soyutils_usegoog.js"
+    "../../third-party/javascript"
   ],
   "inputs": "main.js",
 
