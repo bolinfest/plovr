@@ -5,6 +5,7 @@ goog.require("goog.dom");
 goog.require("goog.string");
 goog.require("goog.ui.Component");
 goog.require("goog.asserts");
+goog.require("goog.date.Date");
 
 /**
  * @param {!goog.dom.DomHelper} dom
