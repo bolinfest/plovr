@@ -10,38 +10,32 @@ import java.io.OutputStream;
 import java.io.File;
 import java.net.URI;
 
-/**
- * {@link CompileRequestHandlerTest} is a unit test for {@link CompileRequestHandler}.
- */
-public class CompileRequestHandlerTest extends HandlerTest {
+public class TestHandlerTest extends HandlerTest {
   @Test
-  public void testCompileModulesAdvanced() throws Exception {
-    CompileRequestHandler handler = createHandler();
+  public void testTestHandlerAll() throws Exception {
+    TestHandler handler = createHandler();
     Config config = ConfigParser.parseFile(new File("testdata/modules/plovr-config.js"));
-    URI uri = new URI("/compile?id=modules");
+    URI uri = new URI("/test/module-example/all");
     HttpExchange ex = createExchange(uri);
     QueryData qdata = QueryData.createFromUri(uri);
-    assertEquals(CompilationMode.ADVANCED, config.getCompilationMode());
 
     handler.doGet(ex, qdata, config);
     Mockito.verify(ex).sendResponseHeaders(Mockito.eq(200), Mockito.anyInt());
   }
 
   @Test
-  public void testCompileModulesRaw() throws Exception {
-    CompileRequestHandler handler = createHandler();
+  public void testTestHandlerList() throws Exception {
+    TestHandler handler = createHandler();
     Config config = ConfigParser.parseFile(new File("testdata/modules/plovr-config.js"));
-    URI uri = new URI("/compile?id=modules&mode=raw");
+    URI uri = new URI("/test/module-example/list");
     HttpExchange ex = createExchange(uri);
     QueryData qdata = QueryData.createFromUri(uri);
-    config = ConfigParser.update(config, qdata);
-    assertEquals(CompilationMode.RAW, config.getCompilationMode());
 
     handler.doGet(ex, qdata, config);
     Mockito.verify(ex).sendResponseHeaders(Mockito.eq(200), Mockito.anyInt());
   }
 
-  private CompileRequestHandler createHandler() {
-    return new CompileRequestHandler(createServer());
+  private TestHandler createHandler() {
+    return new TestHandler(createServer());
   }
 }

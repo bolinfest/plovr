@@ -1,12 +1,10 @@
 {namespace org.plovr}
 
-/**
- * @param configId
- * @param compilationData
- * @param originalSize
- * @param compiledSize
- */
-{template .size autoescape="deprecated-noncontextual"}
+{template .size}
+{@param configId: ?}
+{@param compilationData: ?}
+{@param originalSize: ?}
+{@param compiledSize: ?}
 <!doctype html>
 <html>
 <head>
@@ -46,7 +44,7 @@
 {/template}
 
 /***/
-{template .css autoescape="deprecated-noncontextual"}
+{template .css kind="css"}
 {literal}
 body {
   margin: 0;
