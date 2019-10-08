@@ -1,10 +1,10 @@
 // BEGIN_INCLUDE_APP
-goog.provide('example.App');
+goog.provide("example.App");
 
-goog.require('goog.dom');
-goog.require('goog.string');
-goog.require('goog.ui.Component');
-
+goog.require("goog.dom");
+goog.require("goog.string");
+goog.require("goog.ui.Component");
+goog.require("goog.asserts");
 
 /**
  * @param {!goog.dom.DomHelper} dom
@@ -31,20 +31,32 @@ example.App.buttonClickHandler_ = goog.nullFunction;
 /** @inheritDoc */
 example.App.prototype.createDom = function() {
   var dom = this.dom_;
-  var el = dom.createDom('div', undefined /* opt_attributes */,
-      dom.createDom('span', undefined /* opt_attributes */, 'Messages appear here'),
-      dom.createDom('button', undefined /* opt_attributes */, 'Load Settings'));
+  var el = dom.createDom(
+    "div",
+    undefined /* opt_attributes */,
+    dom.createDom(
+      "span",
+      undefined /* opt_attributes */,
+      "Messages appear here"
+    ),
+    dom.createDom("button", undefined /* opt_attributes */, "Load Settings")
+  );
   this.setElementInternal(el);
 };
 
 /** @inheritDoc */
 example.App.prototype.enterDocument = function() {
-  goog.base(this, 'enterDocument');
+  goog.base(this, "enterDocument");
   var button = this.dom_.getElementsByTagNameAndClass(
-      'button', undefined /* className */, this.getElement())[0];
-  this.getHandler().listen(button,
-                           goog.events.EventType.CLICK,
-                           this.onButtonClick_);
+    "button",
+    undefined /* className */,
+    this.getElement()
+  )[0];
+  this.getHandler().listen(
+    button,
+    goog.events.EventType.CLICK,
+    this.onButtonClick_
+  );
 };
 
 /**
@@ -60,7 +72,8 @@ example.App.setButtonClickHandler = function(handler) {
   example.App.buttonClickHandler_ = handler;
 };
 
-/** Invoke this method when example.Settings is available. */ 
+/** Invoke this method when example.Settings is available. */
+
 example.App.prototype.onSettingsLoaded = function() {
   // The settings module adds the example.Settings component as the first and
   // only child of this component.
@@ -70,7 +83,10 @@ example.App.prototype.onSettingsLoaded = function() {
 /** @param {string} message */
 example.App.prototype.setMessage = function(message) {
   var span = this.dom_.getElementsByTagNameAndClass(
-      'span', undefined /* className */, this.getElement())[0];
+    "span",
+    undefined /* className */,
+    this.getElement()
+  )[0];
   span.innerHTML = goog.string.htmlEscape(message);
 };
 
@@ -88,7 +104,7 @@ example.App.install = function(id) {
   var dom = new goog.dom.DomHelper();
   var app = new example.App(dom);
   app.render(dom.getElement(id));
-  example.App.instance_ = app;  
+  example.App.instance_ = app;
 };
 
 /** @return {example.App} */
@@ -98,5 +114,5 @@ example.App.getInstance = function() {
 // END_INCLUDE_APP
 
 // BEGIN_INCLUDE_EXPORT
-goog.exportSymbol('example.App.install', example.App.install);
+goog.exportSymbol("example.App.install", example.App.install);
 // END_INCLUDE_EXPORT
