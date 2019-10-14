@@ -1,7 +1,7 @@
-Plovr: A Closure build tool
+Plovr Build: A Closure build tool
 ===========================
 
-plovr is a build tool that dynamically recompiles JavaScript and Closure
+Plovr Build is a build tool that dynamically recompiles JavaScript and Closure
 Template code. It is designed to simplify Closure development, and to make it
 more enjoyable.
 
