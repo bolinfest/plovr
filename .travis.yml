@@ -1,0 +1,24 @@
+language: java
+ jdk:
+   - openjdk8
+
+  # Enable container-based architecture.
+ sudo: true
+
+  addons:
+   apt:
+     packages:
+       - ant
+
+  before_install:
+   # Limit Ant's and Buck's memory usage to avoid the OOM killer.
+   - export ANT_OPTS='-Xmx500m'
+   - export BUCK_EXTRA_JAVA_ARGS='-Xmx500m'
+   # Set up the BUCK BUILD environment.
+   - wget https://github.com/facebook/buck/releases/download/v2017.11.16.01/buck_2017.07.24_all.deb
+   - sudo dpkg -i buck_*.deb
+
+  script:
+   - buck clean 2>/dev/null
+   - buck fetch //third-party/...
+   - buck test :test 
