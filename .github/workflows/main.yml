@@ -1,0 +1,12 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: "xvilo/plovr-base"
+    steps:
+      - name: "Run tests"
+      - run: buck fetch //third-party/... && "buck test :test
