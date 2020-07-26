@@ -41,9 +41,7 @@ public class PlovrDiagnosticGroups extends DiagnosticGroups {
     return group;
   }
 
-  public static Map<String, DiagnosticGroup> getRegisteredGroups() {
-    return ImmutableMap.copyOf(groupsByName);
-  }
+  public static Map<String, DiagnosticGroup> getRegisteredGroups() { return groupsByName; }
 
   public static DiagnosticGroup forName(String name) {
     return groupsByName.get(name);
