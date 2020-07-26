@@ -254,9 +254,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.javascript-closure-compiler-jar',
-  out = 'com.google.javascript-closure-compiler-jar-v20190929.jar',
-  url = 'mvn:com.google.javascript:closure-compiler:jar:v20190929',
-  sha1 = '693d096c805f5ab615957445038919adec11bf50',
+  out = 'com.google.javascript-closure-compiler-jar-v20200719.jar',
+  url = 'mvn:com.google.javascript:closure-compiler:jar:v20200719',
+  sha1 = '0adcd8c9d268ee041d5a73753c98e4074fe82488',
 )
 
 prebuilt_jar(
@@ -266,9 +266,21 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.javascript-closure-compiler-externs-jar',
-  out = 'com.google.javascript-closure-compiler-externs-jar-v20190929.jar',
-  url = 'mvn:com.google.javascript:closure-compiler-externs:jar:v20190929',
-  sha1 = '9fb7cc59b057efc5dcd98f16630fd65d371ac383',
+  out = 'com.google.javascript-closure-compiler-externs-jar-v20200719.jar',
+  url = 'mvn:com.google.javascript:closure-compiler-externs:jar:v20200719',
+  sha1 = '900d41a9b4185533a0bdd10242e492050edf02bd',
+)
+
+prebuilt_jar(
+  name = 'com.google.jsinterop-base-jar',
+  binary_jar = ':remote-com.google.jsinterop-base-jar',
+)
+
+remote_file(
+  name = 'remote-com.google.jsinterop-base-jar',
+  out = 'com.google.jsinterop-base-jar-1.0.0.jar',
+  url = 'mvn:com.google.jsinterop:base:jar:1.0.0',
+  sha1 = '5d2a5cda3092004832cb67cfe7a100a2ef8411f8',
 )
 
 prebuilt_jar(
