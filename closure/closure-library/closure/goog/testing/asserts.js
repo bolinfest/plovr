@@ -1,16 +1,8 @@
-// Copyright 2010 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 goog.provide('goog.testing.asserts');
 goog.setTestOnly();
@@ -290,7 +282,8 @@ goog.testing.asserts.assert = function(a, opt_b) {
 
   _assert(
       comment, typeof booleanValue === 'boolean',
-      'Bad argument to assert(boolean)');
+      'Bad argument to assert(boolean): ' +
+          _displayStringForValue(booleanValue));
   _assert(comment, booleanValue, 'Call to assert(boolean) with false');
 };
 /** @const */
@@ -461,7 +454,7 @@ var assertThrowsJsUnitException =
  */
 goog.testing.asserts.assertRejects = function(a, opt_b) {
   _validateArguments(1, arguments);
-  var thenable = nonCommentArg(1, 1, arguments);
+  var thenable = /** @type {!IThenable<*>} */ (nonCommentArg(1, 1, arguments));
   var comment = commentArg(1, arguments);
   _assert(
       comment, goog.isObject(thenable) && goog.isFunction(thenable.then),
@@ -492,7 +485,8 @@ goog.testing.asserts.assertTrue = function(a, opt_b) {
 
   _assert(
       comment, typeof booleanValue === 'boolean',
-      'Bad argument to assertTrue(boolean)');
+      'Bad argument to assertTrue(boolean): ' +
+          _displayStringForValue(booleanValue));
   _assert(comment, booleanValue, 'Call to assertTrue(boolean) with false');
 };
 /** @const */
@@ -510,7 +504,8 @@ goog.testing.asserts.assertFalse = function(a, opt_b) {
 
   _assert(
       comment, typeof booleanValue === 'boolean',
-      'Bad argument to assertFalse(boolean)');
+      'Bad argument to assertFalse(boolean): ' +
+          _displayStringForValue(booleanValue));
   _assert(comment, !booleanValue, 'Call to assertFalse(boolean) with true');
 };
 /** @const */

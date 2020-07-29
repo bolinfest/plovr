@@ -1,21 +1,11 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Low level handling of XMLHttpRequest.
- * @author arv@google.com (Erik Arvidsson)
- * @author dbk@google.com (David Barrett-Kahn)
  */
 
 goog.provide('goog.net.DefaultXmlHttpFactory');
@@ -88,7 +78,7 @@ goog.net.XmlHttp.OptionType = {
    * is still changed to COMPLETE.  We need to ignore it and allow the
    * try/catch around send() to pick up the error.
    */
-  LOCAL_REQUEST_ERROR: 1
+  LOCAL_REQUEST_ERROR: 1,
 };
 
 
@@ -121,7 +111,7 @@ goog.net.XmlHttp.ReadyState = {
   /**
    * Constant for when xmlhttprequest.readyState is completed
    */
-  COMPLETE: 4
+  COMPLETE: 4,
 };
 
 
@@ -219,8 +209,10 @@ goog.net.DefaultXmlHttpFactory.prototype.getProgId_ = function() {
       typeof ActiveXObject != 'undefined') {
     // Candidate Active X types.
     var ACTIVE_X_IDENTS = [
-      'MSXML2.XMLHTTP.6.0', 'MSXML2.XMLHTTP.3.0', 'MSXML2.XMLHTTP',
-      'Microsoft.XMLHTTP'
+      'MSXML2.XMLHTTP.6.0',
+      'MSXML2.XMLHTTP.3.0',
+      'MSXML2.XMLHTTP',
+      'Microsoft.XMLHTTP',
     ];
     for (var i = 0; i < ACTIVE_X_IDENTS.length; i++) {
       var candidate = ACTIVE_X_IDENTS[i];

@@ -1,21 +1,12 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 
 /**
  * @fileoverview SvgGraphics sub class that uses SVG to draw the graphics.
- * @author arv@google.com (Erik Arvidsson)
  */
 
 goog.provide('goog.graphics.SvgGraphics');
@@ -175,7 +166,7 @@ goog.graphics.SvgGraphics.prototype.setElementAttributes = function(
  */
 goog.graphics.SvgGraphics.prototype.append_ = function(element, opt_group) {
   var parent = opt_group || this.canvasElement;
-  parent.getElement().appendChild(element.getElement());
+  parent.getElement().appendChild(/** @type {!Node} */ (element.getElement()));
 };
 
 
@@ -784,7 +775,7 @@ goog.graphics.SvgGraphics.prototype.removeDef = function(defKey) {
   var id = this.getDef(defKey);
   if (id) {
     var element = this.dom_.getElement(id);
-    this.defsElement_.removeChild(element);
+    this.defsElement_.removeChild(/** @type {!Node} */ (element));
     delete this.defs_[defKey];
   }
 };

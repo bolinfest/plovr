@@ -1,20 +1,11 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Error handling utilities.
- *
  */
 
 goog.provide('goog.debug.ErrorHandler');
@@ -62,7 +53,7 @@ goog.debug.ErrorHandler = function(handler) {
    * @type {boolean}
    * @private
    */
-  this.wrapErrors_ = true;  // TODO(user) Change default.
+  this.wrapErrors_ = true;  // TODO(malteubl) Change default.
 
   /**
    * Whether to add a prefix to all error messages. The prefix is
@@ -204,7 +195,7 @@ goog.debug.ErrorHandler.prototype.handleError_ = function(e) {
   // Don't re-report errors that have already been handled by this code.
   var MESSAGE_PREFIX =
       goog.debug.ErrorHandler.ProtectedFunctionError.MESSAGE_PREFIX;
-  if ((e && typeof e === 'object' && e.message &&
+  if ((e && typeof e === 'object' && typeof e.message === 'string' &&
        e.message.indexOf(MESSAGE_PREFIX) == 0) ||
       (typeof e === 'string' && e.indexOf(MESSAGE_PREFIX) == 0)) {
     return;
@@ -213,8 +204,8 @@ goog.debug.ErrorHandler.prototype.handleError_ = function(e) {
   if (!this.wrapErrors_) {
     // Add the prefix to the existing message.
     if (this.prefixErrorMessages_) {
-      if (typeof e === 'object' && e && 'message' in e) {
-        e.message = MESSAGE_PREFIX + e.message;
+      if (typeof e === 'object' && e && typeof e.message === 'string') {
+        /** @type {{message}} */ (e).message = MESSAGE_PREFIX + e.message;
       } else {
         e = MESSAGE_PREFIX + e;
       }
@@ -226,7 +217,8 @@ goog.debug.ErrorHandler.prototype.handleError_ = function(e) {
       // stack trace
       // If it has a stack and Error.captureStackTrace is supported (only
       // supported in V8 as of May 2013) log the stack to the console.
-      if (e && e.stack && Error.captureStackTrace && goog.global['console']) {
+      if (e && typeof e.stack === 'string' && Error.captureStackTrace &&
+          goog.global['console']) {
         goog.global['console']['error'](e.message, e.stack);
       }
     }

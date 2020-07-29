@@ -7,10 +7,13 @@
 
 /*
  * Styles for Editor dialogs and their sub-components.
- *
- * @author marcosalmeida@google.com (Marcos Almeida)
  */
 
+@provide 'goog.css.editor.dialog';
+
+@require '../dialog';
+@require '../tab';
+@require '../tabbar';
 
 .tr-dialog {
   width: 475px;

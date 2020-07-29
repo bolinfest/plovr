@@ -1,24 +1,14 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-// All Rights Reserved.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Class to encapsulate an editable field.  Always uses an
  * iframe to contain the editable area, never inherits the style of the
  * surrounding page, and is always a fixed height.
  *
- * @author nicksantos@google.com (Nick Santos)
  * @see ../demos/editor/editor.html
  * @see ../demos/editor/field_basic.html
  */
@@ -152,6 +142,7 @@ goog.editor.Field = function(id, opt_doc) {
   this.delayedChangeTimer_ = new goog.async.Delay(
       this.dispatchDelayedChange_, goog.editor.Field.DELAYED_CHANGE_FREQUENCY,
       this);
+  this.registerDisposable(this.delayedChangeTimer_);
 
   /** @private */
   this.debouncedEvents_ = {};
@@ -163,6 +154,7 @@ goog.editor.Field = function(id, opt_doc) {
     /** @private */
     this.changeTimerGecko_ = new goog.async.Delay(
         this.handleChange, goog.editor.Field.CHANGE_FREQUENCY, this);
+    this.registerDisposable(this.changeTimerGecko_);
   }
 
   /**
@@ -911,6 +903,7 @@ goog.editor.Field.prototype.setupChangeListeners_ = function() {
   this.selectionChangeTimer_ = new goog.async.Delay(
       this.handleSelectionChangeTimer_,
       goog.editor.Field.SELECTION_CHANGE_FREQUENCY_, this);
+  this.registerDisposable(this.selectionChangeTimer_);
 
   if (this.followLinkInNewWindow_) {
     this.addListener(

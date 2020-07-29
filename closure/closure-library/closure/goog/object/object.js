@@ -1,20 +1,11 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Utilities for manipulating objects/maps/hashes.
- * @author arv@google.com (Erik Arvidsson)
  */
 
 goog.provide('goog.object');
@@ -641,7 +632,7 @@ goog.object.extend = function(target, var_args) {
  */
 goog.object.create = function(var_args) {
   const argLength = arguments.length;
-  if (argLength == 1 && goog.isArray(arguments[0])) {
+  if (argLength == 1 && Array.isArray(arguments[0])) {
     return goog.object.create.apply(null, arguments[0]);
   }
 
@@ -667,7 +658,7 @@ goog.object.create = function(var_args) {
  */
 goog.object.createSet = function(var_args) {
   const argLength = arguments.length;
-  if (argLength == 1 && goog.isArray(arguments[0])) {
+  if (argLength == 1 && Array.isArray(arguments[0])) {
     return goog.object.createSet.apply(null, arguments[0]);
   }
 

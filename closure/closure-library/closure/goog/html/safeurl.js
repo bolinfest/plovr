@@ -1,16 +1,8 @@
-// Copyright 2013 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview The SafeUrl type and its builders.
@@ -23,7 +15,6 @@ goog.provide('goog.html.SafeUrl');
 goog.require('goog.asserts');
 goog.require('goog.fs.url');
 goog.require('goog.html.TrustedResourceUrl');
-goog.require('goog.html.trustedtypes');
 goog.require('goog.i18n.bidi.Dir');
 goog.require('goog.i18n.bidi.DirectionalString');
 goog.require('goog.string.Const');
@@ -71,15 +62,14 @@ goog.require('goog.string.internal');
  * @implements {goog.i18n.bidi.DirectionalString}
  * @implements {goog.string.TypedString}
  * @param {!Object=} opt_token package-internal implementation detail.
- * @param {!TrustedURL|string=} opt_content package-internal
- *     implementation detail.
+ * @param {string=} opt_content package-internal implementation detail.
  */
 goog.html.SafeUrl = function(opt_token, opt_content) {
   /**
    * The contained value of this SafeUrl.  The field has a purposely ugly
    * name to make (non-compiled) code that attempts to directly access this
    * field stand out.
-   * @private {!TrustedURL|string}
+   * @private {string}
    */
   this.privateDoNotAccessOrElseSafeUrlWrappedValue_ =
       ((opt_token === goog.html.SafeUrl.CONSTRUCTOR_TOKEN_PRIVATE_) &&
@@ -128,7 +118,7 @@ goog.html.SafeUrl.prototype.implementsGoogStringTypedString = true;
 
 
 /**
- * Returns this SafeUrl's value a string.
+ * Returns this SafeUrl's value as a string.
  *
  * IMPORTANT: In code where it is security relevant that an object's type is
  * indeed `SafeUrl`, use `goog.html.SafeUrl.unwrap` instead of this
@@ -201,17 +191,6 @@ if (goog.DEBUG) {
  *     `goog.asserts.AssertionError`.
  */
 goog.html.SafeUrl.unwrap = function(safeUrl) {
-  return goog.html.SafeUrl.unwrapTrustedURL(safeUrl).toString();
-};
-
-
-/**
- * Unwraps value as TrustedURL if supported or as a string if not.
- * @param {!goog.html.SafeUrl} safeUrl
- * @return {!TrustedURL|string}
- * @see goog.html.SafeUrl.unwrap
- */
-goog.html.SafeUrl.unwrapTrustedURL = function(safeUrl) {
   // Perform additional Run-time type-checking to ensure that safeUrl is indeed
   // an instance of the expected type.  This provides some additional protection
   // against security bugs due to application code that disables type checks.
@@ -269,13 +248,14 @@ goog.html.SafeUrl.fromConstant = function(url) {
 goog.html.SAFE_MIME_TYPE_PATTERN_ = new RegExp(
     // Note: Due to content-sniffing concerns, only add MIME types for
     // media formats.
-    '^(?:audio/(?:3gpp2|3gpp|aac|L16|midi|mp3|mp4|mpeg|oga|ogg|opus|x-m4a|x-wav|wav|webm)|' +
+    '^(?:audio/(?:3gpp2|3gpp|aac|L16|midi|mp3|mp4|mpeg|oga|ogg|opus|x-m4a|x-matroska|x-wav|wav|webm)|' +
+        'font/\\w+|' +
         'image/(?:bmp|gif|jpeg|jpg|png|tiff|webp|x-icon)|' +
-        // TODO(b/68188949): Due to content-sniffing concerns, text/csv should
+        // TODO(user): Due to content-sniffing concerns, text/csv should
         // be removed from the whitelist.
         'text/csv|' +
-        'video/(?:mpeg|mp4|ogg|webm|quicktime))' +
-        '(?:;\\w+=(?:\\w+|"[\\w;=]+"))*$',  // MIME type parameters
+        'video/(?:mpeg|mp4|ogg|webm|quicktime|x-matroska))' +
+        '(?:;\\w+=(?:\\w+|"[\\w;,= ]+"))*$',  // MIME type parameters
     'i');
 
 
@@ -297,14 +277,44 @@ goog.html.SafeUrl.isSafeMimeType = function(mimeType) {
  * for `blob` is not of a known safe audio, image or video MIME type,
  * then the SafeUrl will wrap {@link #INNOCUOUS_STRING}.
  *
+ * Note: Call {@link revokeObjectUrl} on the URL after it's used
+ * to prevent memory leaks.
+ *
  * @see http://www.w3.org/TR/FileAPI/#url
  * @param {!Blob} blob
  * @return {!goog.html.SafeUrl} The blob URL, or an innocuous string wrapped
  *   as a SafeUrl.
  */
 goog.html.SafeUrl.fromBlob = function(blob) {
-  var url = goog.html.SAFE_MIME_TYPE_PATTERN_.test(blob.type) ?
+  var url = goog.html.SafeUrl.isSafeMimeType(blob.type) ?
       goog.fs.url.createObjectUrl(blob) :
+      goog.html.SafeUrl.INNOCUOUS_STRING;
+  return goog.html.SafeUrl.createSafeUrlSecurityPrivateDoNotAccessOrElse(url);
+};
+
+
+/**
+ * Revokes an object URL created for a safe URL created {@link fromBlob()}.
+ * @param {!goog.html.SafeUrl} safeUrl SafeUrl wrapping a blob object.
+ */
+goog.html.SafeUrl.revokeObjectUrl = function(safeUrl) {
+  var url = safeUrl.getTypedStringValue();
+  if (url !== goog.html.SafeUrl.INNOCUOUS_STRING) {
+    goog.fs.url.revokeObjectUrl(url);
+  }
+};
+
+
+/**
+ * Creates a SafeUrl wrapping a blob URL created for a MediaSource.
+ * @param {!MediaSource} mediaSource
+ * @return {!goog.html.SafeUrl} The blob URL.
+ */
+goog.html.SafeUrl.fromMediaSource = function(mediaSource) {
+  goog.asserts.assert(
+      'MediaSource' in goog.global, 'No support for MediaSource');
+  const url = mediaSource instanceof MediaSource ?
+      goog.fs.url.createObjectUrl(mediaSource) :
       goog.html.SafeUrl.INNOCUOUS_STRING;
   return goog.html.SafeUrl.createSafeUrlSecurityPrivateDoNotAccessOrElse(url);
 };
@@ -315,15 +325,15 @@ goog.html.SafeUrl.fromBlob = function(blob) {
  * @const
  * @private
  */
-goog.html.DATA_URL_PATTERN_ = /^data:([^,]*);base64,[a-z0-9+\/]+=*$/i;
+goog.html.DATA_URL_PATTERN_ = /^data:(.*);base64,[a-z0-9+\/]+=*$/i;
 
 
 /**
  * Creates a SafeUrl wrapping a data: URL, after validating it matches a
- * known-safe audio, image or video MIME type.
+ * known-safe media MIME type.
  *
  * @param {string} dataUrl A valid base64 data URL with one of the whitelisted
- *     audio, image or video MIME types.
+ *     media MIME types.
  * @return {!goog.html.SafeUrl} A matching safe URL, or {@link INNOCUOUS_STRING}
  *     wrapped as a SafeUrl if it does not pass.
  */
@@ -332,13 +342,15 @@ goog.html.SafeUrl.fromDataUrl = function(dataUrl) {
   // See https://tools.ietf.org/html/rfc4648.
   // Remove the CR (%0D) and LF (%0A) from the dataUrl.
   var filteredDataUrl = dataUrl.replace(/(%0A|%0D)/g, '');
-  // There's a slight risk here that a browser sniffs the content type if it
-  // doesn't know the MIME type and executes HTML within the data: URL. For this
-  // to cause XSS it would also have to execute the HTML in the same origin
-  // of the page with the link. It seems unlikely that both of these will
-  // happen, particularly in not really old IEs.
   var match = filteredDataUrl.match(goog.html.DATA_URL_PATTERN_);
-  var valid = match && goog.html.SAFE_MIME_TYPE_PATTERN_.test(match[1]);
+  // Note: The only risk of XSS here is if the `data:` URL results in a
+  // same-origin document. In which case content-sniffing might cause the
+  // browser to interpret the contents as html.
+  // All modern browsers consider `data:` URL documents to have unique empty
+  // origins. Only Firefox for versions prior to v57 behaves differently:
+  // https://blog.mozilla.org/security/2017/10/04/treating-data-urls-unique-origins-firefox-57/
+  // Older versions of IE don't understand `data:` urls, so it is not an issue.
+  var valid = match && goog.html.SafeUrl.isSafeMimeType(match[1]);
   return goog.html.SafeUrl.createSafeUrlSecurityPrivateDoNotAccessOrElse(
       valid ? filteredDataUrl : goog.html.SafeUrl.INNOCUOUS_STRING);
 };
@@ -721,11 +733,7 @@ goog.html.SafeUrl.TYPE_MARKER_GOOG_HTML_SECURITY_PRIVATE_ = {};
 goog.html.SafeUrl.createSafeUrlSecurityPrivateDoNotAccessOrElse = function(
     url) {
   return new goog.html.SafeUrl(
-      goog.html.SafeUrl.CONSTRUCTOR_TOKEN_PRIVATE_,
-      goog.html.trustedtypes.PRIVATE_DO_NOT_ACCESS_OR_ELSE_POLICY ?
-          goog.html.trustedtypes.PRIVATE_DO_NOT_ACCESS_OR_ELSE_POLICY.createURL(
-              url) :
-          url);
+      goog.html.SafeUrl.CONSTRUCTOR_TOKEN_PRIVATE_, url);
 };
 
 

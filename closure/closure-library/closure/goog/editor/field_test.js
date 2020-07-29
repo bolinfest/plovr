@@ -1,24 +1,13 @@
-// Copyright 2012 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Shared tests for Field and ContentEditableField.
  * Since ContentEditableField switches many of the internal code paths in Field
  * (such as via usesIframe()) it's important to re-run a lot of the same tests.
- *
- * @author nicksantos@google.com (Nick Santos)
- * @author gboyer@google.com (Garrett Boyer)
  */
 
 /** @suppress {extraProvide} */
@@ -78,7 +67,7 @@ class TestPlugin extends Plugin {
 const STRING_KEY = String.fromCharCode(KeyCodes.A).toLowerCase();
 
 /**
- * @return {events.Event} Returns an event for a keyboard shortcut for the
+ * @return {!events.Event} Returns an event for a keyboard shortcut for the
  *     letter 'a'.
  */
 function getBrowserEvent() {

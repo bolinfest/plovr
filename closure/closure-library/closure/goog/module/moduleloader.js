@@ -1,16 +1,8 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview The module loader for loading modules across the network.
@@ -24,7 +16,6 @@
  * In debugging mode, we use normal script tags. In order to make this work,
  * we load the scripts in serial: we do not execute script B to the document
  * until we are certain that script A is finished loading.
- *
  */
 
 goog.provide('goog.module.ModuleLoader');
@@ -180,6 +171,14 @@ goog.module.ModuleLoader.createPreloadScriptElement_ = function(url) {
   const link = goog.dom.createElement(goog.dom.TagName.LINK);
   goog.dom.safe.setLinkHrefAndRel(link, url, 'preload');
   link.as = 'script';
+
+  // If CSP nonces are used, propagate them to dynamically created scripts.
+  // This is necessary to allow nonce-based CSPs without 'strict-dynamic'.
+  var nonce = goog.getScriptNonce();
+  if (nonce) {
+    link.setAttribute('nonce', nonce);
+  }
+
   return link;
 };
 
@@ -259,20 +258,19 @@ goog.module.ModuleLoader.prototype.usingSourceUrlInjection_ = function() {
 
 /** @override */
 goog.module.ModuleLoader.prototype.loadModules = function(
-    ids, moduleInfoMap, opt_successFn, opt_errorFn, opt_timeoutFn,
-    opt_forceReload) {
+    ids, moduleInfoMap, {forceReload, onError, onSuccess, onTimeout} = {}) {
   var loadStatus = this.loadingModulesStatus_[ids] ||
       goog.module.ModuleLoader.LoadStatus.createForIds_(ids, moduleInfoMap);
   loadStatus.loadRequested = true;
-  if (loadStatus.successFn && opt_successFn) {
+  if (loadStatus.successFn && onSuccess) {
     // If there already exists a success function, chain it before the passed
     // success functon.
     loadStatus.successFn =
-        goog.functions.sequence(loadStatus.successFn, opt_successFn);
+        goog.functions.sequence(loadStatus.successFn, onSuccess);
   } else {
-    loadStatus.successFn = opt_successFn || loadStatus.successFn;
+    loadStatus.successFn = onSuccess || loadStatus.successFn;
   }
-  loadStatus.errorFn = opt_errorFn || null;
+  loadStatus.errorFn = onError || null;
 
   if (!this.loadingModulesStatus_[ids]) {
     // Modules were not prefetched.

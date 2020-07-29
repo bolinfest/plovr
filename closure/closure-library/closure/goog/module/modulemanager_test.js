@@ -1,16 +1,8 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 goog.module('goog.module.ModuleManagerTest');
 goog.setTestOnly();
@@ -39,8 +31,7 @@ function getModuleManager(infoMap) {
 
 function createSuccessfulBatchLoader(moduleMgr) {
   return {
-    loadModules: function(
-        ids, moduleInfoMap, opt_successFn, opt_errFn, opt_timeoutFn) {
+    loadModules: function(ids, moduleInfoMap, {onError, onSuccess, onTimeout}) {
       requestCount++;
       setTimeout(goog.bind(this.onLoad, this, ids.concat(), 0), 5);
     },
@@ -57,14 +48,13 @@ function createSuccessfulBatchLoader(moduleMgr) {
 
 function createSuccessfulNonBatchLoader(moduleMgr) {
   return {
-    loadModules: function(
-        ids, moduleInfoMap, opt_successFn, opt_errFn, opt_timeoutFn) {
+    loadModules: function(ids, moduleInfoMap, {onError, onSuccess, onTimeout}) {
       requestCount++;
       setTimeout(() => {
         moduleMgr.beforeLoadModuleCode(ids[0]);
         moduleMgr.setLoaded();
-        if (opt_successFn) {
-          opt_successFn();
+        if (onSuccess) {
+          onSuccess();
         }
       }, 5);
     },
@@ -73,11 +63,10 @@ function createSuccessfulNonBatchLoader(moduleMgr) {
 
 function createUnsuccessfulLoader(moduleMgr, status) {
   return {
-    loadModules: function(
-        ids, moduleInfoMap, opt_successFn, opt_errFn, opt_timeoutFn) {
+    loadModules: function(ids, moduleInfoMap, {onError, onSuccess, onTimeout}) {
       moduleMgr.beforeLoadModuleCode(ids[0]);
       setTimeout(() => {
-        opt_errFn(status);
+        onError(status);
       }, 5);
     },
   };
@@ -85,10 +74,9 @@ function createUnsuccessfulLoader(moduleMgr, status) {
 
 function createUnsuccessfulBatchLoader(moduleMgr, status) {
   return {
-    loadModules: function(
-        ids, moduleInfoMap, opt_successFn, opt_errFn, opt_timeoutFn) {
+    loadModules: function(ids, moduleInfoMap, {onError, onSuccess, onTimeout}) {
       setTimeout(() => {
-        opt_errFn(status);
+        onError(status);
       }, 5);
     },
   };
@@ -96,10 +84,9 @@ function createUnsuccessfulBatchLoader(moduleMgr, status) {
 
 function createTimeoutLoader(moduleMgr, status) {
   return {
-    loadModules: function(
-        ids, moduleInfoMap, opt_successFn, opt_errFn, opt_timeoutFn) {
+    loadModules: function(ids, moduleInfoMap, {onError, onSuccess, onTimeout}) {
       setTimeout(() => {
-        opt_timeoutFn(status);
+        onTimeout(status);
       }, 5);
     },
   };
@@ -227,14 +214,13 @@ function assertDependencyOrder(list, mm) {
 
 function createSuccessfulNonBatchLoaderWithRegisterInitCallback(moduleMgr, fn) {
   return {
-    loadModules: function(
-        ids, moduleInfoMap, opt_successFn, opt_errFn, opt_timeoutFn) {
+    loadModules: function(ids, moduleInfoMap, {onError, onSuccess, onTimeout}) {
       moduleMgr.beforeLoadModuleCode(ids[0]);
       moduleMgr.registerInitializationCallback(fn);
       setTimeout(() => {
         moduleMgr.setLoaded();
-        if (opt_successFn) {
-          opt_successFn();
+        if (onSuccess) {
+          onSuccess();
         }
       }, 5);
     },
@@ -252,14 +238,13 @@ function createModulesFor(var_args) {
 
 function createSuccessfulNonBatchLoaderWithConstructor(moduleMgr, info) {
   return {
-    loadModules: function(
-        ids, moduleInfoMap, opt_successFn, opt_errFn, opt_timeoutFn) {
+    loadModules: function(ids, moduleInfoMap, {onError, onSuccess, onTimeout}) {
       setTimeout(() => {
         moduleMgr.beforeLoadModuleCode(ids[0]);
         moduleMgr.setModuleConstructor(info[ids[0]].ctor);
         moduleMgr.setLoaded();
-        if (opt_successFn) {
-          opt_successFn();
+        if (onSuccess) {
+          onSuccess();
         }
       }, 5);
     },
@@ -1560,7 +1545,7 @@ testSuite({
     // failed.
     let triedLoad = false;
     mm.setLoader({
-      loadModules: function(ids, moduleInfoMap, opt_successFn, opt_errFn) {
+      loadModules: function(ids, moduleInfoMap, {onError, onSuccess}) {
         triedLoad = true;
       },
     });
@@ -1908,7 +1893,7 @@ testSuite({
     const errback = recordFunction();
     const mm = getModuleManager({'a': [], 'b': ['a']});
     mm.getModuleInfo('a').registerEarlyCallback(earlyCallback);
-    mm.getModuleInfo('a').registerEarlyCallback(functions.error('error'));
+    mm.getModuleInfo('a').registerCallback(functions.error('error'));
     mm.getModuleInfo('a').registerErrback(errback);
 
     mm.setLoader(createSuccessfulNonBatchLoaderWithConstructor(
@@ -1971,10 +1956,56 @@ testSuite({
     assertEquals('Did not receive module context', appContext, context);
   },
 
+  testSetAllModuleInfo() {
+    const callback = recordFunction();
+    const errback = recordFunction();
+    const moduleInfo = {'base': [], 'one': ['base'], 'two': ['one']};
+    const mm = getModuleManager(moduleInfo);
+    mm.getModuleInfo('one').registerEarlyCallback(callback);
+    mm.getModuleInfo('one').registerCallback(functions.error('error'));
+    mm.getModuleInfo('one').registerErrback(errback);
+    mm.setLoader(createSuccessfulNonBatchLoaderWithConstructor(
+        mm, createModulesFor('base', 'one', 'two')));
+    mm.preloadModule('base');
+    clock.tick(10);
+    // Module 'base' is now loaded.
+    assertTrue(mm.getModuleInfo('base').isLoaded());
+    // Re-init all modules using same instance.
+    mm.setAllModuleInfo(moduleInfo);
+    // Re-init all modules using new instance.
+    mm.setAllModuleInfo({'base': [], 'one': ['base'], 'two': ['one']});
+    // Module 'base' is still loaded.
+    assertTrue(mm.getModuleInfo('base').isLoaded());
+
+    // Callbacks are still registered.
+    mm.preloadModule('two');
+    assertThrows(() => {
+      clock.tick(10);
+    });
+    clock.tick(10);
+
+    assertEquals(1, callback.getCallCount());
+    assertEquals(1, errback.getCallCount());
+  },
+
   testSetAllModuleInfoString() {
-    const info = 'base/one:0/two:0/three:0,1,2/four:0,3/five:';
-    const mm = new ModuleManager();
-    mm.setAllModuleInfoString(info);
+    const callback = recordFunction();
+    const errback = recordFunction();
+    const moduleInfo = {'base': [], 'one': ['base'], 'two': ['one']};
+    const mm = getModuleManager(moduleInfo);
+    mm.getModuleInfo('one').registerEarlyCallback(callback);
+    mm.getModuleInfo('one').registerCallback(functions.error('error'));
+    mm.getModuleInfo('one').registerErrback(errback);
+    mm.setLoader(createSuccessfulNonBatchLoaderWithConstructor(
+        mm, createModulesFor('base', 'one', 'two')));
+    mm.preloadModule('base');
+    clock.tick(10);
+    // Module 'base' is now loaded.
+    assertTrue(mm.getModuleInfo('base').isLoaded());
+    // Re-init all modules using same instance.
+    mm.setAllModuleInfoString('base/one:0/two:1/three:0,1,2/four:0,3/five:');
+    // Module 'base' is still loaded.
+    assertTrue(mm.getModuleInfo('base').isLoaded());
 
     assertNotNull('Base should exist', mm.getModuleInfo('base'));
     assertNotNull('One should exist', mm.getModuleInfo('one'));
@@ -1988,6 +2019,16 @@ testSuite({
     assertArrayEquals(
         ['base', 'three'], mm.getModuleInfo('four').getDependencies());
     assertArrayEquals([], mm.getModuleInfo('five').getDependencies());
+
+    // Callbacks are still registered.
+    mm.preloadModule('two');
+    assertThrows(() => {
+      clock.tick(10);
+    });
+    clock.tick(10);
+
+    assertEquals(1, callback.getCallCount());
+    assertEquals(1, errback.getCallCount());
   },
 
   testSetAllModuleInfoStringWithEmptyString() {

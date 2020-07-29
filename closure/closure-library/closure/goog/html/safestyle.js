@@ -1,16 +1,8 @@
-// Copyright 2014 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview The SafeStyle type and its builders.
@@ -354,7 +346,7 @@ goog.html.SafeStyle.create = function(map) {
     if (value == null) {
       continue;
     }
-    if (goog.isArray(value)) {
+    if (Array.isArray(value)) {
       value = goog.array.map(value, goog.html.SafeStyle.sanitizePropertyValue_)
                   .join(' ');
     } else {
@@ -538,6 +530,7 @@ goog.html.SafeStyle.ALLOWED_FUNCTIONS_ = [
   'fit-content',
   'hsl',
   'hsla',
+  'linear-gradient',
   'matrix',
   'minmax',
   'repeat',
@@ -605,7 +598,7 @@ goog.html.SafeStyle.concat = function(var_args) {
    * @param {!goog.html.SafeStyle|!Array<!goog.html.SafeStyle>} argument
    */
   var addArgument = function(argument) {
-    if (goog.isArray(argument)) {
+    if (Array.isArray(argument)) {
       goog.array.forEach(argument, addArgument);
     } else {
       style += goog.html.SafeStyle.unwrap(argument);

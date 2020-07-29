@@ -1,16 +1,8 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Utilities to check the preconditions, postconditions and
@@ -42,8 +34,6 @@
  * goog.asserts.assert(value);
  * // "value" is of type {!Object} at this point.
  * </code>
- *
- * @author agrieve@google.com (Andrew Grieve)
  */
 
 goog.provide('goog.asserts');
@@ -242,10 +232,9 @@ goog.asserts.assertExists = function(value, opt_message, var_args) {
  */
 goog.asserts.fail = function(opt_message, var_args) {
   if (goog.asserts.ENABLE_ASSERTS) {
-    goog.asserts.errorHandler_(
-        new goog.asserts.AssertionError(
-            'Failure' + (opt_message ? ': ' + opt_message : ''),
-            Array.prototype.slice.call(arguments, 1)));
+    goog.asserts.errorHandler_(new goog.asserts.AssertionError(
+        'Failure' + (opt_message ? ': ' + opt_message : ''),
+        Array.prototype.slice.call(arguments, 1)));
   }
 };
 
@@ -337,7 +326,7 @@ goog.asserts.assertObject = function(value, opt_message, var_args) {
  * @closurePrimitive {asserts.matchesReturn}
  */
 goog.asserts.assertArray = function(value, opt_message, var_args) {
-  if (goog.asserts.ENABLE_ASSERTS && !goog.isArray(value)) {
+  if (goog.asserts.ENABLE_ASSERTS && !Array.isArray(value)) {
     goog.asserts.doAssertFailure_(
         'Expected array but got %s: %s.', [goog.typeOf(value), value],
         opt_message, Array.prototype.slice.call(arguments, 2));
@@ -375,10 +364,12 @@ goog.asserts.assertBoolean = function(value, opt_message, var_args) {
  *     enabled.
  * @throws {goog.asserts.AssertionError} When the value is not an Element.
  * @closurePrimitive {asserts.matchesReturn}
+ * @deprecated Use goog.asserts.dom.assertIsElement instead.
  */
 goog.asserts.assertElement = function(value, opt_message, var_args) {
   if (goog.asserts.ENABLE_ASSERTS &&
-      (!goog.isObject(value) || value.nodeType != goog.dom.NodeType.ELEMENT)) {
+      (!goog.isObject(value) ||
+       /** @type {!Node} */ (value).nodeType != goog.dom.NodeType.ELEMENT)) {
     goog.asserts.doAssertFailure_(
         'Expected Element but got %s: %s.', [goog.typeOf(value), value],
         opt_message, Array.prototype.slice.call(arguments, 2));
@@ -392,6 +383,11 @@ goog.asserts.assertElement = function(value, opt_message, var_args) {
  * goog.asserts.ENABLE_ASSERTS is true.
  *
  * The compiler may tighten the type returned by this function.
+ *
+ * Do not use this to ensure a value is an HTMLElement or a subclass! Cross-
+ * document DOM inherits from separate - though identical - browser classes, and
+ * such a check will unexpectedly fail. Please use the methods in
+ * goog.asserts.dom for these purposes.
  *
  * @param {?} value The value to check.
  * @param {function(new: T, ...)} type A user-defined constructor.

@@ -1,21 +1,12 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Constant declarations for common key codes.
  *
- * @author eae@google.com (Emil A Eklund)
  * @see ../demos/keyhandler.html
  */
 
@@ -75,6 +66,10 @@ goog.events.KeyCodes = {
   // Firefox (Gecko) fires this for # on UK keyboards, rather than
   // Shift+SINGLE_QUOTE.
   FF_HASH: 163,
+  // Firefox (Gecko) fires this for ' (:) on JP keyboards, rather than
+  // SINGLE_QUOTE (US keyboard layout) or SEMICOLON (JP keyboard layout in
+  // chrome)
+  FF_JP_QUOTE: 58,
   QUESTION_MARK: 63,  // needs localization
   AT_SIGN: 64,
   A: 65,
@@ -405,6 +400,7 @@ goog.events.KeyCodes.isCharacterKey = function(keyCode) {
     case goog.events.KeyCodes.BACKSLASH:
     case goog.events.KeyCodes.CLOSE_SQUARE_BRACKET:
     case goog.events.KeyCodes.FF_HASH:
+    case goog.events.KeyCodes.FF_JP_QUOTE:
       return true;
     case goog.events.KeyCodes.FF_DASH:
       return goog.userAgent.GECKO;
