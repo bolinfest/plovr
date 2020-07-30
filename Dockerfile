@@ -1,4 +1,4 @@
-FROM xvilo/plovr-base
+FROM nicks/plovr-deps
 
 # Run tests
 ADD . /plovr
