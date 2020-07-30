@@ -12,7 +12,7 @@ goog.require("goog.asserts");
  * @extends {goog.ui.Component}
  */
 example.App = function(dom) {
-  goog.base(this, dom);
+  goog.ui.Component.call(this, dom);
 };
 goog.inherits(example.App, goog.ui.Component);
 
@@ -46,7 +46,8 @@ example.App.prototype.createDom = function() {
 
 /** @inheritDoc */
 example.App.prototype.enterDocument = function() {
-  goog.base(this, "enterDocument");
+  example.App.superClass_.enterDocument.call(this);
+
   var button = this.dom_.getElementsByTagNameAndClass(
     "button",
     undefined /* className */,
