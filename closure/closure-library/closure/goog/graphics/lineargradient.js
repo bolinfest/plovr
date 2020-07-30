@@ -1,21 +1,12 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 
 /**
  * @fileoverview Represents a gradient to be used with a Graphics implementor.
- * @author arv@google.com (Erik Arvidsson)
  */
 
 
@@ -91,7 +82,7 @@ goog.graphics.LinearGradient = function(
   this.color2_ = color2;
 
   goog.asserts.assert(
-      goog.isNumber(opt_opacity1) == goog.isNumber(opt_opacity2),
+      (typeof opt_opacity1 === 'number') == (typeof opt_opacity2 === 'number'),
       'Both or neither of opt_opacity1 and opt_opacity2 have to be set.');
 
   /**
@@ -99,14 +90,14 @@ goog.graphics.LinearGradient = function(
    * @type {?number}
    * @private
    */
-  this.opacity1_ = goog.isDef(opt_opacity1) ? opt_opacity1 : null;
+  this.opacity1_ = (opt_opacity1 !== undefined) ? opt_opacity1 : null;
 
   /**
    * End opacity of the gradient.
    * @type {?number}
    * @private
    */
-  this.opacity2_ = goog.isDef(opt_opacity2) ? opt_opacity2 : null;
+  this.opacity2_ = (opt_opacity2 !== undefined) ? opt_opacity2 : null;
 };
 goog.inherits(goog.graphics.LinearGradient, goog.graphics.Fill);
 

@@ -1,17 +1,8 @@
-// Copyright 2010 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-// All Rights Reserved.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview A class representing a set of test functions that use
@@ -103,14 +94,13 @@
  *     This seems to catch errors only in ff2/ff3. It does not work in Safari or
  *     IE7. The consequence of this is that exceptions that would have been
  *     caught by window.onerror show up as timeouts.
- *
- * @author agrieve@google.com (Andrew Grieve)
  */
 
 goog.setTestOnly('goog.testing.AsyncTestCase');
 goog.provide('goog.testing.AsyncTestCase');
 goog.provide('goog.testing.AsyncTestCase.ControlBreakingException');
 
+goog.require('goog.asserts');
 goog.require('goog.testing.TestCase');
 goog.require('goog.testing.asserts');
 
@@ -210,16 +200,16 @@ goog.testing.AsyncTestCase.prototype.enableDebugLogs_ = false;
 
 /**
  * A reference to the original asserts.js assert_() function.
- * @private
+ * @private {?function(?, ?, ?):?}
  */
 goog.testing.AsyncTestCase.prototype.origAssert_;
 
 
 /**
  * A reference to the original asserts.js fail() function.
- * @private
+ * @private {?function(?)}
  */
-goog.testing.AsyncTestCase.prototype.origFail_;
+goog.testing.AsyncTestCase.prototype.origFail_ = null;
 
 
 /**
@@ -248,10 +238,10 @@ goog.testing.AsyncTestCase.prototype.curStepName_ = '';
 
 /**
  * The stage of the test we should run next.
- * @type {?Function|undefined}
+ * @type {?function(this:goog.testing.AsyncTestCase, ...?):?}
  * @private
  */
-goog.testing.AsyncTestCase.prototype.nextStepFunc_;
+goog.testing.AsyncTestCase.prototype.nextStepFunc_ = null;
 
 
 /**
@@ -439,7 +429,7 @@ goog.testing.AsyncTestCase.prototype.signal = function() {
 
 /**
  * Handles an exception thrown by a test.
- * @param {*=} opt_e The exception object associated with the failure
+ * @param {?=} opt_e The exception object associated with the failure
  *     or a string.
  * @throws Always throws a ControlBreakingException.
  */
@@ -634,19 +624,22 @@ goog.testing.AsyncTestCase.prototype.hookAssert_ = function() {
     this.origAssert_ = _assert;
     this.origFail_ = fail;
     var self = this;
-    _assert = function() {
 
+    _assert = function() {
+      var expectedUnknownThis = /** @type {?} */ (this);
       try {
-        self.origAssert_.apply(this, arguments);
+        self.origAssert_.apply(expectedUnknownThis, arguments);
       } catch (e) {
         self.dbgLog_('Wrapping failed assert()');
         self.doAsyncError(e);
       }
     };
-    fail = function() {
 
+    /** @suppress {const} */
+    fail = function() {
+      var expectedUnknownThis = /** @type {?} */ (this);
       try {
-        self.origFail_.apply(this, arguments);
+        self.origFail_.apply(expectedUnknownThis, arguments);
       } catch (e) {
         self.dbgLog_('Wrapping fail()');
         self.doAsyncError(e);
@@ -697,9 +690,12 @@ goog.testing.AsyncTestCase.prototype.unhookAll_ = function() {
   if (this.origOnError_) {
     window.onerror = this.origOnError_;
     this.origOnError_ = null;
-    _assert = this.origAssert_;
+
+    _assert = goog.asserts.assert(this.origAssert_);
     this.origAssert_ = null;
-    fail = this.origFail_;
+
+    /** @suppress {const} */
+    fail = goog.asserts.assert(this.origFail_);
     this.origFail_ = null;
   }
 };
@@ -740,7 +736,8 @@ goog.testing.AsyncTestCase.prototype.stopTimeoutTimer_ = function() {
 
 /**
  * Sets the next function to call in our sequence of async callbacks.
- * @param {Function} func The function that executes the next step.
+ * @param {?function(this:goog.testing.AsyncTestCase, ...?)} func
+ *     The function that executes the next step.
  * @param {string} name A description of the next step.
  * @private
  */

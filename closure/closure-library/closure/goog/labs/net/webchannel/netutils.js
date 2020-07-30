@@ -1,20 +1,13 @@
-// Copyright 2013 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Utility functions for managing networking, such as
  * testing network connectivity.
+ *
  */
 
 
@@ -102,30 +95,36 @@ netUtils.testLoadImageWithRetries = function(
  * @param {string} url URL to the image.
  * @param {number} timeout Milliseconds before giving up.
  * @param {function(boolean)} callback Function to call with results.
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 netUtils.testLoadImage = function(url, timeout, callback) {
   var channelDebug = new WebChannelDebug();
   channelDebug.debug('TestLoadImage: loading ' + url);
-  var img = new Image();
-  img.onload = goog.partial(
-      netUtils.imageCallback_, channelDebug, img, 'TestLoadImage: loaded', true,
-      callback);
-  img.onerror = goog.partial(
-      netUtils.imageCallback_, channelDebug, img, 'TestLoadImage: error', false,
-      callback);
-  img.onabort = goog.partial(
-      netUtils.imageCallback_, channelDebug, img, 'TestLoadImage: abort', false,
-      callback);
-  img.ontimeout = goog.partial(
-      netUtils.imageCallback_, channelDebug, img, 'TestLoadImage: timeout',
-      false, callback);
+  if (goog.global.Image) {
+    var img = new Image();
+    img.onload = goog.partial(
+        netUtils.imageCallback_, channelDebug, img, 'TestLoadImage: loaded',
+        true, callback);
+    img.onerror = goog.partial(
+        netUtils.imageCallback_, channelDebug, img, 'TestLoadImage: error',
+        false, callback);
+    img.onabort = goog.partial(
+        netUtils.imageCallback_, channelDebug, img, 'TestLoadImage: abort',
+        false, callback);
+    img.ontimeout = goog.partial(
+        netUtils.imageCallback_, channelDebug, img, 'TestLoadImage: timeout',
+        false, callback);
 
-  goog.global.setTimeout(function() {
-    if (img.ontimeout) {
-      img.ontimeout();
-    }
-  }, timeout);
-  img.src = url;
+    goog.global.setTimeout(function() {
+      if (img.ontimeout) {
+        img.ontimeout();
+      }
+    }, timeout);
+    img.src = url;
+  } else {
+    // log ERROR_OTHER from environements where Image is not supported
+    callback(false);
+  }
 };
 
 
@@ -154,6 +153,7 @@ netUtils.imageCallback_ = function(
  * Clears handlers to avoid memory leaks.
  * @param {Image} img The image to clear handlers from.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 netUtils.clearImageCallbacks_ = function(img) {
   img.onload = null;

@@ -1,16 +1,8 @@
-// Copyright 2013 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview A map of listeners that provides utility functions to
@@ -18,6 +10,7 @@
  * `goog.events.EventTarget`.
  *
  * WARNING: Do not use this class from outside goog.events package.
+ *
  */
 
 goog.provide('goog.events.ListenerMap');
@@ -260,9 +253,9 @@ goog.events.ListenerMap.prototype.getListener = function(
  */
 goog.events.ListenerMap.prototype.hasListener = function(
     opt_type, opt_capture) {
-  var hasType = goog.isDef(opt_type);
+  var hasType = (opt_type !== undefined);
   var typeStr = hasType ? opt_type.toString() : '';
-  var hasCapture = goog.isDef(opt_capture);
+  var hasCapture = (opt_capture !== undefined);
 
   return goog.object.some(this.listeners, function(listenerArray, type) {
     for (var i = 0; i < listenerArray.length; ++i) {

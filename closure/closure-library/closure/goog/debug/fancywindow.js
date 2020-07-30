@@ -1,16 +1,8 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Definition of the FancyWindow class. Please minimize
@@ -23,6 +15,15 @@
  * @see ../demos/debug.html
  */
 
+
+
+// TODO(user): We're trying to migrate all ES5 subclasses of Closure
+// Library to ES6. In ES6 this cannot be referenced before super is called. This
+// file has at least one this before a super call (in ES5) and cannot be
+// automatically upgraded to ES6 as a result. Please fix this if you have a
+// chance. Note: This can sometimes be caused by not calling the super
+// constructor at all. You can run the conversion tool yourself to see what it
+// does on this file: blaze run //javascript/refactoring/es6_classes:convert.
 
 goog.provide('goog.debug.FancyWindow');
 
@@ -57,7 +58,7 @@ goog.require('goog.userAgent');
 goog.debug.FancyWindow = function(opt_identifier, opt_prefix) {
   this.readOptionsFromLocalStorage_();
   goog.debug.FancyWindow.base(this, 'constructor', opt_identifier, opt_prefix);
-  /** @private {goog.dom.DomHelper} */
+  /** @private {?goog.dom.DomHelper} */
   this.dh_ = null;
 };
 goog.inherits(goog.debug.FancyWindow, goog.debug.DebugWindow);
@@ -168,7 +169,7 @@ goog.debug.FancyWindow.prototype.openOptions_ = function() {
  * Make a drop down for the log levels.
  * @param {string} id Logger id.
  * @param {string} selected What log level is currently selected.
- * @return {Element} The newly created 'select' DOM element.
+ * @return {!Element} The newly created 'select' DOM element.
  * @private
  */
 goog.debug.FancyWindow.prototype.getDropDown_ = function(id, selected) {

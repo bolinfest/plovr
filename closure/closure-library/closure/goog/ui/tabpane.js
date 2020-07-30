@@ -1,21 +1,11 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview TabPane widget implementation.
- *
- * @author eae@google.com (Emil A Eklund)
  */
 
 goog.provide('goog.ui.TabPane');
@@ -102,7 +92,6 @@ goog.ui.TabPane = function(
   this.create_();
 };
 goog.inherits(goog.ui.TabPane, goog.events.EventTarget);
-goog.tagUnsealableClass(goog.ui.TabPane);
 
 
 /**
@@ -291,17 +280,18 @@ goog.ui.TabPane.prototype.addPage = function(page, opt_index) {
 
   // Insert page at specified position
   var index = this.pages_.length;
-  if (goog.isDef(opt_index) && opt_index != index) {
+  if (opt_index !== undefined && opt_index != index) {
     index = opt_index;
     this.pages_.splice(index, 0, page);
     this.elButtonBar_.insertBefore(
-        page.elTitle_, this.elButtonBar_.childNodes[index]);
+        /** @type {!Node} */ (page.elTitle_),
+        this.elButtonBar_.childNodes[index]);
   }
 
   // Append page to end
   else {
     this.pages_.push(page);
-    this.elButtonBar_.appendChild(page.elTitle_);
+    this.elButtonBar_.appendChild(/** @type {!Node} */ (page.elTitle_));
   }
 
   page.setParent_(this, index);
@@ -309,13 +299,12 @@ goog.ui.TabPane.prototype.addPage = function(page, opt_index) {
   // Select first page and fire change event
   if (!this.selected_) {
     this.selected_ = page;
-    this.dispatchEvent(
-        new goog.ui.TabPaneEvent(
-            goog.ui.TabPane.Events.CHANGE, this, this.selected_));
+    this.dispatchEvent(new goog.ui.TabPaneEvent(
+        goog.ui.TabPane.Events.CHANGE, this, this.selected_));
   }
 
   // Move page content to the tab pane and update visibility.
-  this.elContent_.appendChild(page.elContent_);
+  this.elContent_.appendChild(/** @type {!Node} */ (page.elContent_));
   page.setVisible_(page == this.selected_);
 
   // Update index for following pages
@@ -332,7 +321,7 @@ goog.ui.TabPane.prototype.addPage = function(page, opt_index) {
  *     based index.
  */
 goog.ui.TabPane.prototype.removePage = function(page) {
-  if (goog.isNumber(page)) {
+  if (typeof page === 'number') {
     page = this.pages_[page];
   }
   this.pages_.splice(page.index_, 1);
@@ -424,9 +413,9 @@ goog.ui.TabPane.prototype.getElement = function() {
 
 /**
  * Click event handler for header element, handles clicks on tabs.
- *
  * @param {goog.events.BrowserEvent} event Click event.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.TabPane.prototype.onHeaderClick_ = function(event) {
   var el = event.target;
@@ -450,9 +439,9 @@ goog.ui.TabPane.prototype.onHeaderClick_ = function(event) {
 /**
  * KeyDown event handler for header element. Arrow keys moves between pages.
  * Home and end selects the first/last page.
- *
  * @param {goog.events.BrowserEvent} event KeyDown event.
  * @private
+ * @suppress {strictPrimitiveOperators} Part of the go/strict_warnings_migration
  */
 goog.ui.TabPane.prototype.onHeaderKeyDown_ = function(event) {
   if (event.altKey || event.metaKey || event.ctrlKey) {
@@ -660,7 +649,7 @@ goog.ui.TabPane.TabPage.prototype.setVisible_ = function(visible) {
  */
 goog.ui.TabPane.TabPage.prototype.setParent_ = function(tabPane, opt_index) {
   this.parent_ = tabPane;
-  this.index_ = goog.isDef(opt_index) ? opt_index : null;
+  this.index_ = (opt_index !== undefined) ? opt_index : null;
 };
 
 

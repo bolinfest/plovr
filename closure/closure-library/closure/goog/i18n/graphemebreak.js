@@ -1,23 +1,14 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Detect Grapheme Cluster Break in a pair of codepoints. Follows
  * Unicode 10 UAX#29. Tailoring for Virama × Indic Letters is used.
  *
  * Reference: http://unicode.org/reports/tr29
- *
  */
 
 goog.provide('goog.i18n.GraphemeBreak');
@@ -85,16 +76,16 @@ goog.i18n.GraphemeBreak.inversions_ = null;
 goog.i18n.GraphemeBreak.applyBreakRules_ = function(a, b, extended) {
   var prop = goog.i18n.GraphemeBreak.property;
 
-  var aCode = goog.isString(a) ?
+  var aCode = (typeof a === 'string') ?
       goog.i18n.GraphemeBreak.getCodePoint_(a, a.length - 1) :
       a;
   var bCode =
-      goog.isString(b) ? goog.i18n.GraphemeBreak.getCodePoint_(b, 0) : b;
+      (typeof b === 'string') ? goog.i18n.GraphemeBreak.getCodePoint_(b, 0) : b;
 
   var aProp = goog.i18n.GraphemeBreak.getBreakProp_(aCode);
   var bProp = goog.i18n.GraphemeBreak.getBreakProp_(bCode);
 
-  var isString = goog.isString(a);
+  var isString = (typeof a === 'string');
 
   // GB3.
   if (aProp === prop.CR && bProp === prop.LF) {
@@ -437,8 +428,8 @@ goog.i18n.GraphemeBreak.hasGraphemeBreak = function(a, b, opt_extended) {
  *     a and b; False otherwise.
  */
 goog.i18n.GraphemeBreak.hasGraphemeBreakStrings = function(a, b, opt_extended) {
-  goog.asserts.assert(goog.isDef(a), 'First string should be defined.');
-  goog.asserts.assert(goog.isDef(b), 'Second string should be defined.');
+  goog.asserts.assert(a !== undefined, 'First string should be defined.');
+  goog.asserts.assert(b !== undefined, 'Second string should be defined.');
 
   // Break if any of the strings is empty.
   if (a.length === 0 || b.length === 0) {

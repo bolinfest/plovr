@@ -1,21 +1,14 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Definition of the Tracer class and associated classes.
  *
  * @see ../demos/tracer.html
+ * @suppress {strictMissingProperties}
  */
 
 goog.provide('goog.debug.StopTraceDetail');
@@ -127,13 +120,11 @@ goog.debug.Trace_ = function() {
 
   var self = this;
 
-  /** @private {!goog.structs.SimplePool} */
+  /** @private {!goog.structs.SimplePool<number>} */
   this.idPool_ = new goog.structs.SimplePool(0, 2000);
-
-  // TODO(nicksantos): SimplePool is supposed to only return objects.
-  // Reconcile this so that we don't have to cast to number below.
-  this.idPool_.createObject = function() { return String(self.nextId_++); };
-  this.idPool_.disposeObject = function(obj) {};
+  this.idPool_.setCreateObjectFn(function() {
+    return self.nextId_++;
+  });
 
   /**
    * Default threshold below which a tracer shouldn't be reported
@@ -255,6 +246,44 @@ goog.debug.Trace_.Event_.prototype.type;
 
 
 /**
+ * @type {goog.debug.Trace_.EventType|undefined}
+ */
+goog.debug.Trace_.Event_.prototype.eventType;
+
+
+/**
+ * @type {number|undefined}
+ */
+goog.debug.Trace_.Event_.prototype.id;
+
+
+/**
+ * @type {string|undefined}
+ */
+goog.debug.Trace_.Event_.prototype.comment;
+
+/**
+ * @type {number|undefined}
+ */
+goog.debug.Trace_.Event_.prototype.eventTime;
+
+/**
+ * @type {number|undefined}
+ */
+goog.debug.Trace_.Event_.prototype.startTime;
+
+/**
+ * @type {number|undefined}
+ */
+goog.debug.Trace_.Event_.prototype.stopTime;
+
+/**
+ * @type {number|undefined}
+ */
+goog.debug.Trace_.Event_.prototype.totalVarAlloc;
+
+
+/**
  * Returns a formatted string for the event.
  * @param {number} startTime The start time of the trace to generate relative
  * times.
@@ -298,7 +327,7 @@ goog.debug.Trace_.Event_.prototype.toTraceString = function(
  */
 goog.debug.Trace_.Event_.prototype.toString = function() {
   if (this.type == null) {
-    return this.comment;
+    return goog.asserts.assert(this.comment);
   } else {
     return '[' + this.type + '] ' + this.comment;
   }
@@ -526,7 +555,7 @@ goog.debug.Trace_.prototype.startTracer = function(comment, opt_type) {
   event.stopTime = undefined;
   event.totalVarAlloc = varAlloc;
   event.eventType = goog.debug.Trace_.EventType.START;
-  event.id = Number(this.idPool_.getObject());
+  event.id = this.idPool_.getObject();
   event.comment = comment;
   event.type = opt_type;
   this.events_.push(event);
@@ -751,7 +780,7 @@ goog.debug.Trace_.prototype.toString = function() {
       indent.pop();
     }
     sb.push(' ', e.toTraceString(this.startTime_, etime, indent.join('')));
-    etime = e.eventTime;
+    etime = /** @type {number} */ (e.eventTime);
     sb.push('\n');
     if (e.eventType == goog.debug.Trace_.EventType.START) {
       indent.push('|  ');

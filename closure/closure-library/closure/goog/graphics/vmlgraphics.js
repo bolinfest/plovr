@@ -1,21 +1,12 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 
 /**
  * @fileoverview VmlGraphics sub class that uses VML to draw the graphics.
- * @author arv@google.com (Erik Arvidsson)
  */
 
 
@@ -127,7 +118,7 @@ goog.graphics.VmlGraphics.COORD_MULTIPLIER = 100;
  * @return {string} The position adjusted for COORD_MULTIPLIER.
  */
 goog.graphics.VmlGraphics.toCssSize = function(size) {
-  return goog.isString(size) && goog.string.endsWith(size, '%') ?
+  return typeof size === 'string' && goog.string.endsWith(size, '%') ?
       size :
       parseFloat(size.toString()) + 'px';
 };
@@ -278,7 +269,7 @@ goog.graphics.VmlGraphics.prototype.updateGraphics_ = function() {
  */
 goog.graphics.VmlGraphics.prototype.append_ = function(element, opt_group) {
   var parent = opt_group || this.canvasElement;
-  parent.getElement().appendChild(element.getElement());
+  parent.getElement().appendChild(/** @type {!Node} */ (element.getElement()));
   this.updateGraphics_();
 };
 
@@ -288,6 +279,7 @@ goog.graphics.VmlGraphics.prototype.append_ = function(element, opt_group) {
  * @param {goog.graphics.StrokeAndFillElement} element The element wrapper.
  * @param {goog.graphics.Fill?} fill The fill object.
  * @override
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.graphics.VmlGraphics.prototype.setElementFill = function(element, fill) {
   var vmlElement = element.getElement();
@@ -314,10 +306,10 @@ goog.graphics.VmlGraphics.prototype.setElementFill = function(element, fill) {
     var gradient = this.createVmlElement('fill');
     gradient.color = fill.getColor1();
     gradient.color2 = fill.getColor2();
-    if (goog.isNumber(fill.getOpacity1())) {
+    if (typeof fill.getOpacity1() === 'number') {
       gradient.opacity = fill.getOpacity1();
     }
-    if (goog.isNumber(fill.getOpacity2())) {
+    if (typeof fill.getOpacity2() === 'number') {
       gradient.opacity2 = fill.getOpacity2();
     }
     var angle =
@@ -340,6 +332,7 @@ goog.graphics.VmlGraphics.prototype.setElementFill = function(element, fill) {
  * @param {goog.graphics.StrokeAndFillElement} element The element wrapper.
  * @param {goog.graphics.Stroke?} stroke The stroke object.
  * @override
+ * @suppress {strictPrimitiveOperators,strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.graphics.VmlGraphics.prototype.setElementStroke = function(
     element, stroke) {
@@ -348,7 +341,7 @@ goog.graphics.VmlGraphics.prototype.setElementStroke = function(
     vmlElement.stroked = true;
 
     var width = stroke.getWidth();
-    if (goog.isString(width) && width.indexOf('px') == -1) {
+    if (typeof width === 'string' && width.indexOf('px') == -1) {
       width = parseFloat(width);
     } else {
       width = width * this.getPixelScaleX();
@@ -402,6 +395,7 @@ goog.graphics.VmlGraphics.prototype.setElementTransform = function(
  * @param {!goog.graphics.AffineTransform} affineTransform The
  *     transformation applied to this element.
  * @override
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.graphics.VmlGraphics.prototype.setElementAffineTransform = function(
     element, affineTransform) {
@@ -433,7 +427,8 @@ goog.graphics.VmlGraphics.prototype.setElementAffineTransform = function(
  * @private
  */
 goog.graphics.VmlGraphics.removeSkew_ = function(element) {
-  goog.array.forEach(element.childNodes, function(child) {
+  goog.array.forEach(element.childNodes, /** @suppress {strictMissingProperties} Part of the go/strict_warnings_migration */
+                                         function(child) {
     if (child.tagName == 'skew') {
       element.removeChild(child);
     }
@@ -448,7 +443,8 @@ goog.graphics.VmlGraphics.removeSkew_ = function(element) {
  */
 goog.graphics.VmlGraphics.removeFill_ = function(element) {
   element.fillcolor = '';
-  goog.array.forEach(element.childNodes, function(child) {
+  goog.array.forEach(element.childNodes, /** @suppress {strictMissingProperties} Part of the go/strict_warnings_migration */
+                                         function(child) {
     if (child.tagName == 'fill') {
       element.removeChild(child);
     }
@@ -572,7 +568,7 @@ goog.graphics.VmlGraphics.prototype.createDom = function() {
         goog.graphics.VmlGraphics.toSizeCoord(pixelHeight);
   }
 
-  if (goog.isDef(this.coordLeft)) {
+  if (this.coordLeft !== undefined) {
     group.coordorigin = goog.graphics.VmlGraphics.toSizeCoord(this.coordLeft) +
         ' ' + goog.graphics.VmlGraphics.toSizeCoord(this.coordTop);
   } else {
@@ -679,6 +675,7 @@ goog.graphics.VmlGraphics.prototype.setSize = function(
  * @return {!goog.math.Size} Returns the number of pixels spanned by the
  *     surface.
  * @override
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.graphics.VmlGraphics.prototype.getPixelSize = function() {
   var el = this.getElement();

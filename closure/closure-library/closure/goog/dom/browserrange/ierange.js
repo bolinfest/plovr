@@ -1,16 +1,8 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Definition of the IE browser specific range wrapper.
@@ -18,8 +10,6 @@
  *     creates a circular dependency.
  *
  * DO NOT USE THIS FILE DIRECTLY.  Use goog.dom.Range instead.
- *
- * @author robbyw@google.com (Robby Walker)
  */
 
 
@@ -31,6 +21,8 @@ goog.require('goog.dom.NodeType');
 goog.require('goog.dom.RangeEndpoint');
 goog.require('goog.dom.TagName');
 goog.require('goog.dom.browserrange.AbstractRange');
+goog.require('goog.dom.safe');
+goog.require('goog.html.uncheckedconversions');
 goog.require('goog.log');
 goog.require('goog.string');
 
@@ -47,19 +39,19 @@ goog.require('goog.string');
 goog.dom.browserrange.IeRange = function(range, doc) {
   /**
    * Lazy cache of the node containing the entire selection.
-   * @private {Node}
+   * @private {?Node}
    */
   this.parentNode_ = null;
 
   /**
    * Lazy cache of the node containing the start of the selection.
-   * @private {Node}
+   * @private {?Node}
    */
   this.startNode_ = null;
 
   /**
    * Lazy cache of the node containing the end of the selection.
-   * @private {Node}
+   * @private {?Node}
    */
   this.endNode_ = null;
 
@@ -849,8 +841,14 @@ goog.dom.browserrange.IeRange.prototype.surroundContents = function(element) {
   // Make sure the element is detached from the document.
   goog.dom.removeNode(element);
 
-  // IE more or less guarantees that range.htmlText is well-formed & valid.
-  element.innerHTML = this.range_.htmlText;
+  goog.dom.safe.setInnerHtml(
+      goog.asserts.assert(element),
+      goog.html.uncheckedconversions
+          .safeHtmlFromStringKnownToSatisfyTypeContract(
+              goog.string.Const.from(
+                  'IE more or less guarantees that range.htmlText is ' +
+                  'well-formed & valid.'),
+              this.range_.htmlText));
   element = goog.dom.browserrange.IeRange.pasteElement_(this.range_, element);
 
   // If element is null here, we failed.

@@ -1,21 +1,12 @@
-// Copyright 2010 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Utilities for dealing with POSIX path strings. Based on
  * Python's os.path and posixpath.
- * @author nnaze@google.com (Nathan Naze)
  */
 
 goog.provide('goog.string.path');
@@ -78,11 +69,12 @@ goog.string.path.extension = function(path) {
 };
 
 
+// TODO(johnlenz): goog.string.path.join should not accept undefined
 /**
  * Joins one or more path components (e.g. 'foo/' and 'bar' make 'foo/bar').
  * An absolute component will discard all previous component.
  * See http://docs.python.org/library/os.path.html#os.path.join
- * @param {...string} var_args One of more path components.
+ * @param {...(string|undefined)} var_args One of more path components.
  * @return {string} The path components joined.
  */
 goog.string.path.join = function(var_args) {

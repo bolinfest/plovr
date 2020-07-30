@@ -1,16 +1,8 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Logging and debugging utilities.
@@ -26,11 +18,13 @@ goog.require('goog.userAgent');
 
 
 /** @define {boolean} Whether logging should be enabled. */
-goog.define('goog.debug.LOGGING_ENABLED', goog.DEBUG);
+goog.debug.LOGGING_ENABLED =
+    goog.define('goog.debug.LOGGING_ENABLED', goog.DEBUG);
 
 
 /** @define {boolean} Whether to force "sloppy" stack building. */
-goog.define('goog.debug.FORCE_SLOPPY_STACKS', false);
+goog.debug.FORCE_SLOPPY_STACKS =
+    goog.define('goog.debug.FORCE_SLOPPY_STACKS', false);
 
 
 /**
@@ -162,11 +156,11 @@ goog.debug.deepExpose = function(obj, opt_showFn) {
 
 
     try {
-      if (!goog.isDef(obj)) {
+      if (obj === undefined) {
         str.push('undefined');
-      } else if (goog.isNull(obj)) {
+      } else if (obj === null) {
         str.push('NULL');
-      } else if (goog.isString(obj)) {
+      } else if (typeof obj === 'string') {
         str.push('"' + indentMultiline(obj) + '"');
       } else if (goog.isFunction(obj)) {
         str.push(indentMultiline(String(obj)));
@@ -220,7 +214,7 @@ goog.debug.deepExpose = function(obj, opt_showFn) {
 goog.debug.exposeArray = function(arr) {
   var str = [];
   for (var i = 0; i < arr.length; i++) {
-    if (goog.isArray(arr[i])) {
+    if (Array.isArray(arr[i])) {
       str.push(goog.debug.exposeArray(arr[i]));
     } else {
       str.push(arr[i]);
@@ -244,7 +238,10 @@ goog.debug.exposeArray = function(arr) {
  */
 goog.debug.normalizeErrorObject = function(err) {
   var href = goog.getObjectByName('window.location.href');
-  if (goog.isString(err)) {
+  if (err == null) {
+    err = 'Unknown Error of type "null/undefined"';
+  }
+  if (typeof err === 'string') {
     return {
       'message': err,
       'name': 'Unknown error',
@@ -281,8 +278,19 @@ goog.debug.normalizeErrorObject = function(err) {
   // The Safari Error object uses the line and sourceURL fields.
   if (threwError || !err.lineNumber || !err.fileName || !err.stack ||
       !err.message || !err.name) {
+    var message = err.message;
+    if (message == null) {
+      if (err.constructor && err.constructor instanceof Function) {
+        var ctorName = err.constructor.name ?
+            err.constructor.name :
+            goog.debug.getFunctionName(err.constructor);
+        message = 'Unknown Error of type "' + ctorName + '"';
+      } else {
+        message = 'Unknown Error of unknown type';
+      }
+    }
     return {
-      'message': err.message || 'Not available',
+      'message': message,
       'name': err.name || 'UnknownError',
       'lineNumber': lineNumber,
       'fileName': fileName,
@@ -541,16 +549,6 @@ goog.debug.getStacktraceHelper_ = function(fn, visited) {
 
 
 /**
- * Set a custom function name resolver.
- * @param {function(Function): string} resolver Resolves functions to their
- *     names.
- */
-goog.debug.setFunctionResolver = function(resolver) {
-  goog.debug.fnNameResolver_ = resolver;
-};
-
-
-/**
  * Gets a function name
  * @param {Function} fn Function to get name of.
  * @return {string} Function's name.
@@ -559,18 +557,11 @@ goog.debug.getFunctionName = function(fn) {
   if (goog.debug.fnNameCache_[fn]) {
     return goog.debug.fnNameCache_[fn];
   }
-  if (goog.debug.fnNameResolver_) {
-    var name = goog.debug.fnNameResolver_(fn);
-    if (name) {
-      goog.debug.fnNameCache_[fn] = name;
-      return name;
-    }
-  }
 
   // Heuristically determine function name based on code.
   var functionSource = String(fn);
   if (!goog.debug.fnNameCache_[functionSource]) {
-    var matches = /function ([^\(]+)/.exec(functionSource);
+    var matches = /function\s+([^\(]+)/m.exec(functionSource);
     if (matches) {
       var method = matches[1];
       goog.debug.fnNameCache_[functionSource] = method;
@@ -626,14 +617,6 @@ goog.debug.runtimeType = function(value) {
  * @private
  */
 goog.debug.fnNameCache_ = {};
-
-
-/**
- * Resolves functions to their names.  Resolved function names will be cached.
- * @type {function(Function):string}
- * @private
- */
-goog.debug.fnNameResolver_;
 
 
 /**

@@ -1,16 +1,8 @@
-// Copyright 2015 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 goog.provide('goog.net.FetchXmlHttp');
 goog.provide('goog.net.FetchXmlHttpFactory');
@@ -125,9 +117,22 @@ goog.net.FetchXmlHttp = function(worker) {
 
   /**
    * Content of the response.
+   * @type {string|!ArrayBuffer}
+   */
+  this.response = '';
+
+  /**
+   * Content of the response.
    * @type {string}
    */
   this.responseText = '';
+
+  /**
+   * The type of the response.  If this is set to 'arraybuffer' the request will
+   * be discrete, streaming is only supported for text encoded requests.
+   * @type {string}
+   */
+  this.responseType = '';
 
   /**
    * Document response entity body.
@@ -169,6 +174,14 @@ goog.net.FetchXmlHttp = function(worker) {
   /** @private @final {?goog.log.Logger} */
   this.logger_ = goog.log.getLogger('goog.net.FetchXmlHttp');
 
+  /** @private {?Response} */
+  this.fetchResponse_ = null;
+
+  /** @private {!ReadableStreamDefaultReader|null} */
+  this.currentReader_ = null;
+
+  /** @private {?TextDecoder} */
+  this.textDecoder_ = null;
 };
 goog.inherits(goog.net.FetchXmlHttp, goog.events.EventTarget);
 
@@ -182,7 +195,7 @@ goog.net.FetchXmlHttp.RequestState = {
   OPENED: 1,
   HEADER_RECEIVED: 2,
   LOADING: 3,
-  DONE: 4
+  DONE: 4,
 };
 
 
@@ -214,7 +227,7 @@ goog.net.FetchXmlHttp.prototype.send = function(opt_data) {
     headers: this.requestHeaders_,
     method: this.method_,
     credentials: this.credentialsMode_,
-    cache: this.cacheMode_
+    cache: this.cacheMode_,
   };
   if (opt_data) {
     requestInit['body'] = opt_data;
@@ -228,15 +241,19 @@ goog.net.FetchXmlHttp.prototype.send = function(opt_data) {
 
 /** @override */
 goog.net.FetchXmlHttp.prototype.abort = function() {
-  this.responseText = '';
+  this.response = this.responseText = '';
   this.requestHeaders_ = new Headers();
   this.status = 0;
+
+  if (!!this.currentReader_) {
+    this.currentReader_.cancel('Request was aborted.');
+  }
+
   if (((this.readyState >= goog.net.FetchXmlHttp.RequestState.OPENED) &&
        this.inProgress_) &&
       (this.readyState != goog.net.FetchXmlHttp.RequestState.DONE)) {
-    this.readyState = goog.net.FetchXmlHttp.RequestState.DONE;
     this.inProgress_ = false;
-    this.dispatchCallback_();
+    this.requestDone_();
   }
 
   this.readyState = goog.net.FetchXmlHttp.RequestState.UNSENT;
@@ -254,7 +271,11 @@ goog.net.FetchXmlHttp.prototype.handleResponse_ = function(response) {
     return;
   }
 
+  this.fetchResponse_ = response;
+
   if (!this.responseHeaders_) {
+    this.status = this.fetchResponse_.status;
+    this.statusText = this.fetchResponse_.statusText;
     this.responseHeaders_ = response.headers;
     this.readyState = goog.net.FetchXmlHttp.RequestState.HEADER_RECEIVED;
     this.dispatchCallback_();
@@ -272,29 +293,97 @@ goog.net.FetchXmlHttp.prototype.handleResponse_ = function(response) {
     // The request was aborted, ignore.
     return;
   }
-  response.text().then(
-      this.handleResponseText_.bind(this, response),
-      this.handleSendFailure_.bind(this));
+
+  if (this.responseType === 'arraybuffer') {
+    response.arrayBuffer().then(
+        this.handleResponseArrayBuffer_.bind(this),
+        this.handleSendFailure_.bind(this));
+  } else if (
+      typeof (goog.global.ReadableStream) !== 'undefined' &&
+      'body' in response) {
+    this.response = this.responseText = '';
+    this.currentReader_ =
+        /** @type {!ReadableStreamDefaultReader} */ (response.body.getReader());
+    this.textDecoder_ = new TextDecoder();
+    this.readInputFromFetch_();
+  } else {
+    response.text().then(
+        this.handleResponseText_.bind(this),
+        this.handleSendFailure_.bind(this));
+  }
+};
+
+
+/**
+ * Reads the next chunk of data from the fetch response.
+ * @private
+ */
+goog.net.FetchXmlHttp.prototype.readInputFromFetch_ = function() {
+  this.currentReader_.read()
+      .then(this.handleDataFromStream_.bind(this))
+      .catch(this.handleSendFailure_.bind(this));
+};
+
+
+/**
+ * Handles a chunk of data from the fetch response stream reader.
+ * @param {!IIterableResult} result
+ * @private
+ */
+goog.net.FetchXmlHttp.prototype.handleDataFromStream_ = function(result) {
+  if (!this.inProgress_) {
+    // The request was aborted, ignore.
+    return;
+  }
+
+  var dataPacket = result.value ? /** @type {!Uint8Array} */ (result.value) :
+                                  new Uint8Array(0);
+  var newText = this.textDecoder_.decode(dataPacket, {stream: !result.done});
+  if (newText) {
+    this.responseText += newText;
+    this.response = this.responseText;
+  }
+
+  if (result.done) {
+    this.requestDone_();
+  } else {
+    this.dispatchCallback_();
+  }
+
+  if (this.readyState == goog.net.FetchXmlHttp.RequestState.LOADING) {
+    this.readInputFromFetch_();
+  }
 };
 
 
 /**
  * Handles the response text.
- * @param {!Response} response
  * @param {string} responseText
  * @private
  */
-goog.net.FetchXmlHttp.prototype.handleResponseText_ = function(
-    response, responseText) {
+goog.net.FetchXmlHttp.prototype.handleResponseText_ = function(responseText) {
   if (!this.inProgress_) {
     // The request was aborted, ignore.
     return;
   }
-  this.status = response.status;
-  this.statusText = response.statusText;
-  this.responseText = responseText;
-  this.readyState = goog.net.FetchXmlHttp.RequestState.DONE;
-  this.dispatchCallback_();
+  this.response = this.responseText = responseText;
+  this.requestDone_();
+};
+
+
+/**
+ * Handles the response text.
+ * @param {!ArrayBuffer} responseArrayBuffer
+ * @private
+ */
+goog.net.FetchXmlHttp.prototype.handleResponseArrayBuffer_ = function(
+    responseArrayBuffer) {
+  if (!this.inProgress_) {
+    // The request was aborted, ignore.
+    return;
+  }
+  this.response = responseArrayBuffer;
+  this.requestDone_();
 };
 
 
@@ -310,7 +399,21 @@ goog.net.FetchXmlHttp.prototype.handleSendFailure_ = function(error) {
     // The request was aborted, ignore.
     return;
   }
+  this.requestDone_();
+};
+
+
+/**
+ * Sets the request state to DONE and performs cleanup.
+ * @private
+ */
+goog.net.FetchXmlHttp.prototype.requestDone_ = function() {
   this.readyState = goog.net.FetchXmlHttp.RequestState.DONE;
+
+  this.fetchResponse_ = null;
+  this.currentReader_ = null;
+  this.textDecoder_ = null;
+
   this.dispatchCallback_();
 };
 
@@ -323,7 +426,7 @@ goog.net.FetchXmlHttp.prototype.setRequestHeader = function(header, value) {
 
 /** @override */
 goog.net.FetchXmlHttp.prototype.getResponseHeader = function(header) {
-  // TODO(b/70808323): This method should return null when the headers are not
+  // TODO(user): This method should return null when the headers are not
   // present or the specified header is missing. The externs need to be fixed.
   if (!this.responseHeaders_) {
     goog.log.warning(

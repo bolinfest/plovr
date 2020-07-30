@@ -1,21 +1,12 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Plain text spell checker implementation.
  *
- * @author eae@google.com (Emil A Eklund)
  * @see ../demos/plaintextspellchecker.html
  */
 
@@ -198,6 +189,7 @@ goog.ui.PlainTextSpellChecker.prototype.initSuggestionsMenu = function() {
 /**
  * Checks spelling for all text and displays correction UI.
  * @override
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.PlainTextSpellChecker.prototype.check = function() {
   var text = this.getElement().value;
@@ -258,9 +250,9 @@ goog.ui.PlainTextSpellChecker.prototype.preChargeDictionary_ = function(text) {
 
 /**
  * Loads few initial dictionary words into the cache.
- *
  * @param {goog.events.Event} e goog.spell.SpellCheck.EventType.READY event.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.PlainTextSpellChecker.prototype.onDictionaryCharged_ = function(e) {
   e.stopPropagation();
@@ -420,6 +412,7 @@ goog.ui.PlainTextSpellChecker.prototype.processRange = function(node, text) {
 /**
  * Hides correction UI.
  * @override
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.PlainTextSpellChecker.prototype.resume = function() {
   var wasVisible = this.isVisible();
@@ -466,9 +459,9 @@ goog.ui.PlainTextSpellChecker.prototype.getElementProperties = function(
 
 /**
  * Handles the click events.
- *
  * @param {goog.events.BrowserEvent} event Event object.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.PlainTextSpellChecker.prototype.onWordClick_ = function(event) {
   if (event.target.className == this.invalidWordClassName ||

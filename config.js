@@ -15,7 +15,7 @@
   "closure-library": "../closure-library/closure/goog",
   "paths": [
     "testdata",
-    "../third-party/javascript/soyutils_usegoog.js"
+    "../third-party/javascript"
   ],
   "inputs": "testdata/example/main.js",
   "externs": "../third-party/externs/",

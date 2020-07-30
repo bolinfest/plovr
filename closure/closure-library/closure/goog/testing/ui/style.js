@@ -1,21 +1,12 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Tools for testing Closure renderers against static markup
  * spec pages.
- *
  */
 
 goog.setTestOnly('goog.testing.ui.style');
@@ -79,6 +70,7 @@ goog.testing.ui.style.getElementChildren = function(element) {
  * which means it is allowed to have arbitrary children.
  * @param {Node} element The node to test.
  * @return {boolean} Whether the given node is a content node or not.
+ * @suppress {missingProperties} "className" not defined on Node
  */
 goog.testing.ui.style.isContentNode = function(element) {
   return element.className.indexOf('content') != -1;

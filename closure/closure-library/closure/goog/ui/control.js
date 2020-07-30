@@ -1,16 +1,8 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Base class for UI controls such as buttons, menus, menu items,
@@ -18,7 +10,6 @@
  * of {@link goog.ui.MenuItem}.
  * TODO(attila):  If the renderer framework works well, pull it into Component.
  *
- * @author attila@google.com (Attila Bodis)
  * @see ../demos/control.html
  * @see http://code.google.com/p/closure-library/wiki/IntroToControls
  */
@@ -79,7 +70,7 @@ goog.ui.Control = function(opt_content, opt_renderer, opt_domHelper) {
   goog.ui.Component.call(this, opt_domHelper);
   this.renderer_ =
       opt_renderer || goog.ui.registry.getDefaultRenderer(this.constructor);
-  this.setContentInternal(goog.isDef(opt_content) ? opt_content : null);
+  this.setContentInternal(opt_content !== undefined ? opt_content : null);
 
   /** @private {?string} The control's aria-label. */
   this.ariaLabel_ = null;
@@ -88,7 +79,6 @@ goog.ui.Control = function(opt_content, opt_renderer, opt_domHelper) {
   this.ieMouseEventSequenceSimulator_;
 };
 goog.inherits(goog.ui.Control, goog.ui.Component);
-goog.tagUnsealableClass(goog.ui.Control);
 
 
 // Renderer registry.
@@ -134,7 +124,7 @@ goog.ui.Control.prototype.renderer_;
 
 /**
  * Text caption or DOM structure displayed in the component.
- * @type {goog.ui.ControlContent}
+ * @type {?goog.ui.ControlContent}
  * @private
  */
 goog.ui.Control.prototype.content_ = null;
@@ -585,13 +575,12 @@ goog.ui.Control.prototype.enableMouseEventHandling_ = function(enable) {
   var handler = this.getHandler();
   var element = this.getElement();
   if (enable) {
-    handler
-        .listen(element, MouseEventType.MOUSEOVER, this.handleMouseOver)
-        .listen(element, MouseEventType.MOUSEDOWN, this.handleMouseDown)
+    handler.listen(element, MouseEventType.MOUSEDOWN, this.handleMouseDown)
         .listen(
             element, [MouseEventType.MOUSEUP, MouseEventType.MOUSECANCEL],
             this.handleMouseUp)
-        .listen(element, MouseEventType.MOUSEOUT, this.handleMouseOut);
+        .listen(element, goog.events.EventType.MOUSEOVER, this.handleMouseOver)
+        .listen(element, goog.events.EventType.MOUSEOUT, this.handleMouseOut);
     if (this.pointerEventsEnabled()) {
       // Prevent pointer events from capturing the target element so they behave
       // more like mouse events.
@@ -618,13 +607,13 @@ goog.ui.Control.prototype.enableMouseEventHandling_ = function(enable) {
       }
     }
   } else {
-    handler
-        .unlisten(element, MouseEventType.MOUSEOVER, this.handleMouseOver)
-        .unlisten(element, MouseEventType.MOUSEDOWN, this.handleMouseDown)
+    handler.unlisten(element, MouseEventType.MOUSEDOWN, this.handleMouseDown)
         .unlisten(
             element, [MouseEventType.MOUSEUP, MouseEventType.MOUSECANCEL],
             this.handleMouseUp)
-        .unlisten(element, MouseEventType.MOUSEOUT, this.handleMouseOut);
+        .unlisten(
+            element, goog.events.EventType.MOUSEOVER, this.handleMouseOver)
+        .unlisten(element, goog.events.EventType.MOUSEOUT, this.handleMouseOut);
     if (this.pointerEventsEnabled()) {
       handler.unlisten(
           element, goog.events.EventType.GOTPOINTERCAPTURE,
@@ -731,9 +720,9 @@ goog.ui.Control.prototype.getCaption = function() {
   if (!content) {
     return '';
   }
-  var caption = goog.isString(content) ?
+  var caption = (typeof content === 'string') ?
       content :
-      goog.isArray(content) ?
+      Array.isArray(content) ?
       goog.array.map(content, goog.dom.getRawTextContent).join('') :
       goog.dom.getTextContent(/** @type {!Node} */ (content));
   return goog.string.collapseBreakingSpaces(caption);
@@ -1263,7 +1252,7 @@ goog.ui.Control.prototype.handleContextMenu = goog.nullFunction;
  *     mouseout).
  * @param {Element} elem The ancestor element.
  * @return {boolean} Whether the event has a relatedTarget (the element the
- *     mouse is coming from) and it's a descendent of elem.
+ *     mouse is coming from) and it's a descendant of elem.
  * @private
  */
 goog.ui.Control.isMouseEventWithinElement_ = function(e, elem) {
@@ -1495,9 +1484,10 @@ goog.ui.Control.IeMouseEventSequenceSimulator_ = function(control) {
   this.registerDisposable(this.handler_);
 
   var element = this.control_.getElementStrict();
-  this.handler_
-      .listen(element, goog.events.EventType.MOUSEDOWN, this.handleMouseDown_)
-      .listen(element, goog.events.EventType.MOUSEUP, this.handleMouseUp_)
+  var MouseEventType = goog.ui.ComponentUtil.getMouseEventType(control);
+
+  this.handler_.listen(element, MouseEventType.MOUSEDOWN, this.handleMouseDown_)
+      .listen(element, MouseEventType.MOUSEUP, this.handleMouseUp_)
       .listen(element, goog.events.EventType.CLICK, this.handleClick_);
 };
 goog.inherits(goog.ui.Control.IeMouseEventSequenceSimulator_, goog.Disposable);

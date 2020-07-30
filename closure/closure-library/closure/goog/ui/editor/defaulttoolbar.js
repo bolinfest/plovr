@@ -1,21 +1,12 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Factory functions for creating a default editing toolbar.
  *
- * @author attila@google.com (Attila Bodis)
  * @see ../../demos/editor/editor.html
  */
 
@@ -301,7 +292,7 @@ goog.ui.editor.DefaultToolbar.makeToolbar = function(
   var controls = [];
 
   for (var i = 0, button; button = items[i]; i++) {
-    if (goog.isString(button)) {
+    if (typeof button === 'string') {
       button = goog.ui.editor.DefaultToolbar.makeBuiltInToolbarButton(
           button, domHelper);
     }
@@ -401,6 +392,7 @@ goog.ui.editor.DefaultToolbar.DEFAULT_BUTTONS_RTL = [
  *     creation; defaults to the current document if unspecified.
  * @return {!goog.ui.Button} A toolbar button.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.editor.DefaultToolbar.rtlButtonFactory_ = function(
     id, tooltip, caption, opt_classNames, opt_renderer, opt_domHelper) {
@@ -437,6 +429,7 @@ goog.ui.editor.DefaultToolbar.rtlButtonFactory_ = function(
  *     creation; defaults to the current document if unspecified.
  * @return {!goog.ui.Button} A toolbar button.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.editor.DefaultToolbar.undoRedoButtonFactory_ = function(
     id, tooltip, caption, opt_classNames, opt_renderer, opt_domHelper) {
@@ -465,6 +458,7 @@ goog.ui.editor.DefaultToolbar.undoRedoButtonFactory_ = function(
  *     creation; defaults to the current document if unspecified.
  * @return {!goog.ui.Button} A toolbar button.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.editor.DefaultToolbar.fontFaceFactory_ = function(
     id, tooltip, caption, opt_classNames, opt_renderer, opt_domHelper) {
@@ -515,6 +509,7 @@ goog.ui.editor.DefaultToolbar.fontFaceFactory_ = function(
  *     creation; defaults to the current document if unspecified.
  * @return {!goog.ui.Button} A toolbar button.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.editor.DefaultToolbar.fontSizeFactory_ = function(
     id, tooltip, caption, opt_classNames, opt_renderer, opt_domHelper) {
@@ -532,7 +527,7 @@ goog.ui.editor.DefaultToolbar.fontSizeFactory_ = function(
     // integer, so normalize that first.
     // NOTE(user): Gecko returns "6" so can't just normalize all
     // strings, only ones ending in "px".
-    if (goog.isString(value) && goog.style.getLengthUnits(value) == 'px') {
+    if (typeof value === 'string' && goog.style.getLengthUnits(value) == 'px') {
       value = goog.ui.editor.ToolbarFactory.getLegacySizeFromPx(
           parseInt(value, 10));
     }
@@ -593,6 +588,7 @@ goog.ui.editor.DefaultToolbar.colorUpdateFromValue_ = function(button, color) {
  *     creation; defaults to the current document if unspecified.
  * @return {!goog.ui.Button} A toolbar button.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.editor.DefaultToolbar.fontColorFactory_ = function(
     id, tooltip, caption, opt_classNames, opt_renderer, opt_domHelper) {
@@ -624,6 +620,7 @@ goog.ui.editor.DefaultToolbar.fontColorFactory_ = function(
  *     creation; defaults to the current document if unspecified.
  * @return {!goog.ui.Button} A toolbar button.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.editor.DefaultToolbar.backgroundColorFactory_ = function(
     id, tooltip, caption, opt_classNames, opt_renderer, opt_domHelper) {
@@ -655,6 +652,7 @@ goog.ui.editor.DefaultToolbar.backgroundColorFactory_ = function(
  *     creation; defaults to the current document if unspecified.
  * @return {!goog.ui.Button} A toolbar button.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.editor.DefaultToolbar.formatBlockFactory_ = function(
     id, tooltip, caption, opt_classNames, opt_renderer, opt_domHelper) {

@@ -25,8 +25,10 @@ import com.google.common.collect.SetMultimap;
 import com.google.common.collect.Sets;
 import com.google.common.io.Resources;
 import com.google.template.soy.SoyFileSet;
+import com.google.template.soy.data.SanitizedContent;
 import com.google.template.soy.data.SoyMapData;
 import com.google.template.soy.tofu.SoyTofu;
+import com.google.template.soy.data.UnsafeSanitizedContentOrdainer;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 
@@ -117,9 +119,11 @@ public final class ModulesHandler extends AbstractGetHandler {
 
     // Populate Soy template.
     Dimension svgDimension = svg.getSecond();
+    SanitizedContent svgContent = UnsafeSanitizedContentOrdainer.ordainAsSafe(
+        svg.getFirst(), SanitizedContent.ContentKind.HTML);
     SoyMapData mapData = new SoyMapData(ImmutableMap.<String, Object>builder()
         .put("configId", config.getId())
-        .put("svg", svg.getFirst())
+        .put("svg", svgContent)
         .put("svgWidth", svgDimension.width)
         .put("svgHeight", svgDimension.height)
         .build());

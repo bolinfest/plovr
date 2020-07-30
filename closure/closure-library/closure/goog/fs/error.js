@@ -1,21 +1,21 @@
-// Copyright 2011 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview A wrapper for the HTML5 FileError object.
- *
  */
+
+
+// TODO(user): We're trying to migrate all ES5 subclasses of Closure
+// Library to ES6. In ES6 this cannot be referenced before super is called. This
+// file has at least one this before a super call (in ES5) and cannot be
+// automatically upgraded to ES6 as a result. Please fix this if you have a
+// chance. Note: This can sometimes be caused by not calling the super
+// constructor at all. You can run the conversion tool yourself to see what it
+// does on this file: blaze run //javascript/refactoring/es6_classes:convert.
 
 goog.provide('goog.fs.DOMErrorLike');
 goog.provide('goog.fs.Error');
@@ -32,7 +32,7 @@ goog.fs.DOMErrorLike = function() {};
 /** @type {string|undefined} */
 goog.fs.DOMErrorLike.prototype.name;
 
-/** @type {goog.fs.Error.ErrorCode|undefined} */
+/** @type {!goog.fs.Error.ErrorCode|undefined} */
 goog.fs.DOMErrorLike.prototype.code;
 
 
@@ -53,20 +53,22 @@ goog.fs.Error = function(error, action) {
   this.name;
 
   /**
-   * @type {goog.fs.Error.ErrorCode}
+   * @type {!goog.fs.Error.ErrorCode}
    * @deprecated Use the 'name' or 'message' field instead.
    */
   this.code;
 
-  if (goog.isDef(error.name)) {
+  if (error.name !== undefined) {
     this.name = error.name;
     // TODO(user): Remove warning suppression after JSCompiler stops
     // firing a spurious warning here.
     /** @suppress {deprecated} */
     this.code = goog.fs.Error.getCodeFromName_(error.name);
   } else {
-    this.code = goog.asserts.assertNumber(error.code);
-    this.name = goog.fs.Error.getNameFromCode_(error.code);
+    var code = /** @type {!goog.fs.Error.ErrorCode} */ (
+        goog.asserts.assertNumber(error.code));
+    this.code = code;
+    this.name = goog.fs.Error.getNameFromCode_(code);
   }
   goog.fs.Error.base(
       this, 'constructor', goog.string.subs('%s %s', this.name, action));
@@ -130,7 +132,7 @@ goog.fs.Error.ErrorCode = {
 goog.fs.Error.getNameFromCode_ = function(code) {
   var name = goog.object.findKey(
       goog.fs.Error.NameToCodeMap_, function(c) { return code == c; });
-  if (!goog.isDef(name)) {
+  if (name === undefined) {
     throw new Error('Invalid code: ' + code);
   }
   return name;

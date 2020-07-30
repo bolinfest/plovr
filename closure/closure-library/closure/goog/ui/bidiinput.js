@@ -1,16 +1,8 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Component for an input field with bidi direction automatic
@@ -45,7 +37,6 @@ goog.ui.BidiInput = function(opt_domHelper) {
   goog.ui.Component.call(this, opt_domHelper);
 };
 goog.inherits(goog.ui.BidiInput, goog.ui.Component);
-goog.tagUnsealableClass(goog.ui.BidiInput);
 
 
 /**
@@ -126,6 +117,7 @@ goog.ui.BidiInput.prototype.setDirection_ = function() {
  *     enough to determine directionality (e.g. an empty value), and the
  *     direction is inherited from a parent element (typically the body
  *     element).
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.BidiInput.prototype.getDirection = function() {
   var dir = this.getElement().dir;
@@ -140,10 +132,11 @@ goog.ui.BidiInput.prototype.getDirection = function() {
  * Sets the value of the underlying input field, and sets the direction
  * according to the given value.
  * @param {string} value  The Value to set in the underlying input field.
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.BidiInput.prototype.setValue = function(value) {
   var element = this.getElement();
-  if (goog.isDefAndNotNull(element.value)) {
+  if (element.value != null) {
     element.value = value;
   } else {
     goog.dom.setTextContent(element, value);
@@ -155,12 +148,12 @@ goog.ui.BidiInput.prototype.setValue = function(value) {
 /**
  * Returns the value of the underlying input field.
  * @return {string} Value of the underlying input field.
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.BidiInput.prototype.getValue = function() {
   var element = this.getElement();
-  return goog.isDefAndNotNull(element.value) ?
-      element.value :
-      goog.dom.getRawTextContent(element);
+  return element.value != null ? element.value :
+                                 goog.dom.getRawTextContent(element);
 };
 
 

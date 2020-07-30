@@ -1,21 +1,12 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Implementation of a progress bar.
  *
- * @author arv@google.com (Erik Arvidsson)
  * @see ../demos/progressbar.html
  */
 
@@ -59,7 +50,6 @@ goog.ui.ProgressBar = function(opt_domHelper) {
       false, this);
 };
 goog.inherits(goog.ui.ProgressBar, goog.ui.Component);
-goog.tagUnsealableClass(goog.ui.ProgressBar);
 
 
 /**
@@ -128,7 +118,7 @@ goog.ui.ProgressBar.prototype.exitDocument = function() {
 /**
  * This creates the thumb element.
  * @private
- * @return {HTMLDivElement} The created thumb element.
+ * @return {!HTMLDivElement} The created thumb element.
  */
 goog.ui.ProgressBar.prototype.createThumb_ = function() {
   return this.getDomHelper().createDom(
@@ -139,6 +129,7 @@ goog.ui.ProgressBar.prototype.createThumb_ = function() {
 /**
  * Adds the initial event listeners to the element.
  * @private
+ * @suppress {strictPrimitiveOperators} Part of the go/strict_warnings_migration
  */
 goog.ui.ProgressBar.prototype.attachEvents_ = function() {
   if (goog.userAgent.IE && goog.userAgent.VERSION < 7) {
@@ -152,6 +143,7 @@ goog.ui.ProgressBar.prototype.attachEvents_ = function() {
 /**
  * Removes the event listeners added by attachEvents_.
  * @private
+ * @suppress {strictPrimitiveOperators} Part of the go/strict_warnings_migration
  */
 goog.ui.ProgressBar.prototype.detachEvents_ = function() {
   if (goog.userAgent.IE && goog.userAgent.VERSION < 7) {
@@ -180,7 +172,7 @@ goog.ui.ProgressBar.prototype.decorateInternal = function(element) {
       null, goog.getCssName('progress-bar-thumb'), this.getElement())[0];
   if (!thumb) {
     thumb = this.createThumb_();
-    this.getElement().appendChild(thumb);
+    this.getElement().appendChild(/** @type {!Node} */ (thumb));
   }
   this.thumbElement_ = /** @type {!HTMLDivElement} */ (thumb);
 };
@@ -303,6 +295,7 @@ goog.ui.ProgressBar.prototype.handleChange_ = function(e) {
  * This is called when we need to update the size of the thumb. This happens
  * when first created as well as when the value and the orientation changes.
  * @private
+ * @suppress {strictPrimitiveOperators} Part of the go/strict_warnings_migration
  */
 goog.ui.ProgressBar.prototype.updateUi_ = function() {
   if (this.thumbElement_) {

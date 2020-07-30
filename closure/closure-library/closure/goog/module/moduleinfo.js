@@ -1,24 +1,16 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Defines the goog.module.ModuleInfo class.
- *
  */
 
 goog.provide('goog.module.ModuleInfo');
 
+goog.forwardDeclare('goog.loader.AbstractModuleManager.FailureType');
 goog.require('goog.Disposable');
 goog.require('goog.async.throwException');
 goog.require('goog.functions');
@@ -27,8 +19,6 @@ goog.require('goog.html.TrustedResourceUrl');
 goog.require('goog.module');
 goog.require('goog.module.BaseModule');
 goog.require('goog.module.ModuleLoadCallback');
-
-goog.forwardDeclare('goog.loader.AbstractModuleManager.FailureType');
 
 
 
@@ -238,6 +228,17 @@ goog.module.ModuleInfo.prototype.registerCallback_ = function(
  */
 goog.module.ModuleInfo.prototype.isLoaded = function() {
   return !!this.module_;
+};
+
+
+/**
+ * Marks the current module as loaded. This is useful for subtractive module
+ * loading, where occasionally we need to fallback to normal module loading,
+ * and re-fetch the module graph. In this case, we need a way to tell the module
+ * manager to mark all modules that are already loaded.
+ */
+goog.module.ModuleInfo.prototype.setLoaded = function() {
+  this.module_ = new goog.module.BaseModule();
 };
 
 

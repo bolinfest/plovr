@@ -1,16 +1,8 @@
-// Copyright 2011 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 
 /**
@@ -20,21 +12,20 @@
  * allocations.  The last parameter will typically be the output vector and
  * an object can be both an input and output parameter to all methods except
  * where noted.
- *
  */
 goog.provide('goog.vec.Vec4');
 
 /** @suppress {extraRequire} */
 goog.require('goog.vec');
 
-/** @typedef {goog.vec.Float32} */ goog.vec.Vec4.Float32;
-/** @typedef {goog.vec.Float64} */ goog.vec.Vec4.Float64;
-/** @typedef {goog.vec.Number} */ goog.vec.Vec4.Number;
-/** @typedef {goog.vec.AnyType} */ goog.vec.Vec4.AnyType;
+/** @typedef {!goog.vec.Float32} */ goog.vec.Vec4.Float32;
+/** @typedef {!goog.vec.Float64} */ goog.vec.Vec4.Float64;
+/** @typedef {!goog.vec.Number} */ goog.vec.Vec4.Number;
+/** @typedef {!goog.vec.AnyType} */ goog.vec.Vec4.AnyType;
 
 // The following two types are deprecated - use the above types instead.
-/** @typedef {Float32Array} */ goog.vec.Vec4.Type;
-/** @typedef {goog.vec.ArrayType} */ goog.vec.Vec4.Vec4Like;
+/** @typedef {!Float32Array} */ goog.vec.Vec4.Type;
+/** @typedef {!goog.vec.ArrayType} */ goog.vec.Vec4.Vec4Like;
 
 
 /**
@@ -424,7 +415,7 @@ goog.vec.Vec4.lerp = function(v0, v1, f, resultVec) {
  *     chained together.
  */
 goog.vec.Vec4.max = function(vec0, limit, resultVec) {
-  if (goog.isNumber(limit)) {
+  if (typeof limit === 'number') {
     resultVec[0] = Math.max(vec0[0], limit);
     resultVec[1] = Math.max(vec0[1], limit);
     resultVec[2] = Math.max(vec0[2], limit);
@@ -451,7 +442,7 @@ goog.vec.Vec4.max = function(vec0, limit, resultVec) {
  *     chained together.
  */
 goog.vec.Vec4.min = function(vec0, limit, resultVec) {
-  if (goog.isNumber(limit)) {
+  if (typeof limit === 'number') {
     resultVec[0] = Math.min(vec0[0], limit);
     resultVec[1] = Math.min(vec0[1], limit);
     resultVec[2] = Math.min(vec0[2], limit);

@@ -1,26 +1,17 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Base class for control renderers.
  * TODO(attila):  If the renderer framework works well, pull it into Component.
- *
- * @author attila@google.com (Attila Bodis)
  */
 
 goog.provide('goog.ui.ControlRenderer');
 
+goog.forwardDeclare('goog.ui.Control');
 goog.require('goog.a11y.aria');
 goog.require('goog.a11y.aria.Role');
 goog.require('goog.a11y.aria.State');
@@ -34,9 +25,7 @@ goog.require('goog.string');
 goog.require('goog.style');
 goog.require('goog.ui.Component');
 goog.require('goog.ui.ControlContent');
-goog.require('goog.userAgent');
-
-goog.forwardDeclare('goog.ui.Control');  // circular
+goog.require('goog.userAgent');  // circular
 
 
 
@@ -61,7 +50,6 @@ goog.forwardDeclare('goog.ui.Control');  // circular
  */
 goog.ui.ControlRenderer = function() {};
 goog.addSingletonGetter(goog.ui.ControlRenderer);
-goog.tagUnsealableClass(goog.ui.ControlRenderer);
 
 
 /**
@@ -426,7 +414,7 @@ goog.ui.ControlRenderer.prototype.setAriaStates = function(control, element) {
   goog.asserts.assert(element);
 
   var ariaLabel = control.getAriaLabel();
-  if (goog.isDefAndNotNull(ariaLabel)) {
+  if (ariaLabel != null) {
     this.setAriaLabel(element, ariaLabel);
   }
 
@@ -528,7 +516,7 @@ goog.ui.ControlRenderer.prototype.setFocusable = function(control, focusable) {
       try {
         keyTarget.blur();
       } catch (e) {
-        // TODO(user|user):  Find out why this fails on IE.
+        // TODO(user):  Find out why this fails on IE.
       }
       // The blur event dispatched by the key event target element when blur()
       // was called on it should have been handled by the control's handleBlur()
@@ -660,17 +648,17 @@ goog.ui.ControlRenderer.prototype.setContent = function(element, content) {
   if (contentElem) {
     goog.dom.removeChildren(contentElem);
     if (content) {
-      if (goog.isString(content)) {
+      if (typeof content === 'string') {
         goog.dom.setTextContent(contentElem, content);
       } else {
         var childHandler = function(child) {
           if (child) {
             var doc = goog.dom.getOwnerDocument(contentElem);
             contentElem.appendChild(
-                goog.isString(child) ? doc.createTextNode(child) : child);
+                typeof child === 'string' ? doc.createTextNode(child) : child);
           }
         };
-        if (goog.isArray(content)) {
+        if (Array.isArray(content)) {
           // Array of nodes.
           goog.array.forEach(content, childHandler);
         } else if (goog.isArrayLike(content) && !('nodeType' in content)) {
@@ -724,7 +712,7 @@ goog.ui.ControlRenderer.prototype.getCssClass = function() {
  * method doesn't reference {@link IE6_CLASS_COMBINATIONS} so that it can be
  * compiled out, but subclasses should return their IE6_CLASS_COMBINATIONS
  * static constant instead.
- * @return {Array<Array<string>>} Array of class name combinations.
+ * @return {!Array<Array<string>>} Array of class name combinations.
  */
 goog.ui.ControlRenderer.prototype.getIe6ClassCombinations = function() {
   return [];

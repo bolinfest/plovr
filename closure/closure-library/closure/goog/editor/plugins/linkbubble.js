@@ -1,20 +1,11 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Base class for bubble plugins.
- *
  */
 
 goog.provide('goog.editor.plugins.LinkBubble');
@@ -69,6 +60,10 @@ goog.editor.plugins.LinkBubble = function(var_args) {
 };
 goog.inherits(
     goog.editor.plugins.LinkBubble, goog.editor.plugins.AbstractBubblePlugin);
+
+
+/** @const @private {string} */
+goog.editor.plugins.LinkBubble.DISABLE_LINK_BUBBLE_DATA_ATTRIBUTE_ = 'data-dlb';
 
 
 /**
@@ -160,6 +155,17 @@ goog.editor.plugins.LinkBubble.MSG_LINK_BUBBLE_REMOVE = goog.getMsg('Remove');
  */
 goog.editor.plugins.LinkBubble.MSG_INVALID_URL_LINK_BUBBLE =
     goog.getMsg('invalid url');
+
+
+/**
+ * @param {!Element} targetElement
+ * @return {boolean}
+ * @private
+ */
+goog.editor.plugins.LinkBubble.shouldShowLinkBubble_ = function(targetElement) {
+  return !targetElement.hasAttribute(
+      goog.editor.plugins.LinkBubble.DISABLE_LINK_BUBBLE_DATA_ATTRIBUTE_);
+};
 
 
 /**
@@ -331,6 +337,21 @@ goog.editor.plugins.LinkBubble.prototype.getBubbleTitle = function() {
  */
 goog.editor.plugins.LinkBubble.prototype.getTestLinkMessage = function() {
   return goog.editor.plugins.LinkBubble.MSG_LINK_BUBBLE_TEST_LINK;
+};
+
+/** @override */
+goog.editor.plugins.LinkBubble.prototype.handleSelectionChangeInternal =
+    function(selectedElement) {
+  if (selectedElement) {
+    var bubbleTarget = this.getBubbleTargetFromSelection(selectedElement);
+    if (bubbleTarget &&
+        !goog.editor.plugins.LinkBubble.shouldShowLinkBubble_(bubbleTarget)) {
+      return false;
+    }
+  }
+
+  return goog.editor.plugins.LinkBubble.base(
+      this, 'handleSelectionChangeInternal', selectedElement);
 };
 
 

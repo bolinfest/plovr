@@ -1,16 +1,8 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Abstract base class for spell checker implementations.
@@ -30,8 +22,6 @@
  * chunks that have been processed after the very beginning, and returns every
  * so often so that the calling function could reschedule its execution on a
  * different stack (for example by calling setInterval(0)).
- *
- * @author eae@google.com (Emil A Eklund)
  */
 
 goog.provide('goog.ui.AbstractSpellChecker');
@@ -112,7 +102,6 @@ goog.ui.AbstractSpellChecker = function(spellCheck, opt_domHelper) {
       this.onWordChanged_, false, this);
 };
 goog.inherits(goog.ui.AbstractSpellChecker, goog.ui.Component);
-goog.tagUnsealableClass(goog.ui.AbstractSpellChecker);
 
 
 /**
@@ -405,6 +394,7 @@ goog.ui.AbstractSpellChecker.prototype.check = function() {
 /**
  * Hides correction UI.
  * Should be overridden by implementation.
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.AbstractSpellChecker.prototype.resume = function() {
   this.isVisible_ = false;
@@ -552,11 +542,11 @@ goog.ui.AbstractSpellChecker.prototype.getSuggestions_ = function() {
 
 /**
  * Displays suggestions menu.
- *
  * @param {Element} el Element to display menu for.
  * @param {goog.events.BrowserEvent|goog.math.Coordinate=} opt_pos Position to
  *     display menu at relative to the viewport (in client coordinates), or a
  *     mouse event.
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.AbstractSpellChecker.prototype.showSuggestionsMenu = function(
     el, opt_pos) {
@@ -661,9 +651,9 @@ goog.ui.AbstractSpellChecker.prototype.initSuggestionsMenu = function() {
 
 /**
  * Handles correction menu actions.
- *
  * @param {goog.events.Event} event Action event.
  * @protected
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.AbstractSpellChecker.prototype.onCorrectionAction = function(event) {
   var word = /** @type {string} */ (this.activeWord_);

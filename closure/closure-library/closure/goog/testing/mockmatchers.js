@@ -1,16 +1,8 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Matchers to be used with the mock utilities.  They allow for
@@ -18,7 +10,6 @@
  * matcher function into an ArgumentMatcher instance.
  *
  * For examples, please see the unit test.
- *
  */
 
 
@@ -35,8 +26,7 @@ goog.provide('goog.testing.mockmatchers.TypeOf');
 goog.require('goog.array');
 goog.require('goog.dom');
 goog.require('goog.testing.asserts');
-
-goog.forwardDeclare('goog.testing.MockExpectation'); // circular
+goog.requireType('goog.testing.MockExpectation');
 
 
 
@@ -74,7 +64,7 @@ goog.testing.mockmatchers.ArgumentMatcher = function(
  * which (if provided) will get error information and returns whether or
  * not it matches.
  * @param {*} toVerify The argument that should be verified.
- * @param {goog.testing.MockExpectation?=} opt_expectation The expectation
+ * @param {?goog.testing.MockExpectation=} opt_expectation The expectation
  *     for this match.
  * @return {boolean} Whether or not a given argument passes verification.
  */
@@ -162,7 +152,7 @@ goog.inherits(
 /**
  * A matcher that always returns true. It is useful when the user does not care
  * for some arguments.
- * For example: mockFunction('username', 'password', IgnoreArgument);
+ * For example: mockFunction('username', 'password', new IgnoreArgument());
  * @constructor
  * @extends {goog.testing.mockmatchers.ArgumentMatcher}
  * @final
@@ -230,6 +220,12 @@ goog.testing.mockmatchers.SaveArgument = function(opt_matcher, opt_matchName) {
   goog.testing.mockmatchers.ArgumentMatcher.call(
       this, /** @type {Function} */ (opt_matcher), opt_matchName);
 
+  /**
+   * All saved arguments that were verified.
+   * @const {!Array<*>}
+   */
+  this.allArgs = [];
+
   if (opt_matcher instanceof goog.testing.mockmatchers.ArgumentMatcher) {
     /**
      * Delegate match requests to this matcher.
@@ -250,6 +246,7 @@ goog.inherits(
 goog.testing.mockmatchers.SaveArgument.prototype.matches = function(
     toVerify, opt_expectation) {
   this.arg = toVerify;
+  this.allArgs.push(toVerify);
   if (this.delegateMatcher_) {
     return this.delegateMatcher_.matches(toVerify, opt_expectation);
   }
@@ -259,7 +256,7 @@ goog.testing.mockmatchers.SaveArgument.prototype.matches = function(
 
 
 /**
- * Saved argument that was verified.
+ * The last (or only) saved argument that was verified.
  * @type {*}
  */
 goog.testing.mockmatchers.SaveArgument.prototype.arg;
@@ -305,7 +302,8 @@ goog.testing.mockmatchers.isDateLike =
  * @type {!goog.testing.mockmatchers.ArgumentMatcher}
  */
 goog.testing.mockmatchers.isString =
-    new goog.testing.mockmatchers.ArgumentMatcher(goog.isString, 'isString');
+    new goog.testing.mockmatchers.ArgumentMatcher(
+        x => typeof x === 'string', 'isString');
 
 
 /**
@@ -313,7 +311,8 @@ goog.testing.mockmatchers.isString =
  * @type {!goog.testing.mockmatchers.ArgumentMatcher}
  */
 goog.testing.mockmatchers.isBoolean =
-    new goog.testing.mockmatchers.ArgumentMatcher(goog.isBoolean, 'isBoolean');
+    new goog.testing.mockmatchers.ArgumentMatcher(
+        x => typeof x === 'boolean', 'isBoolean');
 
 
 /**
@@ -321,7 +320,8 @@ goog.testing.mockmatchers.isBoolean =
  * @type {!goog.testing.mockmatchers.ArgumentMatcher}
  */
 goog.testing.mockmatchers.isNumber =
-    new goog.testing.mockmatchers.ArgumentMatcher(goog.isNumber, 'isNumber');
+    new goog.testing.mockmatchers.ArgumentMatcher(
+        x => typeof x === 'number', 'isNumber');
 
 
 /**

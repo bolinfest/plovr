@@ -1,21 +1,12 @@
-// Copyright 2011 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Base class that implements functionality common
  * across both session and local web storage mechanisms.
- *
  */
 
 goog.provide('goog.storage.mechanism.HTML5WebStorage');
@@ -111,7 +102,7 @@ goog.storage.mechanism.HTML5WebStorage.prototype.get = function(key) {
   // paradox where a key exists, but it does not when it is retrieved.
   // http://www.w3.org/TR/2009/WD-webstorage-20091029/#the-storage-interface
   var value = this.storage_.getItem(key);
-  if (!goog.isString(value) && !goog.isNull(value)) {
+  if (typeof value !== 'string' && value !== null) {
     throw goog.storage.mechanism.ErrorCode.INVALID_VALUE;
   }
   return value;
@@ -146,7 +137,7 @@ goog.storage.mechanism.HTML5WebStorage.prototype.__iterator__ = function(
     }
     var value = storage.getItem(key);
     // The value must exist and be a string, otherwise it is a storage error.
-    if (!goog.isString(value)) {
+    if (typeof value !== 'string') {
       throw goog.storage.mechanism.ErrorCode.INVALID_VALUE;
     }
     return value;

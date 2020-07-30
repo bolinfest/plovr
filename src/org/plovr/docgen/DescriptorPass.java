@@ -66,7 +66,7 @@ public class DescriptorPass implements CompilerPass {
   @Override
   public void process(Node externs, Node root) {
     DescriptorPassCallback callback = new DescriptorPassCallback(compiler);
-    NodeTraversal.traverseEs6(compiler, root, callback);
+    NodeTraversal.traverse(compiler, root, callback);
 
     try {
       ImmutableMap.Builder<String, ClassDescriptor> classMapBuilder =

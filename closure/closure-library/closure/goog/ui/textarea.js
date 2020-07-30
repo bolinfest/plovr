@@ -1,16 +1,8 @@
-// Copyright 2010 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview A content-aware textarea control that grows and shrinks
@@ -60,7 +52,6 @@ goog.ui.Textarea = function(content, opt_renderer, opt_domHelper) {
   }
 };
 goog.inherits(goog.ui.Textarea, goog.ui.Control);
-goog.tagUnsealableClass(goog.ui.Textarea);
 
 
 /**
@@ -313,6 +304,7 @@ goog.ui.Textarea.prototype.setValue = function(value) {
 /**
  * Gets the textarea's value.
  * @return {string} value The value of the textarea.
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.Textarea.prototype.getValue = function() {
   // We potentially have the placeholder stored in the value.
@@ -342,7 +334,10 @@ goog.ui.Textarea.prototype.setContent = function(content) {
 };
 
 
-/** @override **/
+/**
+ * @override *
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
+ */
 goog.ui.Textarea.prototype.setEnabled = function(enable) {
   goog.ui.Textarea.superClass_.setEnabled.call(this, enable);
   this.getElement().disabled = !enable;
@@ -372,6 +367,7 @@ goog.ui.Textarea.prototype.supportsNativePlaceholder_ = function() {
 /**
  * Sets the value of the textarea element to the default text.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.Textarea.prototype.restorePlaceholder_ = function() {
   if (!this.placeholderText_) {
@@ -483,6 +479,7 @@ goog.ui.Textarea.prototype.setHeight_ = function(height) {
  * This is necessary when the textarea is hidden, in which case scrollHeight
  * is not available.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.Textarea.prototype.setHeightToEstimate_ = function() {
   var textarea = this.getElement();
@@ -494,7 +491,7 @@ goog.ui.Textarea.prototype.setHeightToEstimate_ = function() {
 
 
 /**
- * Gets the the height of (possibly present) horizontal scrollbar.
+ * Gets the height of (possibly present) horizontal scrollbar.
  * @return {number} The height of the horizontal scrollbar.
  * @private
  */
@@ -579,6 +576,7 @@ goog.ui.Textarea.TEXTAREA_PLACEHOLDER_CLASS =
  * Called when the element goes out of focus.
  * @param {goog.events.Event=} opt_e The browser event.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.Textarea.prototype.blur_ = function(opt_e) {
   if (!this.supportsNativePlaceholder_()) {
@@ -597,6 +595,7 @@ goog.ui.Textarea.prototype.blur_ = function(opt_e) {
  * Resizes the textarea to grow/shrink to match its contents.
  * @param {goog.events.Event=} opt_e The browser event.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.Textarea.prototype.grow_ = function(opt_e) {
   if (this.isResizing_) {

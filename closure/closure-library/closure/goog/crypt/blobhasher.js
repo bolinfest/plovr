@@ -1,16 +1,8 @@
-// Copyright 2011 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Asynchronous hash computer for the Blob interface.
@@ -24,7 +16,6 @@
  * This implementation currently uses upcoming Chrome and Firefox prefixes,
  * plus the original Blob.slice specification, as implemented on Chrome 10
  * and Firefox 4.0.
- *
  */
 
 goog.provide('goog.crypt.BlobHasher');
@@ -59,14 +50,14 @@ goog.crypt.BlobHasher = function(hashFn, opt_blockSize) {
 
   /**
    * The blob being processed or null if no blob is being processed.
-   * @type {Blob}
+   * @type {?Blob}
    * @private
    */
   this.blob_ = null;
 
   /**
    * Computed hash value.
-   * @type {Array<number>}
+   * @type {?Array<number>}
    * @private
    */
   this.hashVal_ = null;
@@ -94,7 +85,7 @@ goog.crypt.BlobHasher = function(hashFn, opt_blockSize) {
 
   /**
    * File reader object. Will be null if no chunk is currently being read.
-   * @type {FileReader}
+   * @type {?FileReader}
    * @private
    */
   this.fileReader_ = null;
@@ -251,7 +242,7 @@ goog.crypt.BlobHasher.prototype.onLoad_ = function() {
 
   var array = null;
   if (this.fileReader_.result instanceof Array ||
-      goog.isString(this.fileReader_.result)) {
+      typeof this.fileReader_.result === 'string') {
     array = this.fileReader_.result;
   } else if (
       goog.global['ArrayBuffer'] && goog.global['Uint8Array'] &&

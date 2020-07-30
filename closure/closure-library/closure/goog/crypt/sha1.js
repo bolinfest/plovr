@@ -1,16 +1,8 @@
-// Copyright 2005 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview SHA-1 cryptographic hash.
@@ -25,7 +17,6 @@
  * Performance:
  *   Chrome 23:   ~400 Mbit/s
  *   Firefox 16:  ~250 Mbit/s
- *
  */
 
 goog.provide('goog.crypt.Sha1');
@@ -125,7 +116,7 @@ goog.crypt.Sha1.prototype.compress_ = function(buf, opt_offset) {
   var W = this.W_;
 
   // get 16 big endian words
-  if (goog.isString(buf)) {
+  if (typeof buf === 'string') {
     for (var i = 0; i < 16; i++) {
       // TODO(user): [bug 8140122] Recent versions of Safari for Mac OS and iOS
       // have a bug that turns the post-increment ++ operator into pre-increment
@@ -205,7 +196,7 @@ goog.crypt.Sha1.prototype.update = function(bytes, opt_length) {
     return;
   }
 
-  if (!goog.isDef(opt_length)) {
+  if (opt_length === undefined) {
     opt_length = bytes.length;
   }
 
@@ -228,7 +219,7 @@ goog.crypt.Sha1.prototype.update = function(bytes, opt_length) {
       }
     }
 
-    if (goog.isString(bytes)) {
+    if (typeof bytes === 'string') {
       while (n < opt_length) {
         buf[inbuf] = bytes.charCodeAt(n);
         ++inbuf;

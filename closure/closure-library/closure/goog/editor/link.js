@@ -1,21 +1,11 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview A utility class for managing editable links.
- *
- * @author nicksantos@google.com (Nick Santos)
  */
 
 goog.provide('goog.editor.Link');
@@ -96,7 +86,7 @@ goog.editor.Link.prototype.getCurrentText = function() {
 
     var leaf = goog.editor.node.getLeftMostLeaf(anchor);
     if (leaf.tagName && leaf.tagName == goog.dom.TagName.IMG) {
-      this.currentText_ = leaf.getAttribute('alt');
+      this.currentText_ = leaf.getAttribute('alt') || '';
     } else {
       this.currentText_ = goog.dom.getRawTextContent(this.getAnchor());
     }
@@ -138,7 +128,7 @@ goog.editor.Link.prototype.removeLink = function() {
 /**
  * Change the link.
  * @param {string} newText New text for the link. If the link contains all its
- *     text in one descendent, newText will only replace the text in that
+ *     text in one descendant, newText will only replace the text in that
  *     one node. Otherwise, we'll change the innerHTML of the whole
  *     link to newText.
  * @param {string} newUrl A new URL.
@@ -341,7 +331,8 @@ goog.editor.Link.isLikelyUrl = function(str) {
   // Require domains to contain a '.', unless the domain is fully qualified and
   // forbids domains from containing invalid characters.
   var domain = parts[goog.uri.utils.ComponentIndex.DOMAIN];
-  if (!domain || (addedScheme && domain.indexOf('.') == -1) ||
+  if (!domain ||
+      (addedScheme && (domain.indexOf('.') === -1 || domain.length < 3)) ||
       (/[^\w\d\-\u0100-\uffff.%]/.test(domain))) {
     return false;
   }

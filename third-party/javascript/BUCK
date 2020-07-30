@@ -1,4 +1,8 @@
 
 export_file(
+  name = 'checks.js',
+  visibility = ['PUBLIC'])
+
+export_file(
   name = 'soyutils_usegoog.js',
   visibility = ['PUBLIC'])

@@ -1,16 +1,8 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Simple utilities for dealing with URI strings.
@@ -40,9 +32,6 @@
  *
  * Uses features of RFC 3986 for parsing/formatting URIs:
  *   http://www.ietf.org/rfc/rfc3986.txt
- *
- * @author gboyer@google.com (Garrett Boyer) - The "lightened" design.
- * @author msamuel@google.com (Mike Samuel) - Domain knowledge and regexes.
  */
 
 goog.provide('goog.uri.utils');
@@ -184,25 +173,31 @@ goog.uri.utils.buildFromEncodedParts = function(
  *    $6 = <undefined>       query without ?
  *    $7 = Related           fragment without #
  * </pre>
+ *
+ * TODO(user): separate out the authority terminating characters once this
+ * file is moved to ES6.
  * @type {!RegExp}
  * @private
  */
 goog.uri.utils.splitRe_ = new RegExp(
-    '^' +
+    '^' +  // Anchor against the entire string.
     '(?:' +
     '([^:/?#.]+)' +  // scheme - ignore special characters
                      // used by other URL parts such as :,
                      // ?, /, #, and .
     ':)?' +
     '(?://' +
-    '(?:([^/?#]*)@)?' +  // userInfo
-    '([^/#?]*?)' +       // domain
-    '(?::([0-9]+))?' +   // port
-    '(?=[/#?]|$)' +      // authority-terminating character
+    '(?:([^\\\\/?#]*)@)?' +  // userInfo
+    '([^\\\\/?#]*?)' +       // domain
+    '(?::([0-9]+))?' +       // port
+    '(?=[\\\\/?#]|$)' +      // authority-terminating character.
     ')?' +
     '([^?#]+)?' +          // path
     '(?:\\?([^#]*))?' +    // query
-    '(?:#([\\s\\S]*))?' +  // fragment
+    '(?:#([\\s\\S]*))?' +  // fragment. Can't use '.*' with 's' flag as Firefox
+                           // doesn't support the flag, and can't use an
+                           // "everything set" ([^]) as IE10 doesn't match any
+                           // characters with it.
     '$');
 
 
@@ -220,6 +215,20 @@ goog.uri.utils.ComponentIndex = {
   FRAGMENT: 7
 };
 
+/**
+ * @type {?function(string)}
+ * @private
+ */
+goog.uri.utils.urlPackageSupportLoggingHandler_ = null;
+
+/**
+ * @param {?function(string)} handler The handler function to call when a URI
+ *     with a protocol that is better supported by the Closure URL package is
+ *     detected.
+ */
+goog.uri.utils.setUrlPackageSupportLoggingHandler = function(handler) {
+  goog.uri.utils.urlPackageSupportLoggingHandler_ = handler;
+};
 
 /**
  * Splits a URI into its component parts.
@@ -238,8 +247,14 @@ goog.uri.utils.ComponentIndex = {
  */
 goog.uri.utils.split = function(uri) {
   // See @return comment -- never null.
-  return /** @type {!Array<string|undefined>} */ (
+  var result = /** @type {!Array<string|undefined>} */ (
       uri.match(goog.uri.utils.splitRe_));
+  if (goog.uri.utils.urlPackageSupportLoggingHandler_ &&
+      ['http', 'https', 'ws', 'wss',
+       'ftp'].indexOf(result[goog.uri.utils.ComponentIndex.SCHEME]) >= 0) {
+    goog.uri.utils.urlPackageSupportLoggingHandler_(uri);
+  }
+  return result;
 };
 
 
@@ -300,7 +315,7 @@ goog.uri.utils.getEffectiveScheme = function(uri) {
     var protocol = goog.global.self.location.protocol;
     scheme = protocol.substr(0, protocol.length - 1);
   }
-  // NOTE: When called from a web worker in Firefox 3.5, location maybe null.
+  // NOTE: When called from a web worker in Firefox 3.5, location may be null.
   // All other browsers with web workers support self.location from the worker.
   return scheme ? scheme.toLowerCase() : '';
 };
@@ -604,7 +619,7 @@ goog.uri.utils.parseQueryData = function(encodedQuery, callback) {
  * @private
  */
 goog.uri.utils.splitQueryData_ = function(uri) {
-  // Find the query data and and hash.
+  // Find the query data and hash.
   var hashIndex = uri.indexOf('#');
   if (hashIndex < 0) {
     hashIndex = uri.length;
@@ -672,7 +687,7 @@ goog.uri.utils.appendQueryDataToUri_ = function(uri, queryData) {
  */
 goog.uri.utils.appendKeyValuePairs_ = function(key, value, pairs) {
   goog.asserts.assertString(key);
-  if (goog.isArray(value)) {
+  if (Array.isArray(value)) {
     // Convince the compiler it's an array.
     goog.asserts.assertArray(value);
     for (var j = 0; j < value.length; j++) {
@@ -800,9 +815,7 @@ goog.uri.utils.appendParamsFromMap = function(uri, map) {
  * @return {string} The URI with the query parameter added.
  */
 goog.uri.utils.appendParam = function(uri, key, opt_value) {
-  var value = goog.isDefAndNotNull(opt_value) ?
-      '=' + goog.string.urlEncode(opt_value) :
-      '';
+  var value = (opt_value != null) ? '=' + goog.string.urlEncode(opt_value) : '';
   return goog.uri.utils.appendQueryDataToUri_(uri, key + value);
 };
 

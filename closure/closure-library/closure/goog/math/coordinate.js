@@ -1,16 +1,8 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview A utility class for representing two-dimensional positions.
@@ -35,13 +27,13 @@ goog.math.Coordinate = function(opt_x, opt_y) {
    * X-value
    * @type {number}
    */
-  this.x = goog.isDef(opt_x) ? opt_x : 0;
+  this.x = (opt_x !== undefined) ? opt_x : 0;
 
   /**
    * Y-value
    * @type {number}
    */
-  this.y = goog.isDef(opt_y) ? opt_y : 0;
+  this.y = (opt_y !== undefined) ? opt_y : 0;
 };
 
 
@@ -221,7 +213,7 @@ goog.math.Coordinate.prototype.translate = function(tx, opt_ty) {
     this.y += tx.y;
   } else {
     this.x += Number(tx);
-    if (goog.isNumber(opt_ty)) {
+    if (typeof opt_ty === 'number') {
       this.y += opt_ty;
     }
   }
@@ -238,7 +230,7 @@ goog.math.Coordinate.prototype.translate = function(tx, opt_ty) {
  * @return {!goog.math.Coordinate} This coordinate after scaling.
  */
 goog.math.Coordinate.prototype.scale = function(sx, opt_sy) {
-  var sy = goog.isNumber(opt_sy) ? opt_sy : sx;
+  var sy = (typeof opt_sy === 'number') ? opt_sy : sx;
   this.x *= sx;
   this.y *= sy;
   return this;

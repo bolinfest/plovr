@@ -1,23 +1,14 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Standalone script to be included in the relay-document
  * used by goog.net.xpc.IframeRelayTransport. This script will decode the
  * fragment identifier, determine the target window object and deliver
  * the data to it.
- *
  */
 
 goog.provide('goog.net.xpc.relay');
@@ -28,18 +19,18 @@ goog.provide('goog.net.xpc.relay');
   // <url>#<channel_name>[,<iframe_id>]|<data>
 
   // Get the fragment identifier.
-  var raw = window.location.hash;
+  let raw = window.location.hash;
   if (!raw) {
     return;
   }
   if (raw.charAt(0) == '#') {
     raw = raw.substring(1);
   }
-  var pos = raw.indexOf('|');
-  var head = raw.substring(0, pos).split(',');
-  var channelName = head[0];
-  var iframeId = head.length == 2 ? head[1] : null;
-  var frame = raw.substring(pos + 1);
+  const pos = raw.indexOf('|');
+  const head = raw.substring(0, pos).split(',');
+  const channelName = head[0];
+  const iframeId = head.length == 2 ? head[1] : null;
+  const frame = raw.substring(pos + 1);
 
   // Find the window object of the peer.
   //
@@ -51,7 +42,7 @@ goog.provide('goog.net.xpc.relay');
   //
   // We are either relay1 or relay2.
 
-  var win;
+  let win;
   if (iframeId) {
     // We are relay2 and need to deliver the data to peer2.
     win = window.parent.frames[iframeId];

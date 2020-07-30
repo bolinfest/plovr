@@ -1,21 +1,12 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Code for managing series of undo-redo actions in the form of
  * {@link goog.editor.plugins.UndoRedoState}s.
- *
  */
 
 
@@ -115,7 +106,7 @@ goog.editor.plugins.UndoRedoManager.EventType = {
 /**
  * The key for the listener for the completion of the asynchronous state whose
  * undo or redo action is in progress. Null if no action is in progress.
- * @type {goog.events.Key}
+ * @type {?goog.events.Key}
  * @private
  */
 goog.editor.plugins.UndoRedoManager.prototype.inProgressActionKey_ = null;
@@ -269,6 +260,7 @@ goog.editor.plugins.UndoRedoManager.prototype.addAction_ = function(action) {
  * Executes the action at the front of the pending actions queue. If an action
  * is already in progress or the queue is empty, does nothing.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.editor.plugins.UndoRedoManager.prototype.doAction_ = function() {
   if (this.inProgressActionKey_ || this.pendingActions_.length == 0) {

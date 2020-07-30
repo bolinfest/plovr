@@ -1,16 +1,8 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Popup Emoji Picker implementation. This provides a UI widget
@@ -65,7 +57,7 @@ goog.inherits(goog.ui.emoji.PopupEmojiPicker, goog.ui.Component);
 
 /**
  * Instance of an emoji picker control.
- * @type {goog.ui.emoji.EmojiPicker}
+ * @type {?goog.ui.emoji.EmojiPicker}
  * @private
  */
 goog.ui.emoji.PopupEmojiPicker.prototype.emojiPicker_ = null;
@@ -73,7 +65,7 @@ goog.ui.emoji.PopupEmojiPicker.prototype.emojiPicker_ = null;
 
 /**
  * Instance of goog.ui.Popup used to manage the behavior of the emoji picker.
- * @type {goog.ui.Popup}
+ * @type {?goog.ui.Popup}
  * @private
  */
 goog.ui.emoji.PopupEmojiPicker.prototype.popup_ = null;
@@ -81,7 +73,7 @@ goog.ui.emoji.PopupEmojiPicker.prototype.popup_ = null;
 
 /**
  * Reference to the element that triggered the last popup.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.ui.emoji.PopupEmojiPicker.prototype.lastTarget_ = null;
@@ -250,7 +242,8 @@ goog.ui.emoji.PopupEmojiPicker.prototype.createDom = function() {
   this.emojiPicker_.createDom();
 
   this.getElement().className = goog.getCssName('goog-ui-popupemojipicker');
-  this.getElement().appendChild(this.emojiPicker_.getElement());
+  this.getElement().appendChild(
+      /** @type {!Node} */ (this.emojiPicker_.getElement()));
 
   this.popup_ = new goog.ui.Popup(this.getElement());
   this.getElement().unselectable = 'on';

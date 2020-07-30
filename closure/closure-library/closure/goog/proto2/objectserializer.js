@@ -1,21 +1,12 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Protocol Buffer 2 Serializer which serializes messages
  *  into anonymous, simplified JSON objects.
- *
  */
 
 goog.provide('goog.proto2.ObjectSerializer');
@@ -35,13 +26,17 @@ goog.require('goog.string');
  *     which key option to use when serializing/deserializing.
  * @param {boolean=} opt_serializeBooleanAsNumber If specified and true, the
  *     serializer will convert boolean values to 0/1 representation.
+ * @param {boolean=} opt_ignoreUnknownFields If specified and true, the
+ *     serializer will ignore unknown fields in the JSON payload instead of
+ *     returning an error.
  * @constructor
  * @extends {goog.proto2.Serializer}
  */
 goog.proto2.ObjectSerializer = function(
-    opt_keyOption, opt_serializeBooleanAsNumber) {
+    opt_keyOption, opt_serializeBooleanAsNumber, opt_ignoreUnknownFields) {
   this.keyOption_ = opt_keyOption;
   this.serializeBooleanAsNumber_ = opt_serializeBooleanAsNumber;
+  this.ignoreUnknownFields_ = opt_ignoreUnknownFields;
 };
 goog.inherits(goog.proto2.ObjectSerializer, goog.proto2.Serializer);
 
@@ -158,7 +153,7 @@ goog.proto2.ObjectSerializer.prototype.getSerializedValue = function(
   // Some deserialization libraries, such as GWT, can use this notation.
   if (this.serializeBooleanAsNumber_ &&
       field.getFieldType() == goog.proto2.FieldDescriptor.FieldType.BOOL &&
-      goog.isBoolean(value)) {
+      typeof value === 'boolean') {
     return value ? 1 : 0;
   }
 
@@ -174,7 +169,7 @@ goog.proto2.ObjectSerializer.prototype.getDeserializedValue = function(
   // Gracefully handle the case where a boolean is represented by 0/1.
   // Some serialization libraries, such as GWT, can use this notation.
   if (field.getFieldType() == goog.proto2.FieldDescriptor.FieldType.BOOL &&
-      goog.isNumber(value)) {
+      typeof value === 'number') {
     return Boolean(value);
   }
 
@@ -229,7 +224,7 @@ goog.proto2.ObjectSerializer.prototype.deserializeTo = function(message, data) {
     if (field) {
       if (field.isRepeated()) {
         goog.asserts.assert(
-            goog.isArray(value),
+            Array.isArray(value),
             'Value for repeated field ' + field + ' must be an array.');
 
         for (var j = 0; j < value.length; j++) {
@@ -237,17 +232,20 @@ goog.proto2.ObjectSerializer.prototype.deserializeTo = function(message, data) {
         }
       } else {
         goog.asserts.assert(
-            !goog.isArray(value),
+            !Array.isArray(value),
             'Value for non-repeated field ' + field + ' must not be an array.');
         message.set(field, this.getDeserializedValue(field, value));
       }
     } else {
       if (isNumeric) {
-        // We have an unknown field.
+        // We have an unknown field (with a numeric tag).
         message.setUnknown(Number(key), value);
       } else {
-        // Named fields must be present.
-        goog.asserts.fail('Failed to find field: ' + key);
+        // Handle unknown non-numeric tag.
+        if (!this.ignoreUnknownFields_) {
+          // Named fields must be present.
+          goog.asserts.fail('Failed to find field: ' + key);
+        }
       }
     }
   }

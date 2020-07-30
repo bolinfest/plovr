@@ -1,21 +1,11 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Detects images dragged and dropped on to the window.
- *
- * @author robbyw@google.com (Robby Walker)
  */
 
 goog.provide('goog.ui.DragDropDetector');
@@ -211,7 +201,7 @@ goog.ui.DragDropDetector.prototype.element_;
 
 /**
  * The iframe's window, null if the iframe hasn't loaded yet.
- * @type {Window}
+ * @type {?Window}
  * @private
  */
 goog.ui.DragDropDetector.prototype.window_ = null;
@@ -219,7 +209,7 @@ goog.ui.DragDropDetector.prototype.window_ = null;
 
 /**
  * The iframe's document, null if the iframe hasn't loaded yet.
- * @type {Document}
+ * @type {?Document}
  * @private
  */
 goog.ui.DragDropDetector.prototype.document_ = null;
@@ -227,7 +217,7 @@ goog.ui.DragDropDetector.prototype.document_ = null;
 
 /**
  * The iframe's body, null if the iframe hasn't loaded yet.
- * @type {HTMLBodyElement}
+ * @type {?HTMLBodyElement}
  * @private
  */
 goog.ui.DragDropDetector.prototype.body_ = null;
@@ -244,7 +234,7 @@ goog.ui.DragDropDetector.prototype.isCoveringScreen_ = false;
 
 /**
  * The last position of the mouse while dragging.
- * @type {goog.math.Coordinate}
+ * @type {?goog.math.Coordinate}
  * @private
  */
 goog.ui.DragDropDetector.prototype.mousePosition_ = null;

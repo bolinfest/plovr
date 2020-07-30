@@ -1,20 +1,11 @@
-// Copyright 2011 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Mock blob object.
- *
  */
 
 goog.setTestOnly('goog.testing.fs.Blob');
@@ -76,14 +67,14 @@ goog.testing.fs.Blob = function(opt_data, opt_type) {
 goog.testing.fs.Blob.prototype.slice = function(
     opt_start, opt_end, opt_contentType) {
   var relativeStart;
-  if (goog.isNumber(opt_start)) {
+  if (typeof opt_start === 'number') {
     relativeStart = (opt_start < 0) ? Math.max(this.size + opt_start, 0) :
                                       Math.min(opt_start, this.size);
   } else {
     relativeStart = 0;
   }
   var relativeEnd;
-  if (goog.isNumber(opt_end)) {
+  if (typeof opt_end === 'number') {
     relativeEnd = (opt_end < 0) ? Math.max(this.size + opt_end, 0) :
                                   Math.min(opt_end, this.size);
   } else {

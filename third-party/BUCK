@@ -15,11 +15,11 @@ java_library(
     ':aopalliance-aopalliance-jar',
     ':com.google.inject.extensions-guice-multibindings-jar',
     ':com.google.guava-guava-jar',
+    ':com.google.j2objc-j2objc-annotations-jar',
+    ':org.codehaus.mojo-animal-sniffer-annotations-jar',
     ':com.google.common.html.types-types-jar',
-    ':com.google.gwt-gwt-user-jar',
-    ':javax.validation-validation-api-jar',
-    ':javax.validation-validation-api-sources',
     ':javax.annotation-jsr250-api-jar',
+    ':com.google.errorprone-error_prone_annotations-jar',
     ':com.google.protobuf-protobuf-java-jar',
     ':org.ow2.asm-asm-jar',
     ':org.ow2.asm-asm-commons-jar',
@@ -30,8 +30,8 @@ java_library(
     ':org.json-json-jar',
     ':com.google.javascript-closure-compiler-jar',
     ':com.google.javascript-closure-compiler-externs-jar',
-    ':com.google.errorprone-error_prone_annotations-jar',
     ':com.google.jsinterop-jsinterop-annotations-jar',
+    ':com.google.re2j-re2j-jar',
     ':org.seleniumhq.selenium-selenium-java-jar',
     ':org.seleniumhq.selenium-selenium-android-driver-jar',
     ':org.seleniumhq.selenium-selenium-remote-driver-jar',
@@ -73,7 +73,7 @@ java_library(
   name = 'OPTIONAL',
   visibility = ['PUBLIC'],
   exported_deps = [
-    
+
   ],
 )
 
@@ -81,7 +81,7 @@ java_library(
   name = 'PROVIDED',
   visibility = ['PUBLIC'],
   exported_deps = [
-    
+
   ],
 )
 
@@ -89,7 +89,7 @@ java_library(
   name = 'RUNTIME',
   visibility = ['PUBLIC'],
   exported_deps = [
-    
+
   ],
 )
 
@@ -182,9 +182,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.common.html.types-types-jar',
-  out = 'com.google.common.html.types-types-jar-1.0.4.jar',
-  url = 'mvn:com.google.common.html.types:types:jar:1.0.4',
-  sha1 = '2adf4c8bfccc0ff7346f9186ac5aa57d829ad065',
+  out = 'com.google.common.html.types-types-jar-1.0.6.jar',
+  url = 'mvn:com.google.common.html.types:types:jar:1.0.6',
+  sha1 = '782c9bb80f7c6711625124b43512f8b3b00ce58d',
 )
 
 prebuilt_jar(
@@ -194,9 +194,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.errorprone-error_prone_annotations-jar',
-  out = 'com.google.errorprone-error_prone_annotations-jar-2.3.1.jar',
-  url = 'mvn:com.google.errorprone:error_prone_annotations:jar:2.3.1',
-  sha1 = 'a6a2b2df72fd13ec466216049b303f206bd66c5d',
+  out = 'com.google.errorprone-error_prone_annotations-jar-2.1.3.jar',
+  url = 'mvn:com.google.errorprone:error_prone_annotations:jar:2.1.3',
+  sha1 = '39b109f2cd352b2d71b52a3b5a1a9850e1dc304b',
 )
 
 prebuilt_jar(
@@ -206,21 +206,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.guava-guava-jar',
-  out = 'com.google.guava-guava-jar-21.0.jar',
-  url = 'mvn:com.google.guava:guava:jar:21.0',
-  sha1 = '3a3d111be1be1b745edfa7d91678a12d7ed38709',
-)
-
-prebuilt_jar(
-  name = 'com.google.gwt-gwt-user-jar',
-  binary_jar = ':remote-com.google.gwt-gwt-user-jar',
-)
-
-remote_file(
-  name = 'remote-com.google.gwt-gwt-user-jar',
-  out = 'com.google.gwt-gwt-user-jar-2.8.0-beta1.jar',
-  url = 'mvn:com.google.gwt:gwt-user:jar:2.8.0-beta1',
-  sha1 = 'abea2e34826ce592e0d2bd49a844b2ff57b78134',
+  out = 'com.google.guava-guava-jar-25.1-jre.jar',
+  url = 'mvn:com.google.guava:guava:jar:25.1-jre',
+  sha1 = '6c57e4b22b44e89e548b5c9f70f0c45fe10fb0b4',
 )
 
 prebuilt_jar(
@@ -248,15 +236,27 @@ remote_file(
 )
 
 prebuilt_jar(
+  name = 'com.google.j2objc-j2objc-annotations-jar',
+  binary_jar = ':remote-com.google.j2objc-j2objc-annotations-jar',
+)
+
+remote_file(
+  name = 'remote-com.google.j2objc-j2objc-annotations-jar',
+  out = 'com.google.j2objc-j2objc-annotations-jar-1.1.jar',
+  url = 'mvn:com.google.j2objc:j2objc-annotations:jar:1.1',
+  sha1 = 'ed28ded51a8b1c6b112568def5f4b455e6809019',
+)
+
+prebuilt_jar(
   name = 'com.google.javascript-closure-compiler-jar',
   binary_jar = ':remote-com.google.javascript-closure-compiler-jar',
 )
 
 remote_file(
   name = 'remote-com.google.javascript-closure-compiler-jar',
-  out = 'com.google.javascript-closure-compiler-jar-v20181125.jar',
-  url = 'mvn:com.google.javascript:closure-compiler:jar:v20181125',
-  sha1 = '1d13e93106574b51f361d2e73b6e0ecf345d2304',
+  out = 'com.google.javascript-closure-compiler-jar-v20200719.jar',
+  url = 'mvn:com.google.javascript:closure-compiler:jar:v20200719',
+  sha1 = '0adcd8c9d268ee041d5a73753c98e4074fe82488',
 )
 
 prebuilt_jar(
@@ -266,9 +266,21 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-com.google.javascript-closure-compiler-externs-jar',
-  out = 'com.google.javascript-closure-compiler-externs-jar-v20181125.jar',
-  url = 'mvn:com.google.javascript:closure-compiler-externs:jar:v20181125',
-  sha1 = '6c7839867a7ee53173d69be31c70b3aa012fb90a',
+  out = 'com.google.javascript-closure-compiler-externs-jar-v20200719.jar',
+  url = 'mvn:com.google.javascript:closure-compiler-externs:jar:v20200719',
+  sha1 = '900d41a9b4185533a0bdd10242e492050edf02bd',
+)
+
+prebuilt_jar(
+  name = 'com.google.jsinterop-base-jar',
+  binary_jar = ':remote-com.google.jsinterop-base-jar',
+)
+
+remote_file(
+  name = 'remote-com.google.jsinterop-base-jar',
+  out = 'com.google.jsinterop-base-jar-1.0.0.jar',
+  url = 'mvn:com.google.jsinterop:base:jar:1.0.0',
+  sha1 = '5d2a5cda3092004832cb67cfe7a100a2ef8411f8',
 )
 
 prebuilt_jar(
@@ -296,15 +308,27 @@ remote_file(
 )
 
 prebuilt_jar(
+  name = 'com.google.re2j-re2j-jar',
+  binary_jar = ':remote-com.google.re2j-re2j-jar',
+)
+
+remote_file(
+  name = 'remote-com.google.re2j-re2j-jar',
+  out = 'com.google.re2j-re2j-jar-1.3.jar',
+  url = 'mvn:com.google.re2j:re2j:jar:1.3',
+  sha1 = 'dc7de2b32fa8cc569ab44fb849abadbbc6983b91',
+)
+
+prebuilt_jar(
   name = 'com.google.template-soy-jar',
   binary_jar = ':remote-com.google.template-soy-jar',
 )
 
 remote_file(
   name = 'remote-com.google.template-soy-jar',
-  out = 'com.google.template-soy-jar-2018-03-14.jar',
-  url = 'mvn:com.google.template:soy:jar:2018-03-14',
-  sha1 = '76a1322705ba5a6d6329ee26e7387417725ce4b3',
+  out = 'com.google.template-soy-jar-2019-09-03.jar',
+  url = 'mvn:com.google.template:soy:jar:2019-09-03',
+  sha1 = '40781da0302b4b5d53006dc8bd5a432c7288d807',
 )
 
 prebuilt_jar(
@@ -401,30 +425,6 @@ remote_file(
   out = 'javax.inject-javax.inject-jar-1.jar',
   url = 'mvn:javax.inject:javax.inject:jar:1',
   sha1 = '6975da39a7040257bd51d21a231b76c915872d38',
-)
-
-prebuilt_jar(
-  name = 'javax.validation-validation-api-sources',
-  binary_jar = ':remote-javax.validation-validation-api-sources',
-)
-
-remote_file(
-  name = 'remote-javax.validation-validation-api-sources',
-  out = 'javax.validation-validation-api-sources-1.0.0.GA.jar',
-  url = 'mvn:javax.validation:validation-api:sources:1.0.0.GA',
-  sha1 = '7a561191db2203550fbfa40d534d4997624cd369',
-)
-
-prebuilt_jar(
-  name = 'javax.validation-validation-api-jar',
-  binary_jar = ':remote-javax.validation-validation-api-jar',
-)
-
-remote_file(
-  name = 'remote-javax.validation-validation-api-jar',
-  out = 'javax.validation-validation-api-jar-1.0.0.GA.jar',
-  url = 'mvn:javax.validation:validation-api:jar:1.0.0.GA',
-  sha1 = 'b6bd7f9d78f6fdaa3c37dae18a4bd298915f328e',
 )
 
 prebuilt_jar(
@@ -572,6 +572,18 @@ remote_file(
 )
 
 prebuilt_jar(
+  name = 'org.codehaus.mojo-animal-sniffer-annotations-jar',
+  binary_jar = ':remote-org.codehaus.mojo-animal-sniffer-annotations-jar',
+)
+
+remote_file(
+  name = 'remote-org.codehaus.mojo-animal-sniffer-annotations-jar',
+  out = 'org.codehaus.mojo-animal-sniffer-annotations-jar-1.14.jar',
+  url = 'mvn:org.codehaus.mojo:animal-sniffer-annotations:jar:1.14',
+  sha1 = '775b7e22fb10026eed3f86e8dc556dfafe35f2d5',
+)
+
+prebuilt_jar(
   name = 'org.easymock-easymock-jar',
   binary_jar = ':remote-org.easymock-easymock-jar',
 )
@@ -650,9 +662,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-org.ow2.asm-asm-jar',
-  out = 'org.ow2.asm-asm-jar-6.0.jar',
-  url = 'mvn:org.ow2.asm:asm:jar:6.0',
-  sha1 = 'bc6fa6b19424bb9592fe43bbc20178f92d403105',
+  out = 'org.ow2.asm-asm-jar-7.0.jar',
+  url = 'mvn:org.ow2.asm:asm:jar:7.0',
+  sha1 = 'd74d4ba0dee443f68fb2dcb7fcdb945a2cd89912',
 )
 
 prebuilt_jar(
@@ -662,9 +674,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-org.ow2.asm-asm-analysis-jar',
-  out = 'org.ow2.asm-asm-analysis-jar-6.0.jar',
-  url = 'mvn:org.ow2.asm:asm-analysis:jar:6.0',
-  sha1 = 'dd1cc1381a970800268160203aae2d3784da779b',
+  out = 'org.ow2.asm-asm-analysis-jar-7.0.jar',
+  url = 'mvn:org.ow2.asm:asm-analysis:jar:7.0',
+  sha1 = '4b310d20d6f1c6b7197a75f1b5d69f169bc8ac1f',
 )
 
 prebuilt_jar(
@@ -674,9 +686,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-org.ow2.asm-asm-commons-jar',
-  out = 'org.ow2.asm-asm-commons-jar-6.0.jar',
-  url = 'mvn:org.ow2.asm:asm-commons:jar:6.0',
-  sha1 = 'f256fd215d8dd5a4fa2ab3201bf653de266ed4ec',
+  out = 'org.ow2.asm-asm-commons-jar-7.0.jar',
+  url = 'mvn:org.ow2.asm:asm-commons:jar:7.0',
+  sha1 = '478006d07b7c561ae3a92ddc1829bca81ae0cdd1',
 )
 
 prebuilt_jar(
@@ -686,9 +698,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-org.ow2.asm-asm-tree-jar',
-  out = 'org.ow2.asm-asm-tree-jar-6.0.jar',
-  url = 'mvn:org.ow2.asm:asm-tree:jar:6.0',
-  sha1 = 'a624f1a6e4e428dcd680a01bab2d4c56b35b18f0',
+  out = 'org.ow2.asm-asm-tree-jar-7.0.jar',
+  url = 'mvn:org.ow2.asm:asm-tree:jar:7.0',
+  sha1 = '29bc62dcb85573af6e62e5b2d735ef65966c4180',
 )
 
 prebuilt_jar(
@@ -698,9 +710,9 @@ prebuilt_jar(
 
 remote_file(
   name = 'remote-org.ow2.asm-asm-util-jar',
-  out = 'org.ow2.asm-asm-util-jar-6.0.jar',
-  url = 'mvn:org.ow2.asm:asm-util:jar:6.0',
-  sha1 = '430b2fc839b5de1f3643b528853d5cf26096c1de',
+  out = 'org.ow2.asm-asm-util-jar-7.0.jar',
+  url = 'mvn:org.ow2.asm:asm-util:jar:7.0',
+  sha1 = '18d4d07010c24405129a6dbb0e92057f8779fb9d',
 )
 
 prebuilt_jar(
@@ -906,4 +918,3 @@ remote_file(
   url = 'mvn:xml-apis:xml-apis:jar:1.3.04',
   sha1 = '90b215f48fe42776c8c7f6e3509ec54e84fd65ef',
 )
-

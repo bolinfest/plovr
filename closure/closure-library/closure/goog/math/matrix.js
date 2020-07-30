@@ -1,16 +1,8 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Class for representing matrices and static helper functions.
@@ -64,7 +56,9 @@ goog.math.Matrix = function(m, opt_n) {
     this.array_ = goog.array.clone(/** @type {!Array<!Array<number>>} */ (m));
   } else if (m instanceof goog.math.Size) {
     this.array_ = goog.math.Matrix.createZeroPaddedArray_(m.height, m.width);
-  } else if (goog.isNumber(m) && goog.isNumber(opt_n) && m > 0 && opt_n > 0) {
+  } else if (
+      typeof m === 'number' && typeof opt_n === 'number' && m > 0 &&
+      opt_n > 0) {
     this.array_ = goog.math.Matrix.createZeroPaddedArray_(
         /** @type {number} */ (m), opt_n);
   } else {
@@ -130,7 +124,7 @@ goog.math.Matrix.isValidArray = function(arr) {
       return false;
     }
     for (var j = 0; j < arr[i].length; j++) {
-      if (!goog.isNumber(arr[i][j])) {
+      if (typeof arr[i][j] !== 'number') {
         return false;
       }
     }
@@ -462,7 +456,7 @@ goog.math.Matrix.prototype.multiply = function(m) {
           'should have the same number of rows as the first has columns.');
     }
     return this.matrixMultiply_(/** @type {!goog.math.Matrix} */ (m));
-  } else if (goog.isNumber(m)) {
+  } else if (typeof m === 'number') {
     return this.scalarMultiply_(/** @type {number} */ (m));
   } else {
     throw new Error(

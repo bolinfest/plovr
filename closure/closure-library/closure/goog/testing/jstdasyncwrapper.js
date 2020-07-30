@@ -1,16 +1,8 @@
-// Copyright 2016 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview A utility for wrapping a JSTD test object so that any test
@@ -57,9 +49,11 @@ goog.testing.JsTdAsyncWrapper.REAL_SET_TIMEOUT_ = function(fn, timeout) {
  * Wraps an object's methods by passing in a Queue that is based on the JSTD
  * async API. The queue exposes a promise that resolves when the queue
  * completes. This promise can be used in JsUnit tests.
- * @param {!Object} original The original JSTD test object. The object should
+ *
+ * @template T
+ * @param {T} original The original JSTD test object. The object should
  *     contain methods such as testXyz or setUp.
- * @return {!Object} A object that has all test methods wrapped in a fake
+ * @return {T} A object that has all test methods wrapped in a fake
  *     testing queue.
  */
 goog.testing.JsTdAsyncWrapper.convertToAsyncTestObj = function(original) {
@@ -67,8 +61,9 @@ goog.testing.JsTdAsyncWrapper.convertToAsyncTestObj = function(original) {
   // into the test function.
   var queueWrapperFn = function(fn) {
     return function() {
-      var queue = new goog.testing.JsTdAsyncWrapper.Queue(this);
-      fn.call(this, queue);
+      var self = /** @type {?} */ (this);  // T this is expected
+      var queue = new goog.testing.JsTdAsyncWrapper.Queue(self);
+      fn.call(self, queue);
       return queue.startExecuting();
     };
   };

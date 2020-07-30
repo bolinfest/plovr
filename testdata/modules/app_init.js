@@ -1,14 +1,15 @@
-goog.require('example.App');
+goog.require("example.App");
 
-goog.require('goog.module.ModuleLoader');
-goog.require('goog.module.ModuleManager');
+goog.require("goog.module.ModuleLoader");
+goog.require("goog.module.ModuleManager");
+goog.require("goog.Uri");
 
 example.App.setButtonClickHandler(function(e) {
   var moduleManager = goog.module.ModuleManager.getInstance();
-  moduleManager.execOnLoad('settings', this.onSettingsLoaded, this);
+  moduleManager.execOnLoad("settings", this.onSettingsLoaded, this);
 });
 
-example.App.install('content');
+example.App.install("content");
 
 var moduleManager = goog.module.ModuleManager.getInstance();
 var moduleLoader = new goog.module.ModuleLoader();
@@ -20,13 +21,13 @@ var moduleLoader = new goog.module.ModuleLoader();
 moduleLoader.setDebugMode(true);
 
 moduleManager.setLoader(moduleLoader);
-moduleManager.setAllModuleInfo(goog.global['PLOVR_MODULE_INFO']);
-moduleManager.setModuleUris(goog.global['PLOVR_MODULE_URIS']);
+moduleManager.setAllModuleInfo(goog.global["PLOVR_MODULE_INFO"]);
+moduleManager.setModuleTrustedUris(goog.global["PLOVR_MODULE_URIS"]);
 
 // This tells the module manager that the 'app' module has been loaded.
 // The module manager will not evaluate the code for any of app's
 // dependencies until it knows it has been loaded.
-moduleManager.setLoaded('app');
+moduleManager.setLoaded();
 
 // One problem with this use of exports is that it causes problems in RAW mode.
 // These calls to goog.exportSymbol() define an example.api object in the global
@@ -46,17 +47,14 @@ moduleManager.setLoaded('app');
 // the loading code is in the gmonkey.* namespace while the Gmail API is in the
 // gmail.* namespace.
 
-goog.exportSymbol('example.api.load', function(callback) {
-  moduleManager.execOnLoad('api', callback);
+goog.exportSymbol("example.api.load", function(callback) {
+  moduleManager.execOnLoad("api", callback);
 });
 
-goog.exportSymbol('example.api.isLoaded', function() {
-  var moduleInfo = moduleManager.getModuleInfo('api');
+goog.exportSymbol("example.api.isLoaded", function() {
+  var moduleInfo = moduleManager.getModuleInfo("api");
   return moduleInfo ? moduleInfo.isLoaded() : false;
 });
 
 // TODO(bolinfest): Include deps.js by default to eliminate the need for this.
-goog.addDependency('', [
-  'goog.debug.ErrorHandler',
-  'goog.Uri'
-], []);
+goog.addDependency("", ["goog.debug.ErrorHandler", "goog.Uri"], []);

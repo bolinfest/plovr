@@ -1,16 +1,8 @@
-// Copyright 2012 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Provides the built-in dictionary matcher methods like
@@ -18,12 +10,10 @@
  */
 
 
-
 goog.provide('goog.labs.testing.HasEntriesMatcher');
 goog.provide('goog.labs.testing.HasEntryMatcher');
 goog.provide('goog.labs.testing.HasKeyMatcher');
 goog.provide('goog.labs.testing.HasValueMatcher');
-
 
 goog.require('goog.asserts');
 goog.require('goog.labs.testing.Matcher');
@@ -219,12 +209,12 @@ goog.labs.testing.HasValueMatcher.prototype.describe = function(actualObject) {
  * in the input object.
  *
  * @param {!Object} entries The entries to check for presence in the object.
- *
  * @return {!goog.labs.testing.HasEntriesMatcher} A HasEntriesMatcher.
  */
-function hasEntries(entries) {
-  return new goog.labs.testing.HasEntriesMatcher(entries);
-}
+var hasEntries =
+    goog.labs.testing.HasEntriesMatcher.hasEntries = function(entries) {
+      return new goog.labs.testing.HasEntriesMatcher(entries);
+    };
 
 
 /**
@@ -232,33 +222,31 @@ function hasEntries(entries) {
  *
  * @param {string} key The key to check for presence in the object.
  * @param {*} value The value to check for presence in the object.
- *
  * @return {!goog.labs.testing.HasEntryMatcher} A HasEntryMatcher.
  */
-function hasEntry(key, value) {
-  return new goog.labs.testing.HasEntryMatcher(key, value);
-}
+var hasEntry =
+    goog.labs.testing.HasEntryMatcher.hasEntry = function(key, value) {
+      return new goog.labs.testing.HasEntryMatcher(key, value);
+    };
 
 
 /**
  * Gives a matcher that asserts an object contains the given key.
  *
  * @param {string} key The key to check for presence in the object.
- *
  * @return {!goog.labs.testing.HasKeyMatcher} A HasKeyMatcher.
  */
-function hasKey(key) {
+var hasKey = goog.labs.testing.HasKeyMatcher.hasKey = function(key) {
   return new goog.labs.testing.HasKeyMatcher(key);
-}
+};
 
 
 /**
  * Gives a matcher that asserts an object contains the given value.
  *
  * @param {*} value The value to check for presence in the object.
- *
  * @return {!goog.labs.testing.HasValueMatcher} A HasValueMatcher.
  */
-function hasValue(value) {
+var hasValue = goog.labs.testing.HasValueMatcher.hasValue = function(value) {
   return new goog.labs.testing.HasValueMatcher(value);
-}
+};

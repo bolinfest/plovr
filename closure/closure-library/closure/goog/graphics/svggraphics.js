@@ -1,21 +1,12 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 
 /**
  * @fileoverview SvgGraphics sub class that uses SVG to draw the graphics.
- * @author arv@google.com (Erik Arvidsson)
  */
 
 goog.provide('goog.graphics.SvgGraphics');
@@ -175,7 +166,7 @@ goog.graphics.SvgGraphics.prototype.setElementAttributes = function(
  */
 goog.graphics.SvgGraphics.prototype.append_ = function(element, opt_group) {
   var parent = opt_group || this.canvasElement;
-  parent.getElement().appendChild(element.getElement());
+  parent.getElement().appendChild(/** @type {!Node} */ (element.getElement()));
 };
 
 
@@ -210,7 +201,7 @@ goog.graphics.SvgGraphics.prototype.setElementFill = function(element, fill) {
       });
 
       var gstyle = 'stop-color:' + fill.getColor1();
-      if (goog.isNumber(fill.getOpacity1())) {
+      if (typeof fill.getOpacity1() === 'number') {
         gstyle += ';stop-opacity:' + fill.getOpacity1();
       }
       var stop1 =
@@ -223,7 +214,7 @@ goog.graphics.SvgGraphics.prototype.setElementFill = function(element, fill) {
       //   gstyles += 'opacity:' + fill.getOpacity() + ';'
       // }
       gstyle = 'stop-color:' + fill.getColor2();
-      if (goog.isNumber(fill.getOpacity2())) {
+      if (typeof fill.getOpacity2() === 'number') {
         gstyle += ';stop-opacity:' + fill.getOpacity2();
       }
       var stop2 =
@@ -261,7 +252,7 @@ goog.graphics.SvgGraphics.prototype.setElementStroke = function(
     svgElement.setAttribute('stroke-opacity', stroke.getOpacity());
 
     var width = stroke.getWidth();
-    if (goog.isString(width) && width.indexOf('px') != -1) {
+    if (typeof width === 'string' && width.indexOf('px') != -1) {
       svgElement.setAttribute(
           'stroke-width', parseFloat(width) / this.getPixelScaleX());
     } else {
@@ -396,6 +387,7 @@ goog.graphics.SvgGraphics.prototype.setViewBox_ = function() {
  * Updates the transform of the root element to fake a viewBox.  Should only
  * be called when useManualViewbox_ is set.
  * @private
+ * @suppress {strictPrimitiveOperators} Part of the go/strict_warnings_migration
  */
 goog.graphics.SvgGraphics.prototype.updateManualViewBox_ = function() {
   if (!this.isInDocument() ||
@@ -447,8 +439,8 @@ goog.graphics.SvgGraphics.prototype.getPixelSize = function() {
   // compute the size manually if it is percentage based.
   var width = this.width;
   var height = this.height;
-  var computeWidth = goog.isString(width) && width.indexOf('%') != -1;
-  var computeHeight = goog.isString(height) && height.indexOf('%') != -1;
+  var computeWidth = (typeof width === 'string') && width.indexOf('%') != -1;
+  var computeHeight = (typeof height === 'string') && height.indexOf('%') != -1;
 
   if (!this.isInDocument() && (computeWidth || computeHeight)) {
     return null;
@@ -783,7 +775,7 @@ goog.graphics.SvgGraphics.prototype.removeDef = function(defKey) {
   var id = this.getDef(defKey);
   if (id) {
     var element = this.dom_.getElement(id);
-    this.defsElement_.removeChild(element);
+    this.defsElement_.removeChild(/** @type {!Node} */ (element));
     delete this.defs_[defKey];
   }
 };

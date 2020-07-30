@@ -1,16 +1,8 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview
@@ -32,7 +24,6 @@
  *
  * FastDataNodes can be constructed from JSON-like objects via the function
  * goog.ds.FastDataNode.fromJs.
-
  */
 
 goog.provide('goog.ds.AbstractFastDataNode');
@@ -152,7 +143,7 @@ goog.ds.FastDataNode.prototype.extendWith = function(object) {
  * @return {!goog.ds.AbstractFastDataNode} Data node representing object.
  */
 goog.ds.FastDataNode.fromJs = function(object, dataName, opt_parent) {
-  if (goog.isArray(object)) {
+  if (Array.isArray(object)) {
     return new goog.ds.FastListNode(object, dataName, opt_parent);
   } else if (goog.isObject(object)) {
     return new goog.ds.FastDataNode(object, dataName, opt_parent);
@@ -280,7 +271,7 @@ goog.ds.FastDataNode.prototype.isList = function() {
 /**
  * Returns a javascript object representation of this data node. You should
  * not modify the object returned by this function.
- * @return {!Object} Javascript object representation of this data node.
+ * @return {!Object} JavaScript object representation of this data node.
  */
 goog.ds.FastDataNode.prototype.getJsObject = function() {
   var result = {};
@@ -296,7 +287,7 @@ goog.ds.FastDataNode.prototype.getJsObject = function() {
 
 /**
  * Creates a deep copy of this data node.
- * @return {goog.ds.FastDataNode} Clone of this data node.
+ * @return {!goog.ds.FastDataNode} Clone of this data node.
  */
 goog.ds.FastDataNode.prototype.clone = function() {
   return /** @type {!goog.ds.FastDataNode} */ (
@@ -327,7 +318,7 @@ goog.ds.FastDataNode.prototype.add = function(value) {
  * @override
  */
 goog.ds.FastDataNode.prototype.get = function(opt_key) {
-  if (!goog.isDef(opt_key)) {
+  if (opt_key === undefined) {
     // if there is no key, DataNode#get was called
     return this;
   } else {
@@ -432,7 +423,7 @@ goog.ds.PrimitiveFastDataNode.prototype.get = function() {
  * @override
  */
 goog.ds.PrimitiveFastDataNode.prototype.set = function(value) {
-  if (goog.isArray(value) || goog.isObject(value)) {
+  if (Array.isArray(value) || goog.isObject(value)) {
     throw new Error('can only set PrimitiveFastDataNode to primitive values');
   }
   this.value_ = value;
@@ -498,7 +489,7 @@ goog.ds.PrimitiveFastDataNode.prototype.isList = function() {
 /**
  * Returns a javascript object representation of this data node. You should
  * not modify the object returned by this function.
- * @return {*} Javascript object representation of this data node.
+ * @return {*} JavaScript object representation of this data node.
  */
 goog.ds.PrimitiveFastDataNode.prototype.getJsObject = function() {
   return this.value_;
@@ -685,7 +676,7 @@ goog.ds.FastListNode.prototype.isList = function() {
 /**
  * Returns a javascript object representation of this data node. You should
  * not modify the object returned by this function.
- * @return {!Object} Javascript object representation of this data node.
+ * @return {!Object} JavaScript object representation of this data node.
  */
 goog.ds.FastListNode.prototype.getJsObject = function() {
   var result = [];
@@ -730,7 +721,7 @@ goog.ds.FastListNode.prototype.add = function(value) {
  */
 goog.ds.FastListNode.prototype.get = function(opt_key) {
   // if there are no arguments, DataNode.get was called
-  if (!goog.isDef(opt_key)) {
+  if (opt_key === undefined) {
     return this.values_;
   } else {
     return this.getChildNode(opt_key);

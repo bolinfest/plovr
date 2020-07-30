@@ -1,29 +1,19 @@
-// Copyright 2011 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Provides a convenient API for data persistence using a selected
  * data storage mechanism.
- *
  */
 
 goog.provide('goog.storage.Storage');
 
 goog.require('goog.json');
 goog.require('goog.storage.ErrorCode');
-
-goog.forwardDeclare('goog.storage.mechanism.Mechanism');
+goog.requireType('goog.storage.mechanism.Mechanism');
 
 
 
@@ -52,7 +42,7 @@ goog.storage.Storage = function(mechanism) {
  * @param {*} value The value to serialize to a string and save.
  */
 goog.storage.Storage.prototype.set = function(key, value) {
-  if (!goog.isDef(value)) {
+  if (value === undefined) {
     this.mechanism.remove(key);
     return;
   }
@@ -77,7 +67,7 @@ goog.storage.Storage.prototype.get = function(key) {
     // details.
     return undefined;
   }
-  if (goog.isNull(json)) {
+  if (json === null) {
     return undefined;
   }
 

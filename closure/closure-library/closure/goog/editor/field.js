@@ -1,24 +1,14 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-// All Rights Reserved.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Class to encapsulate an editable field.  Always uses an
  * iframe to contain the editable area, never inherits the style of the
  * surrounding page, and is always a fixed height.
  *
- * @author nicksantos@google.com (Nick Santos)
  * @see ../demos/editor/editor.html
  * @see ../demos/editor/field_basic.html
  */
@@ -38,7 +28,7 @@ goog.require('goog.dom.classlist');
 goog.require('goog.dom.safe');
 goog.require('goog.editor.BrowserFeature');
 goog.require('goog.editor.Command');
-goog.require('goog.editor.Plugin');
+goog.require('goog.editor.PluginImpl');
 goog.require('goog.editor.icontent');
 goog.require('goog.editor.icontent.FieldFormatInfo');
 goog.require('goog.editor.icontent.FieldStyleInfo');
@@ -106,7 +96,7 @@ goog.editor.Field = function(id, opt_doc) {
 
   /**
    * Dom helper for the editable node.
-   * @type {goog.dom.DomHelper}
+   * @type {?goog.dom.DomHelper}
    * @protected
    */
   this.editableDomHelper = null;
@@ -120,14 +110,14 @@ goog.editor.Field = function(id, opt_doc) {
 
 
   /**
-   * Plugins registered on this field, indexed by the goog.editor.Plugin.Op
+   * Plugins registered on this field, indexed by the goog.editor.PluginImpl.Op
    * that they support.
-   * @type {Object<Array<goog.editor.Plugin>>}
+   * @type {!Object<!Array<!goog.editor.PluginImpl>>}
    * @private
    */
   this.indexedPlugins_ = {};
 
-  for (var op in goog.editor.Plugin.OPCODE) {
+  for (var op in goog.editor.PluginImpl.OPCODE) {
     this.indexedPlugins_[op] = [];
   }
 
@@ -152,6 +142,7 @@ goog.editor.Field = function(id, opt_doc) {
   this.delayedChangeTimer_ = new goog.async.Delay(
       this.dispatchDelayedChange_, goog.editor.Field.DELAYED_CHANGE_FREQUENCY,
       this);
+  this.registerDisposable(this.delayedChangeTimer_);
 
   /** @private */
   this.debouncedEvents_ = {};
@@ -163,6 +154,7 @@ goog.editor.Field = function(id, opt_doc) {
     /** @private */
     this.changeTimerGecko_ = new goog.async.Delay(
         this.handleChange, goog.editor.Field.CHANGE_FREQUENCY, this);
+    this.registerDisposable(this.changeTimerGecko_);
   }
 
   /**
@@ -210,7 +202,7 @@ goog.inherits(goog.editor.Field, goog.events.EventTarget);
 
 /**
  * The editable dom node.
- * @type {Element}
+ * @type {?Element}
  * TODO(user): Make this private!
  */
 goog.editor.Field.prototype.field = null;
@@ -495,16 +487,16 @@ goog.editor.Field.prototype.addListener = function(
 /**
  * Returns the registered plugin with the given classId.
  * @param {string} classId classId of the plugin.
- * @return {goog.editor.Plugin} Registered plugin with the given classId.
+ * @return {?goog.editor.PluginImpl} Registered plugin with the given classId.
  */
 goog.editor.Field.prototype.getPluginByClassId = function(classId) {
-  return this.plugins_[classId];
+  return this.plugins_[classId] || null;
 };
 
 
 /**
  * Registers the plugin with the editable field.
- * @param {goog.editor.Plugin} plugin The plugin to register.
+ * @param {!goog.editor.PluginImpl} plugin The plugin to register.
  */
 goog.editor.Field.prototype.registerPlugin = function(plugin) {
   var classId = plugin.getTrogClassId();
@@ -517,8 +509,8 @@ goog.editor.Field.prototype.registerPlugin = function(plugin) {
   // Only key events and execute should have these has* functions with a custom
   // handler array since they need to be very careful about performance.
   // The rest of the plugin hooks should be event-based.
-  for (var op in goog.editor.Plugin.OPCODE) {
-    var opcode = goog.editor.Plugin.OPCODE[op];
+  for (var op in goog.editor.PluginImpl.OPCODE) {
+    var opcode = goog.editor.PluginImpl.OPCODE[op];
     if (plugin[opcode]) {
       this.indexedPlugins_[op].push(plugin);
     }
@@ -534,9 +526,13 @@ goog.editor.Field.prototype.registerPlugin = function(plugin) {
 
 /**
  * Unregisters the plugin with this field.
- * @param {goog.editor.Plugin} plugin The plugin to unregister.
+ * @param {?goog.editor.PluginImpl} plugin The plugin to unregister.
  */
 goog.editor.Field.prototype.unregisterPlugin = function(plugin) {
+  if (!plugin) {
+    return;
+  }
+
   var classId = plugin.getTrogClassId();
   if (!this.plugins_[classId]) {
     goog.log.error(
@@ -544,8 +540,8 @@ goog.editor.Field.prototype.unregisterPlugin = function(plugin) {
   }
   delete this.plugins_[classId];
 
-  for (var op in goog.editor.Plugin.OPCODE) {
-    var opcode = goog.editor.Plugin.OPCODE[op];
+  for (var op in goog.editor.PluginImpl.OPCODE) {
+    var opcode = goog.editor.PluginImpl.OPCODE[op];
     if (plugin[opcode]) {
       goog.array.remove(this.indexedPlugins_[op], plugin);
     }
@@ -591,7 +587,7 @@ goog.editor.Field.prototype.resetOriginalElemProperties = function() {
     goog.dom.setProperties(field, {'style': cssText});
   }
 
-  if (goog.isString(this.originalFieldLineHeight_)) {
+  if (typeof (this.originalFieldLineHeight_) === 'string') {
     goog.style.setStyle(field, 'lineHeight', this.originalFieldLineHeight_);
     this.originalFieldLineHeight_ = null;
   }
@@ -907,6 +903,7 @@ goog.editor.Field.prototype.setupChangeListeners_ = function() {
   this.selectionChangeTimer_ = new goog.async.Delay(
       this.handleSelectionChangeTimer_,
       goog.editor.Field.SELECTION_CHANGE_FREQUENCY_, this);
+  this.registerDisposable(this.selectionChangeTimer_);
 
   if (this.followLinkInNewWindow_) {
     this.addListener(
@@ -1200,7 +1197,7 @@ goog.editor.Field.POTENTIAL_SHORTCUT_KEYCODES_ = {
  * Calls all the plugins of the given operation, in sequence, with the
  * given arguments. This is short-circuiting: once one plugin cancels
  * the event, no more plugins will be invoked.
- * @param {goog.editor.Plugin.Op} op A plugin op.
+ * @param {goog.editor.PluginImpl.Op} op A plugin op.
  * @param {...*} var_args The arguments to the plugin.
  * @return {boolean} True if one of the plugins cancel the event, false
  *    otherwise.
@@ -1213,8 +1210,9 @@ goog.editor.Field.prototype.invokeShortCircuitingOp_ = function(op, var_args) {
     // If the plugin returns true, that means it handled the event and
     // we shouldn't propagate to the other plugins.
     var plugin = plugins[i];
-    if ((plugin.isEnabled(this) || goog.editor.Plugin.IRREPRESSIBLE_OPS[op]) &&
-        plugin[goog.editor.Plugin.OPCODE[op]].apply(plugin, argList)) {
+    if ((plugin.isEnabled(this) ||
+         goog.editor.PluginImpl.IRREPRESSIBLE_OPS[op]) &&
+        plugin[goog.editor.PluginImpl.OPCODE[op]].apply(plugin, argList)) {
       // Only one plugin is allowed to handle the event. If for some reason
       // a plugin wants to handle it and still allow other plugins to handle
       // it, it shouldn't return true.
@@ -1228,7 +1226,7 @@ goog.editor.Field.prototype.invokeShortCircuitingOp_ = function(op, var_args) {
 
 /**
  * Invoke this operation on all plugins with the given arguments.
- * @param {goog.editor.Plugin.Op} op A plugin op.
+ * @param {!goog.editor.PluginImpl.Op} op A plugin op.
  * @param {...*} var_args The arguments to the plugin.
  * @private
  */
@@ -1237,8 +1235,9 @@ goog.editor.Field.prototype.invokeOp_ = function(op, var_args) {
   var argList = goog.array.slice(arguments, 1);
   for (var i = 0; i < plugins.length; ++i) {
     var plugin = plugins[i];
-    if (plugin.isEnabled(this) || goog.editor.Plugin.IRREPRESSIBLE_OPS[op]) {
-      plugin[goog.editor.Plugin.OPCODE[op]].apply(plugin, argList);
+    if (plugin.isEnabled(this) ||
+        goog.editor.PluginImpl.IRREPRESSIBLE_OPS[op]) {
+      plugin[goog.editor.PluginImpl.OPCODE[op]].apply(plugin, argList);
     }
   }
 };
@@ -1247,7 +1246,7 @@ goog.editor.Field.prototype.invokeOp_ = function(op, var_args) {
 /**
  * Reduce this argument over all plugins. The result of each plugin invocation
  * will be passed to the next plugin invocation. See goog.array.reduce.
- * @param {goog.editor.Plugin.Op} op A plugin op.
+ * @param {goog.editor.PluginImpl.Op} op A plugin op.
  * @param {string} arg The argument to reduce. For now, we assume it's a
  *     string, but we should widen this later if there are reducing
  *     plugins that don't operate on strings.
@@ -1261,8 +1260,10 @@ goog.editor.Field.prototype.reduceOp_ = function(op, arg, var_args) {
   var argList = goog.array.slice(arguments, 1);
   for (var i = 0; i < plugins.length; ++i) {
     var plugin = plugins[i];
-    if (plugin.isEnabled(this) || goog.editor.Plugin.IRREPRESSIBLE_OPS[op]) {
-      argList[0] = plugin[goog.editor.Plugin.OPCODE[op]].apply(plugin, argList);
+    if (plugin.isEnabled(this) ||
+        goog.editor.PluginImpl.IRREPRESSIBLE_OPS[op]) {
+      argList[0] =
+          plugin[goog.editor.PluginImpl.OPCODE[op]].apply(plugin, argList);
     }
   }
   return argList[0];
@@ -1292,7 +1293,7 @@ goog.editor.Field.prototype.injectContents = function(contents, field) {
  */
 goog.editor.Field.prototype.getInjectableContents = function(contents, styles) {
   return this.reduceOp_(
-      goog.editor.Plugin.Op.PREPARE_CONTENTS_HTML, contents || '', styles);
+      goog.editor.PluginImpl.Op.PREPARE_CONTENTS_HTML, contents || '', styles);
 };
 
 
@@ -1313,7 +1314,7 @@ goog.editor.Field.prototype.handleKeyDown_ = function(e) {
     }
   }
 
-  if (!this.invokeShortCircuitingOp_(goog.editor.Plugin.Op.KEYDOWN, e) &&
+  if (!this.invokeShortCircuitingOp_(goog.editor.PluginImpl.Op.KEYDOWN, e) &&
       goog.editor.BrowserFeature.USES_KEYDOWN) {
     this.handleKeyboardShortcut_(e);
   }
@@ -1337,7 +1338,7 @@ goog.editor.Field.prototype.handleKeyPress_ = function(e) {
     this.dispatchBeforeChange();
   }
 
-  if (!this.invokeShortCircuitingOp_(goog.editor.Plugin.Op.KEYPRESS, e) &&
+  if (!this.invokeShortCircuitingOp_(goog.editor.PluginImpl.Op.KEYPRESS, e) &&
       !goog.editor.BrowserFeature.USES_KEYDOWN) {
     this.handleKeyboardShortcut_(e);
   }
@@ -1358,7 +1359,7 @@ goog.editor.Field.prototype.handleKeyUp_ = function(e) {
     this.handleChange();
   }
 
-  this.invokeShortCircuitingOp_(goog.editor.Plugin.Op.KEYUP, e);
+  this.invokeShortCircuitingOp_(goog.editor.PluginImpl.Op.KEYUP, e);
   this.maybeStartSelectionChangeTimer_(e);
 };
 
@@ -1396,24 +1397,23 @@ goog.editor.Field.prototype.maybeStartSelectionChangeTimer_ = function(e) {
 goog.editor.Field.prototype.handleKeyboardShortcut_ = function(e) {
   // Alt key is used for i18n languages to enter certain characters. like
   // control + alt + z (used for IMEs) and control + alt + s for Polish.
-  // So we don't invoke handleKeyboardShortcut at all for alt keys.
-  if (e.altKey) {
+  // So we only invoke handleKeyboardShortcut for alt + shift only.
+  if (e.altKey && !e.shiftKey) {
     return;
   }
-
-  var isModifierPressed = goog.userAgent.MAC ? e.metaKey : e.ctrlKey;
-  if (isModifierPressed ||
+  // TODO(user): goog.events.KeyHandler uses much more complicated logic
+  // to determine key.  Consider changing to what they do.
+  var key = e.charCode || e.keyCode;
+  var stringKey = String.fromCharCode(key).toLowerCase();
+  var isPrimaryModifierPressed = goog.userAgent.MAC ? e.metaKey : e.ctrlKey;
+  var isAltShiftPressed = e.altKey && e.shiftKey;
+  if (isPrimaryModifierPressed || isAltShiftPressed ||
       goog.editor.Field.POTENTIAL_SHORTCUT_KEYCODES_[e.keyCode]) {
-    // TODO(user): goog.events.KeyHandler uses much more complicated logic
-    // to determine key.  Consider changing to what they do.
-    var key = e.charCode || e.keyCode;
-
     if (key == 17) {  // Ctrl key
       // In IE and Webkit pressing Ctrl key itself results in this event.
       return;
     }
 
-    var stringKey = String.fromCharCode(key).toLowerCase();
     // Ctrl+Cmd+Space generates a charCode for a backtick on Mac Firefox, but
     // has the correct string key in the browser event.
     if (goog.userAgent.MAC && goog.userAgent.GECKO && stringKey == '`' &&
@@ -1427,7 +1427,8 @@ goog.editor.Field.prototype.handleKeyboardShortcut_ = function(e) {
     }
 
     if (this.invokeShortCircuitingOp_(
-            goog.editor.Plugin.Op.SHORTCUT, e, stringKey, isModifierPressed)) {
+            goog.editor.PluginImpl.Op.SHORTCUT, e, stringKey,
+            isPrimaryModifierPressed)) {
       e.preventDefault();
       // We don't call stopPropagation as some other handler outside of
       // trogedit might need it.
@@ -1448,7 +1449,7 @@ goog.editor.Field.prototype.execCommand = function(command, var_args) {
   var args = arguments;
   var result;
 
-  var plugins = this.indexedPlugins_[goog.editor.Plugin.Op.EXEC_COMMAND];
+  var plugins = this.indexedPlugins_[goog.editor.PluginImpl.Op.EXEC_COMMAND];
   for (var i = 0; i < plugins.length; ++i) {
     // If the plugin supports the command, that means it handled the
     // event and we shouldn't propagate to the other plugins.
@@ -1472,7 +1473,7 @@ goog.editor.Field.prototype.execCommand = function(command, var_args) {
  */
 goog.editor.Field.prototype.queryCommandValue = function(commands) {
   var isEditable = this.isLoaded() && this.isSelectionEditable();
-  if (goog.isString(commands)) {
+  if (typeof commands === 'string') {
     return this.queryCommandValueInternal_(commands, isEditable);
   } else {
     var state = {};
@@ -1496,7 +1497,7 @@ goog.editor.Field.prototype.queryCommandValue = function(commands) {
  */
 goog.editor.Field.prototype.queryCommandValueInternal_ = function(
     command, isEditable) {
-  var plugins = this.indexedPlugins_[goog.editor.Plugin.Op.QUERY_COMMAND];
+  var plugins = this.indexedPlugins_[goog.editor.PluginImpl.Op.QUERY_COMMAND];
   for (var i = 0; i < plugins.length; ++i) {
     var plugin = plugins[i];
     if (plugin.isEnabled(this) && plugin.isSupportedCommand(command) &&
@@ -1652,7 +1653,7 @@ goog.editor.Field.prototype.dispatchSelectionChangeEvent = function(
   });
 
   this.invokeShortCircuitingOp_(
-      goog.editor.Plugin.Op.SELECTION, opt_e, opt_target);
+      goog.editor.PluginImpl.Op.SELECTION, opt_e, opt_target);
 };
 
 
@@ -2134,9 +2135,9 @@ goog.editor.Field.prototype.getCleanContents = function() {
   var fieldCopy = this.getFieldCopy();
 
   // Allow the plugins to handle their cleanup.
-  this.invokeOp_(goog.editor.Plugin.Op.CLEAN_CONTENTS_DOM, fieldCopy);
+  this.invokeOp_(goog.editor.PluginImpl.Op.CLEAN_CONTENTS_DOM, fieldCopy);
   return this.reduceOp_(
-      goog.editor.Plugin.Op.CLEAN_CONTENTS_HTML, fieldCopy.innerHTML);
+      goog.editor.PluginImpl.Op.CLEAN_CONTENTS_HTML, fieldCopy.innerHTML);
 };
 
 
@@ -2168,7 +2169,7 @@ goog.editor.Field.prototype.getFieldCopy = function() {
  * @param {boolean} addParas Boolean to specify whether to add paragraphs
  *    to long fields.
  * @param {?goog.html.SafeHtml} html html to insert.  If html=null, then this
- *    defaults to a nsbp for mozilla and an empty string for IE.
+ *    defaults to a nbsp for mozilla and an empty string for IE.
  * @param {boolean=} opt_dontFireDelayedChange True to make this content change
  *    not fire a delayed change event.
  * @param {boolean=} opt_applyLorem Whether to apply lorem ipsum styles.
@@ -2538,7 +2539,7 @@ goog.editor.Field.prototype.makeUneditable = function(opt_skipRestore) {
   // If html is provided, copy it back and reset the properties on the field
   // so that the original node will have the same properties as it did before
   // it was made editable.
-  if (goog.isString(html)) {
+  if (typeof html === 'string') {
     goog.editor.node.replaceInnerHtml(field, html);
     this.resetOriginalElemProperties();
   }
@@ -2583,7 +2584,7 @@ goog.editor.Field.prototype.restoreDom = function() {
  * @protected
  */
 goog.editor.Field.prototype.shouldLoadAsynchronously = function() {
-  if (!goog.isDef(this.isHttps_)) {
+  if (this.isHttps_ === undefined) {
     this.isHttps_ = false;
 
     if (goog.userAgent.IE && this.usesIframe()) {
@@ -2632,7 +2633,7 @@ goog.editor.Field.prototype.makeIframeField_ = function(opt_iframeSrc) {
     // element is still in its original position in DOM.
     var styles = {};
     html = this.reduceOp_(
-        goog.editor.Plugin.Op.PREPARE_CONTENTS_HTML, html, styles);
+        goog.editor.PluginImpl.Op.PREPARE_CONTENTS_HTML, html, styles);
 
     var iframe = this.originalDomHelper.createDom(
         goog.dom.TagName.IFRAME, this.getIframeAttributes());

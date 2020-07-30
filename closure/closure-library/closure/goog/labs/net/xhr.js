@@ -1,16 +1,8 @@
-// Copyright 2011 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 
 /**
@@ -18,7 +10,6 @@
  * via XMLHttpRequest.  Instead of mirroring the XHR interface and exposing
  * events, results are used as a way to pass a "promise" of the response to
  * interested parties.
- *
  */
 
 goog.provide('goog.labs.net.xhr');
@@ -270,7 +261,8 @@ xhr.send = function(method, url, data, opt_options) {
       options.xmlHttpFactory.createInstance() :
       goog.net.XmlHttp();
 
-  var result = new goog.Promise(function(resolve, reject) {
+  var result = new goog.Promise(/** @suppress {strictPrimitiveOperators} Part of the go/strict_warnings_migration */
+                                function(resolve, reject) {
     var timer;
 
     try {
@@ -304,7 +296,7 @@ xhr.send = function(method, url, data, opt_options) {
     if (options.headers) {
       for (var key in options.headers) {
         var value = options.headers[key];
-        if (goog.isDefAndNotNull(value)) {
+        if (value != null) {
           request.setRequestHeader(key, value);
         }
       }
@@ -374,7 +366,7 @@ xhr.send = function(method, url, data, opt_options) {
 
 /**
  * @param {string} url The URL to test.
- * @return {boolean} Whether the effective scheme is HTTP or HTTPs.
+ * @return {boolean} Whether the effective scheme is HTTP or HTTPS.
  * @private
  */
 xhr.isEffectiveSchemeHttp_ = function(url) {
@@ -384,13 +376,23 @@ xhr.isEffectiveSchemeHttp_ = function(url) {
   return scheme == 'http' || scheme == 'https' || scheme == '';
 };
 
+/**
+ * @param {string} responseText
+ * @param {string=} opt_xssiPrefix Prefix used for protecting against XSSI
+ *     attacks, which should be removed before parsing the response as JSON.
+ * @return {!Object} JSON-parsed value of the original responseText.
+ */
+xhr.parseJson = function(responseText, opt_xssiPrefix) {
+  return xhr.parseJson_(responseText, {xssiPrefix: opt_xssiPrefix});
+};
+
 
 /**
  * JSON-parses the given response text, returning an Object.
  *
  * @param {string} responseText Response text.
  * @param {xhr.Options|undefined} options The options object.
- * @return {Object} The JSON-parsed value of the original responseText.
+ * @return {!Object} The JSON-parsed value of the original responseText.
  * @private
  */
 xhr.parseJson_ = function(responseText, options) {

@@ -1,24 +1,14 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Abstract Base Class for Drag and Drop.
  *
  * Provides functionality for implementing drag and drop classes. Also provides
  * support classes and events.
- *
- * @author eae@google.com (Emil A Eklund)
  */
 
 goog.provide('goog.fx.AbstractDragDrop');
@@ -411,7 +401,7 @@ goog.fx.AbstractDragDrop.prototype.startDrag = function(event, item) {
   var el = item.getCurrentDragElement();
   this.dragEl_ = this.createDragElement(el);
   var doc = goog.dom.getOwnerDocument(el);
-  doc.body.appendChild(this.dragEl_);
+  doc.body.appendChild(/** @type {!Node} */ (this.dragEl_));
 
   this.dragger_ = this.createDraggerFor(el, this.dragEl_, event);
   this.dragger_.setScrollTarget(this.scrollTarget_);
@@ -1070,7 +1060,7 @@ goog.fx.AbstractDragDrop.prototype.maybeCreateDummyTargetForPosition_ =
     // If both clippings are possible, choose one that gives us larger distance
     // to mouse pointer (mark the shorter clipping as impossible, by setting it
     // to null).
-    if (!goog.isNull(horizontalClip) && !goog.isNull(verticalClip)) {
+    if (horizontalClip !== null && verticalClip !== null) {
       if (Math.abs(horizontalClip - x) > Math.abs(verticalClip - y)) {
         verticalClip = null;
       } else {
@@ -1080,13 +1070,13 @@ goog.fx.AbstractDragDrop.prototype.maybeCreateDummyTargetForPosition_ =
 
     // Clip none or one of fake target box sides (at most one clipping
     // coordinate can be active).
-    if (!goog.isNull(horizontalClip)) {
+    if (horizontalClip !== null) {
       if (horizontalClip <= x) {
         fakeTargetBox.left = horizontalClip;
       } else {
         fakeTargetBox.right = horizontalClip;
       }
-    } else if (!goog.isNull(verticalClip)) {
+    } else if (verticalClip !== null) {
       if (verticalClip <= y) {
         fakeTargetBox.top = verticalClip;
       } else {
@@ -1171,7 +1161,10 @@ goog.fx.AbstractDragDrop.prototype.getEventPosition = function(event) {
 };
 
 
-/** @override */
+/**
+ * @override
+ * @protected
+ */
 goog.fx.AbstractDragDrop.prototype.disposeInternal = function() {
   goog.fx.AbstractDragDrop.base(this, 'disposeInternal');
   this.removeItems();
@@ -1568,8 +1561,17 @@ goog.fx.ScrollableContainer_ = function(element) {
 
   /**
    * The space occupied by the container.
-   * @type {goog.math.Box}
+   * @type {?goog.math.Box}
    * @private
    */
   this.box_ = null;
+};
+
+
+/**
+ * Test-only exports.
+ * @const
+ */
+goog.fx.AbstractDragDrop.TEST_ONLY = {
+  ActiveDropTarget: goog.fx.ActiveDropTarget_,
 };

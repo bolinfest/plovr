@@ -1,22 +1,12 @@
-// Copyright 2009 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Provides facilities for creating and querying tweaks.
  * @see http://code.google.com/p/closure-library/wiki/UsingTweaks
- *
- * @author agrieve@google.com (Andrew Grieve)
  */
 
 goog.provide('goog.tweak');
@@ -47,7 +37,7 @@ goog.tweak.getCompilerOverrides_ = function() {
 
 /**
  * The global reference to the registry, if it exists.
- * @type {goog.tweak.Registry}
+ * @type {?goog.tweak.Registry}
  * @private
  */
 goog.tweak.registry_ = null;
@@ -55,7 +45,7 @@ goog.tweak.registry_ = null;
 
 /**
  * The boolean group set by beginBooleanGroup and cleared by endBooleanGroup.
- * @type {goog.tweak.BooleanGroup}
+ * @type {?goog.tweak.BooleanGroup}
  * @private
  */
 goog.tweak.activeBooleanGroup_ = null;
@@ -115,14 +105,14 @@ goog.tweak.applyConfigParams_ = function(entry, configParams) {
     }
     delete configParams.validValues;
   }
-  if (goog.isDef(configParams.paramName)) {
+  if (configParams.paramName !== undefined) {
     goog.asserts.assertInstanceof(
         entry, goog.tweak.BaseSetting, 'Cannot set paramName on tweak: %s',
         entry.getId());
     entry.setParamName(configParams.paramName);
     delete configParams.paramName;
   }
-  if (goog.isDef(configParams.restartRequired)) {
+  if (configParams.restartRequired !== undefined) {
     entry.setRestartRequired(configParams.restartRequired);
     delete configParams.restartRequired;
   }

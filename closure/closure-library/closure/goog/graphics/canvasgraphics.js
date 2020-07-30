@@ -1,21 +1,12 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 
 /**
  * @fileoverview CanvasGraphics sub class that uses the canvas tag for drawing.
- * @author robbyw@google.com (Robby Walker)
  */
 
 
@@ -257,8 +248,8 @@ goog.graphics.CanvasGraphics.prototype.getPixelSize = function() {
   // have to compute the size manually if it is percentage based.
   var width = this.width;
   var height = this.height;
-  var computeWidth = goog.isString(width) && width.indexOf('%') != -1;
-  var computeHeight = goog.isString(height) && height.indexOf('%') != -1;
+  var computeWidth = (typeof width === 'string') && width.indexOf('%') != -1;
+  var computeHeight = (typeof height === 'string') && height.indexOf('%') != -1;
 
   if (!this.isInDocument() && (computeWidth || computeHeight)) {
     return null;
@@ -330,7 +321,7 @@ goog.graphics.CanvasGraphics.prototype.clear = function() {
 
   // Remove all children (text nodes) except the canvas (which is at index 0)
   while (el.childNodes.length > 1) {
-    el.removeChild(el.lastChild);
+    el.removeChild(/** @type {!Node} */ (el.lastChild));
   }
 };
 
@@ -410,7 +401,7 @@ goog.graphics.CanvasGraphics.prototype.drawElement = function(element) {
     ctx.strokeStyle = stroke.getColor();
 
     var width = stroke.getWidth();
-    if (goog.isString(width) && width.indexOf('px') != -1) {
+    if (typeof width === 'string' && width.indexOf('px') != -1) {
       width = parseFloat(width) / this.getPixelScaleX();
     }
     ctx.lineWidth = width;

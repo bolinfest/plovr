@@ -1,23 +1,14 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Utility for running multiple test files that utilize the same
  * interface as goog.testing.TestRunner.  Each test is run in series and their
  * results aggregated.  The main usecase for the MultiTestRunner is to allow
  * the testing of all tests in a project locally.
- *
  */
 
 goog.setTestOnly('goog.testing.MultiTestRunner');
@@ -138,7 +129,7 @@ goog.testing.MultiTestRunner.prototype.basePath_ = '';
 
 /**
  * A set of tests that have finished.  All extant keys map to true.
- * @type {Object<boolean>}
+ * @type {?Object<boolean>}
  * @private
  */
 goog.testing.MultiTestRunner.prototype.finished_ = null;
@@ -228,8 +219,21 @@ goog.testing.MultiTestRunner.prototype.timeoutMs_ =
 
 
 /**
+ * @typedef {{
+ *   testFile: string,
+ *   success: ?boolean,
+ *   runTime: number,
+ *   totalTime: number,
+ *   numFilesLoaded: number
+ * }}
+ * @private
+ */
+goog.testing.MultiTestRunner.StatsType_;
+
+
+/**
  * An array of objects containing stats about the tests.
- * @type {Array<Object>?}
+ * @type {?Array<!goog.testing.MultiTestRunner.StatsType_>}
  * @private
  */
 goog.testing.MultiTestRunner.prototype.stats_ = null;
@@ -237,7 +241,7 @@ goog.testing.MultiTestRunner.prototype.stats_ = null;
 
 /**
  * Reference to the start button element.
- * @type {Element}
+ * @type {?HTMLButtonElement}
  * @private
  */
 goog.testing.MultiTestRunner.prototype.startButtonEl_ = null;
@@ -245,7 +249,7 @@ goog.testing.MultiTestRunner.prototype.startButtonEl_ = null;
 
 /**
  * Reference to the stop button element.
- * @type {Element}
+ * @type {?HTMLButtonElement}
  * @private
  */
 goog.testing.MultiTestRunner.prototype.stopButtonEl_ = null;
@@ -253,7 +257,7 @@ goog.testing.MultiTestRunner.prototype.stopButtonEl_ = null;
 
 /**
  * Reference to the log element.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.testing.MultiTestRunner.prototype.logEl_ = null;
@@ -261,7 +265,7 @@ goog.testing.MultiTestRunner.prototype.logEl_ = null;
 
 /**
  * Reference to the report element.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.testing.MultiTestRunner.prototype.reportEl_ = null;
@@ -269,7 +273,7 @@ goog.testing.MultiTestRunner.prototype.reportEl_ = null;
 
 /**
  * Reference to the stats element.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.testing.MultiTestRunner.prototype.statsEl_ = null;
@@ -277,7 +281,7 @@ goog.testing.MultiTestRunner.prototype.statsEl_ = null;
 
 /**
  * Reference to the progress bar's element.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.testing.MultiTestRunner.prototype.progressEl_ = null;
@@ -285,7 +289,7 @@ goog.testing.MultiTestRunner.prototype.progressEl_ = null;
 
 /**
  * Reference to the progress bar's inner row element.
- * @type {Element}
+ * @type {?HTMLTableRowElement}
  * @private
  */
 goog.testing.MultiTestRunner.prototype.progressRow_ = null;
@@ -293,7 +297,7 @@ goog.testing.MultiTestRunner.prototype.progressRow_ = null;
 
 /**
  * Reference to the log tab.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.testing.MultiTestRunner.prototype.logTabEl_ = null;
@@ -301,7 +305,7 @@ goog.testing.MultiTestRunner.prototype.logTabEl_ = null;
 
 /**
  * Reference to the report tab.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.testing.MultiTestRunner.prototype.reportTabEl_ = null;
@@ -309,7 +313,7 @@ goog.testing.MultiTestRunner.prototype.reportTabEl_ = null;
 
 /**
  * Reference to the stats tab.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.testing.MultiTestRunner.prototype.statsTabEl_ = null;
@@ -758,7 +762,7 @@ goog.testing.MultiTestRunner.prototype.processResult = function(frame) {
   }
 
   this.allTestResults_.push(frame.getTestResults());
-  this.stats_.push(stats);
+  this.stats_.push(/** @type {?} */ (stats));
   this.finished_[test] = true;
 
   var prefix = success ? '' : '*** FAILURE *** ';
@@ -1045,7 +1049,7 @@ goog.testing.MultiTestRunner.prototype.writeCurrentSummary_ = function() {
   var text = executed + ' of ' + total + ' tests executed.<br>' + passes +
       ' passed, ' + (executed - passes) + ' failed.<br>' +
       'Duration: ' + duration + 's.';
-  this.reportEl_.firstChild.innerHTML = text;
+  goog.dom.getFirstElementChild(this.reportEl_).innerHTML = text;
 };
 
 
@@ -1266,7 +1270,7 @@ goog.inherits(goog.testing.MultiTestRunner.TestFrame, goog.ui.Component);
 
 /**
  * Reference to the iframe.
- * @type {HTMLIFrameElement}
+ * @type {?HTMLIFrameElement}
  * @private
  */
 goog.testing.MultiTestRunner.TestFrame.prototype.iframeEl_ = null;
@@ -1402,7 +1406,7 @@ goog.testing.MultiTestRunner.TestFrame.prototype.getTestFile = function() {
 
 
 /**
- * @return {!Object} Stats about the test run.
+ * @return {!goog.testing.MultiTestRunner.StatsType_} Stats about the test run.
  */
 goog.testing.MultiTestRunner.TestFrame.prototype.getStats = function() {
   return {
@@ -1458,9 +1462,9 @@ goog.testing.MultiTestRunner.TestFrame.prototype.isSuccess = function() {
  */
 goog.testing.MultiTestRunner.TestFrame.prototype.finish_ = function() {
   this.totalTime_ = goog.now() - this.startTime_;
-  // TODO(user): Fire an event instead?
-  if (this.getParent() && this.getParent().processResult) {
-    this.getParent().processResult(this);
+  var parent = this.getParent();
+  if (parent instanceof goog.testing.MultiTestRunner) {
+    parent.processResult(this);
   }
 };
 

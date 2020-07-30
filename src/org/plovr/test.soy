@@ -1,12 +1,10 @@
 {namespace org.plovr}
 
-/**
- * @param title
- * @param baseJsUrl
- * @param testJsUrl
- * @param requires
- */
-{template .test autoescape="deprecated-noncontextual"}
+{template .test}
+{@param title: ?}
+{@param baseJsUrl: ?}
+{@param testJsUrl: ?}
+{@param requires: ?}
 <!doctype html>
 <html>
 <head>
@@ -16,7 +14,7 @@
   <script src="{$baseJsUrl}"></script>
   <script>{\n}
     {for $r in $requires}
-      goog.require('{$r |escapeJsString}');{\n}
+      goog.require('{$r}');{\n}
     {/for}
   </script>
   <script src="{$testJsUrl}"></script>
@@ -26,49 +24,44 @@
 
 /**
  * A list of the _test.html URLs in this config.
- *
- * @param configId
- * @param tests array of paths to _test.html URLs
  */
-{template .listTests autoescape="deprecated-noncontextual"}
+{template .listTests}
+{@param configId: ?}
+{@param tests: ?}
 <!doctype html>
 <html>
 <head>
   <title>{$configId} Tests</title>
 </head>
 <body>
-{for $test in $tests}
-  {if isFirst($test)}
-    <h3>All Tests ({length($tests)})</h3>
+  <h3>All Tests ({length($tests)})</h3>
 
-    <a href="all">Run all tests</a>
-    <p>
+  <a href="all">Run all tests</a>
+  <p>
 
-    <ul>
-  {/if}
-
-    <li><a href="/test/{$configId}/{$test}">{$test}</a>
-
-  {if isLast($test)}
+  {if length($tests) == 0}
+    No tests for {$configId}.
+    {sp}
+    <a href="/">Back to the config list.</a>
+  {else}
+  
+    <ul>  
+    {for $test in $tests}
+      <li><a href="/test/{$configId}/{$test}">{$test}</a>
+    {/for}
     </ul>
   {/if}
 
-{ifempty}
-  No tests for {$configId}.
-  {sp}
-  <a href="/">Back to the config list.</a>
-{/for}
 </body>
 </html>
 {/template}
 
 /**
  * A test runner to run all of the _test.html URLs in this config.
- *
- * @param configId
- * @param tests array of paths to _test.html URLs
  */
-{template .all autoescape="deprecated-noncontextual"}
+{template .all}
+{@param configId: ?}
+{@param tests: ?}
 <!doctype html>
 <html>
 <head>
@@ -87,12 +80,10 @@
 </html>
 {/template}
 
-/**
- * @param configId
- * @param baseJsUrl
- * @param tests array of paths to _test.html URLs
- */
-{template .testRunner autoescape="deprecated-noncontextual"}
+{template .testRunner}
+{@param configId: ?}
+{@param baseJsUrl: ?}
+{@param tests: ?}
 {call .testRunnerCss /}
 
 <h1>{$configId} - All JsUnit Tests</h1>
@@ -180,7 +171,7 @@ goog.require('goog.testing.MultiTestRunner');
 {/template}
 
 /***/
-{template .testRunnerCss autoescape="deprecated-noncontextual"}
+{template .testRunnerCss}
 {literal}
 <style>
 .goog-testrunner {

@@ -1,16 +1,8 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Drag Utilities.
@@ -208,7 +200,6 @@ goog.fx.Dragger = function(target, opt_handle, opt_limits) {
 goog.inherits(goog.fx.Dragger, goog.events.EventTarget);
 // Dragger is meant to be extended, but defines most properties on its
 // prototype, thus making it unsuitable for sealing.
-goog.tagUnsealableClass(goog.fx.Dragger);
 
 
 /**
@@ -420,7 +411,7 @@ goog.fx.Dragger.prototype.disposeInternal = function() {
  * @private
  */
 goog.fx.Dragger.prototype.isRightToLeft_ = function() {
-  if (!goog.isDef(this.rightToLeft_)) {
+  if (this.rightToLeft_ === undefined) {
     this.rightToLeft_ = goog.style.isRightToLeft(this.target);
   }
   return this.rightToLeft_;
@@ -800,13 +791,13 @@ goog.fx.DragEvent = function(
    * The real x-position of the drag if it has been limited
    * @type {number}
    */
-  this.left = goog.isDef(opt_actX) ? opt_actX : dragobj.deltaX;
+  this.left = (opt_actX !== undefined) ? opt_actX : dragobj.deltaX;
 
   /**
    * The real y-position of the drag if it has been limited
    * @type {number}
    */
-  this.top = goog.isDef(opt_actY) ? opt_actY : dragobj.deltaY;
+  this.top = (opt_actY !== undefined) ? opt_actY : dragobj.deltaY;
 
   /**
    * Reference to the drag object for this event

@@ -1,22 +1,13 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Menu where items can be filtered based on user keyboard input.
  * If a filter is specified only the items matching it will be displayed.
  *
- * @author eae@google.com (Emil A Eklund)
  * @see ../demos/filteredmenu.html
  */
 
@@ -55,7 +46,6 @@ goog.ui.FilteredMenu = function(opt_renderer, opt_domHelper) {
   goog.ui.Menu.call(this, opt_domHelper, opt_renderer);
 };
 goog.inherits(goog.ui.FilteredMenu, goog.ui.Menu);
-goog.tagUnsealableClass(goog.ui.FilteredMenu);
 
 
 /**
@@ -320,7 +310,7 @@ goog.ui.FilteredMenu.prototype.setFilter = function(str) {
  * @return {string} Current filter or an an empty string.
  */
 goog.ui.FilteredMenu.prototype.getFilter = function() {
-  return this.filterInput_ && goog.isString(this.filterInput_.value) ?
+  return this.filterInput_ && typeof this.filterInput_.value === 'string' ?
       this.filterInput_.value :
       '';
 };
@@ -481,7 +471,7 @@ goog.ui.FilteredMenu.prototype.filterItems_ = function(str) {
           if (pos) {
             pos++;
           }
-          this.boldContent_(child, pos, str.length);
+          this.boldContent(child, pos, str.length);
         } else {
           child.setVisible(false);
         }
@@ -502,9 +492,9 @@ goog.ui.FilteredMenu.prototype.filterItems_ = function(str) {
  * @param {!goog.ui.Control} child The control to bold content on.
  * @param {number} start The index at which to start bolding.
  * @param {number} len How many characters to bold.
- * @private
+ * @protected
  */
-goog.ui.FilteredMenu.prototype.boldContent_ = function(child, start, len) {
+goog.ui.FilteredMenu.prototype.boldContent = function(child, start, len) {
   var caption = child.getCaption();
   var boldedCaption;
   if (len == 0) {
@@ -573,26 +563,9 @@ goog.ui.FilteredMenu.prototype.setHighlightedIndex = function(index) {
   }
 
   if (el && goog.dom.contains(contentEl, el)) {
-    var contentTop = goog.userAgent.IE && !goog.userAgent.isVersionOrHigher(8) ?
-        0 :
-        contentEl.offsetTop;
-
-    // IE (tested on IE8) sometime does not scroll enough by about
-    // 1px. So we add 1px to the scroll amount. This still looks ok in
-    // other browser except for the most degenerate case (menu height <=
-    // item height).
-
-    // Scroll down if the highlighted item is below the bottom edge.
-    var diff = (el.offsetTop + el.offsetHeight - contentTop) -
-        (contentEl.clientHeight + contentEl.scrollTop) + 1;
-    contentEl.scrollTop += Math.max(diff, 0);
-
-    // Scroll up if the highlighted item is above the top edge.
-    diff = contentEl.scrollTop - (el.offsetTop - contentTop) + 1;
-    contentEl.scrollTop -= Math.max(diff, 0);
+    goog.style.scrollIntoContainerView(el, contentEl);
   }
 };
-
 
 /**
  * Handles clicks on the filter label. Focuses the input element.

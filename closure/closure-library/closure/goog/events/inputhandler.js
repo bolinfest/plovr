@@ -1,16 +1,8 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview An object that encapsulates text changed events for textareas
@@ -30,7 +22,6 @@
  *     trigger in emulation mode if text was modified by context menu commands
  *     such as 'Undo' and 'Delete'.
  * </ul>
- * @author arv@google.com (Erik Arvidsson)
  * @see ../demos/inputhandler.html
  */
 
@@ -119,6 +110,7 @@ goog.events.InputHandler.EventType = {
 /**
  * This handles the underlying events and dispatches a new event as needed.
  * @param {goog.events.BrowserEvent} e The underlying browser event.
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.events.InputHandler.prototype.handleEvent = function(e) {
   if (e.type == 'input') {
@@ -167,7 +159,8 @@ goog.events.InputHandler.prototype.handleEvent = function(e) {
     // of the element has changed, we need to postpone dispatching input event
     // until value is updated.
     this.cancelTimerIfSet_();
-    this.timer_ = goog.Timer.callOnce(function() {
+    this.timer_ = goog.Timer.callOnce(/** @suppress {strictMissingProperties} Part of the go/strict_warnings_migration */
+                                      function() {
       this.timer_ = null;
       if (this.element_.value != valueBeforeKey) {
         this.dispatchEvent(inputEvent);

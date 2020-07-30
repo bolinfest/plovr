@@ -1,22 +1,13 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Default list of locale specific country and language names.
  *
- * File generated from CLDR ver. 33
- *
+ * File generated from CLDR ver. 36
  */
 
 // clang-format off
@@ -213,11 +204,11 @@ goog.locale.defaultLocaleNameConstants = {
     'MF': 'St. Martin',
     'MG': 'Madagascar',
     'MH': 'Marshall Islands',
-    'MK': 'Macedonia (FYROM)',
+    'MK': 'North Macedonia',
     'ML': 'Mali',
     'MM': 'Myanmar (Burma)',
     'MN': 'Mongolia',
-    'MO': 'Macau',
+    'MO': 'Macao',
     'MP': 'Northern Mariana Islands',
     'MQ': 'Martinique',
     'MR': 'Mauritania',
@@ -283,7 +274,7 @@ goog.locale.defaultLocaleNameConstants = {
     'SV': 'El Salvador',
     'SX': 'Sint Maarten',
     'SY': 'Syria',
-    'SZ': 'Swaziland',
+    'SZ': 'Eswatini',
     'TA': 'Tristan da Cunha',
     'TC': 'Turks & Caicos Islands',
     'TD': 'Chad',
@@ -470,6 +461,7 @@ goog.locale.defaultLocaleNameConstants = {
     'fan': 'Fang',
     'fat': 'Fanti',
     'ff': 'Fulah',
+    'ff_Latn': 'Fulah (Latin)',
     'fi': 'Finnish',
     'fil': 'Filipino',
     'fj': 'Fijian',
@@ -646,7 +638,7 @@ goog.locale.defaultLocaleNameConstants = {
     'mt': 'Maltese',
     'mua': 'Mundang',
     'mul': 'Multiple languages',
-    'mus': 'Creek',
+    'mus': 'Muscogee',
     'mwl': 'Mirandese',
     'mwr': 'Marwari',
     'my': 'Burmese',
@@ -819,7 +811,6 @@ goog.locale.defaultLocaleNameConstants = {
     'uga': 'Ugaritic',
     'uk': 'Ukrainian',
     'umb': 'Umbundu',
-    'und': 'Unknown language',
     'ur': 'Urdu',
     'uz': 'Uzbek',
     'uz_Arab': 'Uzbek (Arabic)',

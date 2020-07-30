@@ -1,16 +1,8 @@
-// Copyright 2012 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Utilities for detecting, adding and removing classes.  Prefer
@@ -18,9 +10,8 @@
  * (DOMTokenList: http://dom.spec.whatwg.org/#domtokenlist) which is faster
  * and requires less code.
  *
- * Note: these utilities are meant to operate on HTMLElements
- * and may have unexpected behavior on elements with differing interfaces
- * (such as SVGElements).
+ * Note: these utilities are meant to operate on HTMLElements and SVGElements
+ * and may have unexpected behavior on elements with differing interfaces.
  */
 
 
@@ -33,7 +24,23 @@ goog.require('goog.array');
  * Override this define at build-time if you know your target supports it.
  * @define {boolean} Whether to use the classList property (DOMTokenList).
  */
-goog.define('goog.dom.classlist.ALWAYS_USE_DOM_TOKEN_LIST', false);
+goog.dom.classlist.ALWAYS_USE_DOM_TOKEN_LIST =
+    goog.define('goog.dom.classlist.ALWAYS_USE_DOM_TOKEN_LIST', false);
+
+
+/**
+ * A wrapper which ensures correct functionality when interacting with
+ * SVGElements
+ * @param {?Element} element DOM node to get the class name of.
+ * @return {string}
+ * @private
+ */
+goog.dom.classlist.getClassName_ = function(element) {
+  // If className is an instance of SVGAnimatedString use getAttribute
+  return typeof element.className == 'string' ?
+      element.className :
+      element.getAttribute && element.getAttribute('class') || '';
+};
 
 
 /**
@@ -46,11 +53,7 @@ goog.dom.classlist.get = function(element) {
     return element.classList;
   }
 
-  var className = element.className;
-  // Some types of elements don't have a className in IE (e.g. iframes).
-  // Furthermore, in Firefox, className is not a string when the element is
-  // an SVG element.
-  return goog.isString(className) && className.match(/\S+/g) || [];
+  return goog.dom.classlist.getClassName_(element).match(/\S+/g) || [];
 };
 
 
@@ -60,7 +63,13 @@ goog.dom.classlist.get = function(element) {
  * @param {string} className Class name(s) to apply to element.
  */
 goog.dom.classlist.set = function(element, className) {
-  element.className = className;
+  // If className is an instance of SVGAnimatedString use setAttribute
+  if ((typeof element.className) == 'string') {
+    element.className = className;
+    return;
+  } else if (element.setAttribute) {
+    element.setAttribute('class', className);
+  }
 };
 
 
@@ -94,8 +103,11 @@ goog.dom.classlist.add = function(element, className) {
 
   if (!goog.dom.classlist.contains(element, className)) {
     // Ensure we add a space if this is not the first class name added.
-    element.className +=
-        element.className.length > 0 ? (' ' + className) : className;
+    var oldClassName = goog.dom.classlist.getClassName_(element);
+    goog.dom.classlist.set(
+        element,
+        oldClassName +
+            (oldClassName.length > 0 ? (' ' + className) : className));
   }
 };
 
@@ -128,11 +140,11 @@ goog.dom.classlist.addAll = function(element, classesToAdd) {
       classesToAdd, function(className) { classMap[className] = true; });
 
   // Flatten the keys of the map into the className.
-  element.className = '';
+  var newClassName = '';
   for (var className in classMap) {
-    element.className +=
-        element.className.length > 0 ? (' ' + className) : className;
+    newClassName += newClassName.length > 0 ? (' ' + className) : className;
   }
+  goog.dom.classlist.set(element, newClassName);
 };
 
 
@@ -150,11 +162,15 @@ goog.dom.classlist.remove = function(element, className) {
 
   if (goog.dom.classlist.contains(element, className)) {
     // Filter out the class name.
-    element.className = goog.array
-                            .filter(
-                                goog.dom.classlist.get(element),
-                                function(c) { return c != className; })
-                            .join(' ');
+    goog.dom.classlist.set(
+        element,
+        goog.array
+            .filter(
+                goog.dom.classlist.get(element),
+                function(c) {
+                  return c != className;
+                })
+            .join(' '));
   }
 };
 
@@ -176,8 +192,10 @@ goog.dom.classlist.removeAll = function(element, classesToRemove) {
     });
     return;
   }
+
   // Filter out those classes in classesToRemove.
-  element.className =
+  goog.dom.classlist.set(
+      element,
       goog.array
           .filter(
               goog.dom.classlist.get(element),
@@ -186,7 +204,7 @@ goog.dom.classlist.removeAll = function(element, classesToRemove) {
                 // add it to the array of new class names.
                 return !goog.array.contains(classesToRemove, className);
               })
-          .join(' ');
+          .join(' '));
 };
 
 

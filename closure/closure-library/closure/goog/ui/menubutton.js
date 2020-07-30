@@ -1,21 +1,12 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview A menu button control.
  *
- * @author attila@google.com (Attila Bodis)
  * @see ../demos/menubutton.html
  */
 
@@ -30,6 +21,7 @@ goog.require('goog.events.EventType');
 goog.require('goog.events.KeyCodes');
 goog.require('goog.events.KeyHandler');
 goog.require('goog.math.Box');
+goog.require('goog.math.Coordinate');
 goog.require('goog.math.Rect');
 goog.require('goog.positioning');
 goog.require('goog.positioning.Corner');
@@ -43,6 +35,7 @@ goog.require('goog.ui.Menu');
 goog.require('goog.ui.MenuButtonRenderer');
 goog.require('goog.ui.MenuItem');
 goog.require('goog.ui.MenuRenderer');
+goog.require('goog.ui.SubMenu');
 goog.require('goog.ui.registry');
 goog.require('goog.userAgent');
 goog.require('goog.userAgent.product');
@@ -102,7 +95,6 @@ goog.ui.MenuButton = function(
   this.menuRenderer_ = opt_menuRenderer || goog.ui.MenuRenderer.getInstance();
 };
 goog.inherits(goog.ui.MenuButton, goog.ui.Button);
-goog.tagUnsealableClass(goog.ui.MenuButton);
 
 
 /**
@@ -340,10 +332,19 @@ goog.ui.MenuButton.prototype.handleKeyEventInternal = function(e) {
 
   if (this.menu_ && this.menu_.isVisible()) {
     // Menu is open.
-    var isEnterOrSpace = e.keyCode == goog.events.KeyCodes.ENTER ||
+    const isEnterOrSpace = e.keyCode == goog.events.KeyCodes.ENTER ||
         e.keyCode == goog.events.KeyCodes.SPACE;
-    var handledByMenu = this.menu_.handleKeyEvent(e);
-    if (e.keyCode == goog.events.KeyCodes.ESC || isEnterOrSpace) {
+    const handledByMenu = this.menu_.handleKeyEvent(e);
+    // If the submenu has handled the key event, then defer to it to close the
+    // menu if necessary and do not close it here. This is needed because the
+    // enter key should keep the submenu open, but should close other types of
+    // menu items.
+    // Check for this.menu_ again here because some widgets set this.dispose
+    // after handleKeyEvent. Example: go/widget-dispose-ex
+    const handledBySubMenu = handledByMenu && this.menu_ &&
+        this.menu_.getOpenItem() instanceof goog.ui.SubMenu;
+    if (!handledBySubMenu &&
+        (e.keyCode == goog.events.KeyCodes.ESC || isEnterOrSpace)) {
       // Dismiss the menu.
       this.setOpen(false);
       return true;
@@ -789,7 +790,7 @@ goog.ui.MenuButton.prototype.setOpen = function(open, opt_e) {
       }
 
       // Clear any sizes that might have been stored.
-      if (goog.isDefAndNotNull(this.originalSize_)) {
+      if (this.originalSize_ != null) {
         this.originalSize_ = undefined;
         var elem = this.menu_.getElement();
         if (elem) {
@@ -868,12 +869,30 @@ goog.ui.MenuButton.prototype.onTick_ = function(e) {
   // changed, or if the window's viewport was changed.
   var currentButtonRect = goog.style.getBounds(this.getElement());
   var currentViewport = goog.style.getVisibleRectForElement(this.getElement());
-  if (!goog.math.Rect.equals(this.buttonRect_, currentButtonRect) ||
-      !goog.math.Box.equals(this.viewportBox_, currentViewport)) {
-    this.buttonRect_ = currentButtonRect;
-    this.viewportBox_ = currentViewport;
-    this.positionMenu();
+  if (goog.math.Rect.equals(this.buttonRect_, currentButtonRect) &&
+      goog.math.Box.equals(this.viewportBox_, currentViewport)) {
+    return;
   }
+
+  // Reduction in the viewport width (e.g. due to increasing the zoom) can
+  // cause the menu to get squashed against the right edge, distorting its
+  // shape. When we move the menu back where it belongs, we risk using the
+  // distorted size, causing mispositioning. To be safe, start by moving the
+  // menu to the top left to let it reassume its true shape.
+  if (this.menu_.isInDocument() && currentViewport && this.viewportBox_ &&
+      (currentViewport.getWidth() < this.viewportBox_.getWidth())) {
+    var elem = this.menu_.getElement();
+    if (!this.menu_.isVisible()) {
+      elem.style.visibility = 'hidden';
+      goog.style.setElementShown(elem, true);
+    }
+
+    goog.style.setPosition(elem, new goog.math.Coordinate(0, 0));
+  }
+
+  this.buttonRect_ = currentButtonRect;
+  this.viewportBox_ = currentViewport;
+  this.positionMenu();
 };
 
 

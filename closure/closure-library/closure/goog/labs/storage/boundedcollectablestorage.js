@@ -1,16 +1,8 @@
-// Copyright 2013 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Provides a convenient API for data persistence with data
@@ -31,8 +23,7 @@ goog.require('goog.iter');
 goog.require('goog.storage.CollectableStorage');
 goog.require('goog.storage.ErrorCode');
 goog.require('goog.storage.ExpiringStorage');
-
-goog.forwardDeclare('goog.storage.mechanism.IterableMechanism');
+goog.requireType('goog.storage.mechanism.IterableMechanism');
 
 
 
@@ -129,7 +120,7 @@ goog.labs.storage.BoundedCollectableStorage.prototype.getKeys_ = function(
       goog.labs.storage.BoundedCollectableStorage.superClass_.get.call(
           this, goog.labs.storage.BoundedCollectableStorage.KEY_LIST_KEY_) ||
       null;
-  if (!keys || !goog.isArray(keys)) {
+  if (!keys || !Array.isArray(keys)) {
     if (rebuild) {
       keys = this.rebuildIndex_();
     } else {
@@ -261,7 +252,7 @@ goog.labs.storage.BoundedCollectableStorage.prototype.set = function(
   var keys = this.getKeys_(true);
   goog.array.remove(keys, key);
 
-  if (goog.isDef(value)) {
+  if (value !== undefined) {
     keys.push(key);
     if (keys.length >= this.maxItems_) {
       var keysToRemove = this.collectInternal(keys);
@@ -284,7 +275,7 @@ goog.labs.storage.BoundedCollectableStorage.prototype.remove = function(key) {
   goog.labs.storage.BoundedCollectableStorage.base(this, 'remove', key);
 
   var keys = this.getKeys_(false);
-  if (goog.isDef(keys)) {
+  if (keys !== undefined) {
     goog.array.remove(keys, key);
     this.setKeys_(keys);
   }

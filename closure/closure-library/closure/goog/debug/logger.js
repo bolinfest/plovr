@@ -1,16 +1,8 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Definition of the Logger class. Please minimize dependencies
@@ -71,27 +63,27 @@ goog.debug.Logger = function(name) {
 
   /**
    * Parent Logger.
-   * @private {goog.debug.Logger}
+   * @private {?goog.debug.Logger}
    */
   this.parent_ = null;
 
   /**
    * Level that this logger only filters above. Null indicates it should
    * inherit from the parent.
-   * @private {goog.debug.Logger.Level}
+   * @private {?goog.debug.Logger.Level}
    */
   this.level_ = null;
 
   /**
    * Map of children loggers. The keys are the leaf names of the children and
    * the values are the child loggers.
-   * @private {Object}
+   * @private {?Object}
    */
   this.children_ = null;
 
   /**
    * Handlers that are listening to this logger.
-   * @private {Array<Function>}
+   * @private {?Array<?Function>}
    */
   this.handlers_ = null;
 };
@@ -106,14 +98,16 @@ goog.debug.Logger.ROOT_LOGGER_NAME = '';
  *     log handlers attached to them and whether they can have their log level
  *     set. Logging is a bit faster when this is set to false.
  */
-goog.define('goog.debug.Logger.ENABLE_HIERARCHY', true);
+goog.debug.Logger.ENABLE_HIERARCHY =
+    goog.define('goog.debug.Logger.ENABLE_HIERARCHY', true);
 
 
 /**
  * @define {boolean} Toggles whether active log statements are also recorded
  *     to the profiler.
  */
-goog.define('goog.debug.Logger.ENABLE_PROFILER_LOGGING', false);
+goog.debug.Logger.ENABLE_PROFILER_LOGGING =
+    goog.define('goog.debug.Logger.ENABLE_PROFILER_LOGGING', false);
 
 
 if (!goog.debug.Logger.ENABLE_HIERARCHY) {
@@ -282,7 +276,7 @@ goog.debug.Logger.Level.PREDEFINED_LEVELS = [
 /**
  * A lookup map used to find the level object based on the name or value of
  * the level object.
- * @type {Object}
+ * @type {?Object}
  * @private
  */
 goog.debug.Logger.Level.predefinedLevelsCache_ = null;
@@ -780,7 +774,7 @@ goog.debug.LogManager.loggers_ = {};
 
 /**
  * The root logger which is the root of the logger tree.
- * @type {goog.debug.Logger}
+ * @type {?goog.debug.Logger}
  * @private
  */
 goog.debug.LogManager.rootLogger_ = null;

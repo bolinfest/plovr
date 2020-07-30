@@ -12,3 +12,8 @@
 *.pyc
 
 node_modules/
+closure-deps/node_modules/
+package-lock.json
+
+# Closure Generated Unit Test
+*_test.html

@@ -1,23 +1,14 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview A class that supports single selection from a dropdown menu,
  * with semantics similar to the native HTML <code>&lt;select&gt;</code>
  * element.
  *
- * @author attila@google.com (Attila Bodis)
  * @see ../demos/select.html
  */
 
@@ -81,12 +72,11 @@ goog.ui.Select = function(
   this.setPreferredAriaRole(goog.a11y.aria.Role.LISTBOX);
 };
 goog.inherits(goog.ui.Select, goog.ui.MenuButton);
-goog.tagUnsealableClass(goog.ui.Select);
 
 
 /**
  * The selection model controlling the items in the menu.
- * @type {goog.ui.SelectionModel}
+ * @type {?goog.ui.SelectionModel}
  * @private
  */
 goog.ui.Select.prototype.selectionModel_ = null;
@@ -332,7 +322,7 @@ goog.ui.Select.prototype.setSelectedIndex = function(index) {
  * @override
  */
 goog.ui.Select.prototype.setValue = function(value) {
-  if (goog.isDefAndNotNull(value) && this.selectionModel_) {
+  if (value != null && this.selectionModel_) {
     for (var i = 0, item; item = this.selectionModel_.getItemAt(i); i++) {
       if (item && typeof item.getValue == 'function' &&
           item.getValue() == value) {
@@ -470,6 +460,10 @@ goog.ui.Select.prototype.updateAriaActiveDescendant_ = function() {
         contentElement.id = goog.ui.IdGenerator.getInstance().getNextUniqueId();
       }
       goog.a11y.aria.setRole(contentElement, goog.a11y.aria.Role.OPTION);
+      // Set 'aria-selected' to true since the content element represents the
+      // currently selected option.
+      goog.a11y.aria.setState(
+          contentElement, goog.a11y.aria.State.SELECTED, true);
       goog.a11y.aria.setState(
           buttonElement, goog.a11y.aria.State.ACTIVEDESCENDANT,
           contentElement.id);

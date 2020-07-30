@@ -1,21 +1,12 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Datastructure: Set.
  *
- * @author arv@google.com (Erik Arvidsson)
  *
  * This class implements a set data structure. Adding and removing is O(1). It
  * supports both object and primitive values. Be careful because you can add
@@ -29,8 +20,6 @@ goog.provide('goog.structs.Set');
 goog.require('goog.structs');
 goog.require('goog.structs.Collection');
 goog.require('goog.structs.Map');
-
-
 
 /**
  * A set that can contain both primitives and objects.  Adding and removing
@@ -56,6 +45,12 @@ goog.structs.Set = function(opt_values) {
   }
 };
 
+/**
+ * A function that returns a unique id.
+ * @private @const {function(?Object): number}
+ */
+goog.structs.Set.getUid_ = goog.getUid;
+
 
 /**
  * Obtains a unique key for an element of the set.  Primitives will yield the
@@ -68,7 +63,7 @@ goog.structs.Set = function(opt_values) {
 goog.structs.Set.getKey_ = function(val) {
   var type = typeof val;
   if (type == 'object' && val || type == 'function') {
-    return 'o' + goog.getUid(/** @type {Object} */ (val));
+    return 'o' + goog.structs.Set.getUid_(/** @type {Object} */ (val));
   } else {
     return type.substr(0, 1) + val;
   }

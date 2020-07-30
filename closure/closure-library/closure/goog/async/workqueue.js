@@ -1,16 +1,8 @@
-// Copyright 2015 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 goog.provide('goog.async.WorkItem');
 goog.provide('goog.async.WorkQueue');
@@ -40,7 +32,8 @@ goog.async.WorkQueue = function() {
 
 
 /** @define {number} The maximum number of entries to keep for recycling. */
-goog.define('goog.async.WorkQueue.DEFAULT_MAX_UNUSED', 100);
+goog.async.WorkQueue.DEFAULT_MAX_UNUSED =
+    goog.define('goog.async.WorkQueue.DEFAULT_MAX_UNUSED', 100);
 
 
 /** @const @private {goog.async.FreeList<goog.async.WorkItem>} */
@@ -112,7 +105,7 @@ goog.async.WorkQueue.prototype.getUnusedItem_ = function() {
 goog.async.WorkItem = function() {
   /** @type {?function()} */
   this.fn = null;
-  /** @type {Object|null|undefined} */
+  /** @type {?Object|null|undefined} */
   this.scope = null;
   /** @type {?goog.async.WorkItem} */
   this.next = null;

@@ -1,21 +1,11 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Plugin to handle enter keys.
- *
- * @author robbyw@google.com (Robby Walker)
  */
 
 goog.provide('goog.editor.plugins.EnterHandler');
@@ -269,20 +259,33 @@ goog.editor.plugins.EnterHandler.prototype.deleteBrGecko = function(e) {
 
 
 /** @override */
-goog.editor.plugins.EnterHandler.prototype.handleKeyPress = function(e) {
-  // If a dialog doesn't have selectable field, Gecko grabs the event and
-  // performs actions in editor window. This solves that problem and allows
-  // the event to be passed on to proper handlers.
-  if (goog.userAgent.GECKO && this.getFieldObject().inModalMode()) {
-    return false;
+goog.editor.plugins.EnterHandler.prototype.handleKeyDown = function(e) {
+  if (goog.userAgent.GECKO) {
+    // If a dialog doesn't have selectable field, Gecko grabs the event and
+    // performs actions in editor window. This solves that problem and allows
+    // the event to be passed on to proper handlers.
+    if (this.getFieldObject().inModalMode()) {
+      return false;
+    }
+
+    // Firefox will allow the first node in an iframe to be deleted
+    // on a backspace.  Disallow it if the node is empty.
+    if (e.keyCode == goog.events.KeyCodes.BACKSPACE) {
+      this.handleBackspaceInternal(e, this.getFieldObject().getRange());
+    } else if (e.keyCode == goog.events.KeyCodes.DELETE) {
+      this.handleDeleteGecko(e);
+    }
   }
 
-  // Firefox will allow the first node in an iframe to be deleted
-  // on a backspace.  Disallow it if the node is empty.
-  if (e.keyCode == goog.events.KeyCodes.BACKSPACE) {
-    this.handleBackspaceInternal(e, this.getFieldObject().getRange());
+  return false;
+};
 
-  } else if (e.keyCode == goog.events.KeyCodes.ENTER) {
+
+/** @override */
+goog.editor.plugins.EnterHandler.prototype.handleKeyPress = function(e) {
+  // ENTER must be handled in keyPress as it requires a beforechange event,
+  // which is fired in between keydown and keyup.
+  if (e.keyCode == goog.events.KeyCodes.ENTER) {
     if (goog.userAgent.GECKO) {
       if (!e.shiftKey) {
         // Behave similarly to IE's content editable return carriage:
@@ -313,9 +316,6 @@ goog.editor.plugins.EnterHandler.prototype.handleKeyPress = function(e) {
       this.processParagraphTagsInternal(e, split);
       this.getFieldObject().dispatchChange();
     }
-
-  } else if (goog.userAgent.GECKO && e.keyCode == goog.events.KeyCodes.DELETE) {
-    this.handleDeleteGecko(e);
   }
 
   return false;
@@ -553,7 +553,7 @@ goog.editor.plugins.EnterHandler.prototype.deleteCursorSelection_ = function() {
 goog.editor.plugins.EnterHandler.prototype.releasePositionObject_ = function(
     position) {
   if (!goog.editor.BrowserFeature.HAS_W3C_RANGES) {
-    (/** @type {Node} */ (position)).removeNode(true);
+    goog.dom.removeNode(/** @type {!Node} */ (position));
   }
 };
 
@@ -623,6 +623,25 @@ goog.editor.plugins.EnterHandler.prototype.deleteCursorSelectionW3C_ =
   return goog.editor.range.getDeepEndPoint(range, true);
 };
 
+/**
+ * Checks Whether the selection range start from leftmost.
+ * @param {?Node} node the element or text node the range starts in.
+ * @param {?Node} baseNode the container element.
+ * @return {boolean} Whether the selection range start from leftmost.
+ * @private
+ */
+goog.editor.plugins.EnterHandler.isNodeLeftMostChild_ = function(
+    node, baseNode) {
+  let childNode = node;
+  while (childNode && childNode.nodeName != goog.dom.TagName.BODY &&
+         childNode != baseNode) {
+    if (childNode.previousSibling) {
+      return false;
+    }
+    childNode = childNode.parentNode;
+  }
+  return true;
+};
 
 /**
  * Deletes the contents of the selection from the DOM.
@@ -641,9 +660,15 @@ goog.editor.plugins.EnterHandler.deleteW3cRange_ = function(range) {
     var isInOneContainer =
         goog.editor.plugins.EnterHandler.isInOneContainerW3c_(range);
 
+    // Whether the selection starts in a container.
+    var isPartialStart = !isInOneContainer && range.getStartOffset() != 0;
     // Whether the selection ends in a container it doesn't fully select.
     var isPartialEnd = !isInOneContainer &&
         goog.editor.plugins.EnterHandler.isPartialEndW3c_(range);
+
+    var isNodeLeftMostChild =
+        goog.editor.plugins.EnterHandler.isNodeLeftMostChild_(
+            range.getStartNode(), baseNode);
 
     // Remove The range contents, and ensure the correct content stays selected.
     range.removeContents();
@@ -651,10 +676,12 @@ goog.editor.plugins.EnterHandler.deleteW3cRange_ = function(range) {
     if (node) {
       range = goog.dom.Range.createCaret(node, rangeOffset);
     } else {
-      // This occurs when the node that would have been referenced has now been
-      // deleted and there are no other nodes in the baseNode. Thus need to
-      // set the caret to the end of the base node.
-      range = goog.dom.Range.createCaret(baseNode, baseNode.childNodes.length);
+      // when the node that would have been referenced has now been deleted and
+      // there are no other nodes in the baseNode,  Thus need to set the caret
+      // to the end of the base node. If selection range start from leftmost,
+      // set the caret to the start of the base node.
+      var pos = isNodeLeftMostChild ? 0 : baseNode.childNodes.length;
+      range = goog.dom.Range.createCaret(baseNode, pos);
       reselect = false;
     }
     range.select();
@@ -675,7 +702,7 @@ goog.editor.plugins.EnterHandler.deleteW3cRange_ = function(range) {
       }
     }
 
-    if (isPartialEnd) {
+    if (isPartialStart && isPartialEnd) {
       /*
        This code handles the following, where | is the cursor:
          <div>a|b</div><div>c|d</div>
@@ -749,6 +776,21 @@ goog.editor.plugins.EnterHandler.isInOneContainerW3c_ = function(range) {
 goog.editor.plugins.EnterHandler.isPartialEndW3c_ = function(range) {
   var endContainer = range.getEndNode();
   var endOffset = range.getEndOffset();
+  // Since the range object is different for each browser,
+  // Normalize range using previousSibling or parentNode of
+  // endContainer, when endOffset is 0.
+  while (endOffset === 0 && endContainer) {
+    if (endContainer.previousSibling) {
+      endContainer = endContainer.previousSibling;
+      endOffset = goog.editor.node.getLength(endContainer);
+    } else if (endContainer.parentNode) {
+      endContainer = endContainer.parentNode;
+      endOffset = 0;
+    } else {
+      break;
+    }
+  }
+
   var node = endContainer;
   if (goog.editor.style.isContainer(node)) {
     var child = node.childNodes[endOffset];

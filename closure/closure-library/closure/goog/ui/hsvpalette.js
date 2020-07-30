@@ -1,16 +1,8 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview An HSV (hue/saturation/value) color palette/picker
@@ -20,7 +12,6 @@
  * palette. Without the styles from the demo css file, only a hex color label
  * and input field show up.
  *
- * @author arv@google.com (Erik Arvidsson)
  * @see ../demos/hsvpalette.html
  */
 
@@ -71,7 +62,6 @@ goog.ui.HsvPalette = function(opt_domHelper, opt_color, opt_class) {
 goog.inherits(goog.ui.HsvPalette, goog.ui.Component);
 // TODO(user): Make this inherit from goog.ui.Control and split this into
 // a control and a renderer.
-goog.tagUnsealableClass(goog.ui.HsvPalette);
 
 
 /**
@@ -188,6 +178,7 @@ goog.ui.HsvPalette.prototype.getAlpha = function() {
 /**
  * Updates the text entry field.
  * @protected
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.HsvPalette.prototype.updateInput = function() {
   var parsed;
@@ -205,12 +196,17 @@ goog.ui.HsvPalette.prototype.updateInput = function() {
 /**
  * Sets which color is selected and update the UI.
  * @param {string} color The selected color.
+ * @param {boolean=} opt_disableDispatchEvent (optional) Whether the event
+ * should not be fired.
  */
-goog.ui.HsvPalette.prototype.setColor = function(color) {
+goog.ui.HsvPalette.prototype.setColor = function(
+    color, opt_disableDispatchEvent) {
   if (color != this.color) {
     this.setColorInternal(color);
     this.updateUi();
-    this.dispatchEvent(goog.ui.Component.EventType.ACTION);
+    if (!opt_disableDispatchEvent) {
+      this.dispatchEvent(goog.ui.Component.EventType.ACTION);
+    }
   }
 };
 
@@ -317,6 +313,8 @@ goog.ui.HsvPalette.prototype.createDom = function() {
     'type': goog.dom.InputType.TEXT,
     'dir': 'ltr'
   });
+  // Spellcheck is not necessary, so setting it to false on the inputElement.
+  this.inputElement.spellcheck = false;
 
   var labelElement =
       dom.createDom(goog.dom.TagName.LABEL, null, this.inputElement);
@@ -520,6 +518,7 @@ goog.ui.HsvPalette.prototype.handleMouseUp = function(e) {
  * Handles input events on the hex value input field.
  * @param {goog.events.Event} e Event object.
  * @protected
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.HsvPalette.prototype.handleInput = function(e) {
   if (/^#?[0-9a-f]{6}$/i.test(this.inputElement.value)) {

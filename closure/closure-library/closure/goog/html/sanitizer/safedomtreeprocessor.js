@@ -1,16 +1,8 @@
-// Copyright 2017 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 
 /**
@@ -26,12 +18,15 @@
 goog.module('goog.html.sanitizer.SafeDomTreeProcessor');
 goog.module.declareLegacyNamespace();
 
+var Const = goog.require('goog.string.Const');
 var ElementWeakMap = goog.require('goog.html.sanitizer.ElementWeakMap');
 var NodeType = goog.require('goog.dom.NodeType');
 var TagName = goog.require('goog.dom.TagName');
 var googDom = goog.require('goog.dom');
 var googLog = goog.require('goog.log');
 var noclobber = goog.require('goog.html.sanitizer.noclobber');
+var safe = goog.require('goog.dom.safe');
+var uncheckedconversions = goog.require('goog.html.uncheckedconversions');
 var userAgent = goog.require('goog.userAgent');
 
 /** @const {?googLog.Logger} */
@@ -46,6 +41,13 @@ var SAFE_PARSING_SUPPORTED =
     !userAgent.IE || userAgent.isDocumentModeOrHigher(10);
 
 /**
+ * Whether the template tag is supported.
+ * @const {boolean}
+ */
+var HTML_SANITIZER_TEMPLATE_SUPPORTED =
+    !userAgent.IE || document.documentMode == null;
+
+/**
  * Parses a string of unsanitized HTML and provides an iterator over the
  * resulting DOM tree nodes. The parsing operation is inert (that is,
  * it does not cause execution of any active content or cause the browser to
@@ -56,17 +58,19 @@ var SAFE_PARSING_SUPPORTED =
  */
 function getDomTreeWalker(html) {
   var iteratorParent;
-  // Use a <template> element if possible.
+  var safeHtml =
+      uncheckedconversions.safeHtmlFromStringKnownToSatisfyTypeContract(
+          Const.from('Never attached to DOM.'), html);
   var templateElement = document.createElement('template');
-  if ('content' in templateElement) {
-    templateElement.innerHTML = html;
+  if (HTML_SANITIZER_TEMPLATE_SUPPORTED && 'content' in templateElement) {
+    safe.unsafeSetInnerHtmlDoNotUseOrElse(templateElement, safeHtml);
     iteratorParent = templateElement.content;
   } else {
     // In browsers where <template> is not implemented, use an inert
     // HTMLDocument.
     var doc = document.implementation.createHTMLDocument('x');
     iteratorParent = doc.body;
-    doc.body.innerHTML = html;
+    safe.unsafeSetInnerHtmlDoNotUseOrElse(doc.body, safeHtml);
   }
   return document.createTreeWalker(
       iteratorParent, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
@@ -232,7 +236,7 @@ SafeDomTreeProcessor.prototype.createNode_ = function(originalNode) {
   var nodeType = noclobber.getNodeType(originalNode);
   switch (nodeType) {
     case NodeType.TEXT:
-      return this.createTextNode(originalNode);
+      return this.createTextNode(/** @type {!Text} */ (originalNode));
     case NodeType.ELEMENT:
       return this.createElement_(noclobber.assertNodeIsElement(originalNode));
     default:
@@ -244,8 +248,8 @@ SafeDomTreeProcessor.prototype.createNode_ = function(originalNode) {
 /**
  * Creates a new text node from the original text node, or null if the node
  * should not be copied over to the new tree.
- * @param {!Node} originalNode
- * @return {?Node}
+ * @param {!Text} originalNode
+ * @return {?Text}
  * @protected @abstract
  */
 SafeDomTreeProcessor.prototype.createTextNode = function(originalNode) {};
@@ -302,7 +306,7 @@ SafeDomTreeProcessor.prototype.processElementAttributes_ = function(
   for (var i = 0, attribute; attribute = attributes[i]; i++) {
     if (attribute.specified) {
       var newValue = this.processElementAttribute(originalElement, attribute);
-      if (!goog.isNull(newValue)) {
+      if (newValue !== null) {
         noclobber.setElementAttribute(newElement, attribute.name, newValue);
       }
     }

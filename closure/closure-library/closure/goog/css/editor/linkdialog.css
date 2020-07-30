@@ -8,8 +8,12 @@
 /**
  * Styles for the Editor's Edit Link dialog.
  *
- * @author marcosalmeida@google.com (Marcos Almeida)
  */
+
+@provide 'goog.css.editor.linkdialog';
+
+@require './dialog';
+@require '../linkbutton';
 
 
 .tr-link-dialog-explanation-text {

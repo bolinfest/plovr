@@ -1,16 +1,8 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Utilities for adding, removing and setting classes.  Prefer
@@ -21,8 +13,6 @@
  *
  * Note: these utilities are meant to operate on HTMLElements and
  * will not work on elements with differing interfaces (such as SVGElements).
- *
- * @author arv@google.com (Erik Arvidsson)
  */
 
 
@@ -54,7 +44,7 @@ goog.dom.classes.get = function(element) {
   // Some types of elements don't have a className in IE (e.g. iframes).
   // Furthermore, in Firefox, className is not a string when the element is
   // an SVG element.
-  return goog.isString(className) && className.match(/\S+/g) || [];
+  return typeof className === 'string' && className.match(/\S+/g) || [];
 };
 
 
@@ -174,16 +164,16 @@ goog.dom.classes.swap = function(element, fromClass, toClass) {
  */
 goog.dom.classes.addRemove = function(element, classesToRemove, classesToAdd) {
   var classes = goog.dom.classes.get(element);
-  if (goog.isString(classesToRemove)) {
+  if (typeof classesToRemove === 'string') {
     goog.array.remove(classes, classesToRemove);
-  } else if (goog.isArray(classesToRemove)) {
+  } else if (Array.isArray(classesToRemove)) {
     classes = goog.dom.classes.getDifference_(classes, classesToRemove);
   }
 
-  if (goog.isString(classesToAdd) &&
+  if (typeof classesToAdd === 'string' &&
       !goog.array.contains(classes, classesToAdd)) {
     classes.push(classesToAdd);
-  } else if (goog.isArray(classesToAdd)) {
+  } else if (Array.isArray(classesToAdd)) {
     goog.dom.classes.add_(classes, classesToAdd);
   }
 

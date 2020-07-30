@@ -1,16 +1,8 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 
 /**
@@ -28,8 +20,6 @@
  *
  * Additional pieces of advanced coordinate functionality can (soon) be found in
  * element.js and groupelement.js.
- *
- * @author robbyw@google.com (Robby Walker)
  */
 
 goog.provide('goog.graphics.ext.coordinates');
@@ -78,7 +68,7 @@ goog.graphics.ext.coordinates.isSpecial = function(coord) {
   var cache = goog.graphics.ext.coordinates.specialCoordinateCache_;
 
   if (!(coord in cache)) {
-    cache[coord] = goog.isString(coord) &&
+    cache[coord] = (typeof coord === 'string') &&
         (goog.graphics.ext.coordinates.isPercent_(coord) ||
          goog.graphics.ext.coordinates.isPixels_(coord));
   }
@@ -100,7 +90,7 @@ goog.graphics.ext.coordinates.isSpecial = function(coord) {
  */
 goog.graphics.ext.coordinates.computeValue = function(coord, size, scale) {
   var number = parseFloat(String(coord));
-  if (goog.isString(coord)) {
+  if (typeof coord === 'string') {
     if (goog.graphics.ext.coordinates.isPercent_(coord)) {
       return number * size / 100;
     } else if (goog.graphics.ext.coordinates.isPixels_(coord)) {
@@ -132,7 +122,7 @@ goog.graphics.ext.coordinates.computeValue = function(coord, size, scale) {
  */
 goog.graphics.ext.coordinates.getValue = function(
     coord, forMaximum, containerSize, scale, opt_cache) {
-  if (!goog.isNumber(coord)) {
+  if (typeof coord !== 'number') {
     var cacheString = opt_cache && ((forMaximum ? 'X' : '') + coord);
 
     if (opt_cache && cacheString in opt_cache) {

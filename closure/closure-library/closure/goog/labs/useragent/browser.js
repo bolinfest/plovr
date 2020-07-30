@@ -1,16 +1,8 @@
-// Copyright 2013 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Closure user agent detection (Browser).
@@ -18,8 +10,6 @@
  * For more information on rendering engine, platform, or device see the other
  * sub-namespaces in goog.labs.userAgent, goog.labs.userAgent.platform,
  * goog.labs.userAgent.device respectively.)
- *
- * @author martone@google.com (Andy Martone)
  */
 
 goog.provide('goog.labs.userAgent.browser');
@@ -27,7 +17,7 @@ goog.provide('goog.labs.userAgent.browser');
 goog.require('goog.array');
 goog.require('goog.labs.userAgent.util');
 goog.require('goog.object');
-goog.require('goog.string');
+goog.require('goog.string.internal');
 
 
 // TODO(nnaze): Refactor to remove excessive exclusion logic in matching
@@ -56,11 +46,30 @@ goog.labs.userAgent.browser.matchIE_ = function() {
 
 
 /**
- * @return {boolean} Whether the user's browser is Edge.
+ * @return {boolean} Whether the user's browser is Edge. This refers to EdgeHTML
+ * based Edge.
  * @private
  */
-goog.labs.userAgent.browser.matchEdge_ = function() {
+goog.labs.userAgent.browser.matchEdgeHtml_ = function() {
   return goog.labs.userAgent.util.matchUserAgent('Edge');
+};
+
+
+/**
+ * @return {boolean} Whether the user's browser is Chromium based Edge.
+ * @private
+ */
+goog.labs.userAgent.browser.matchEdgeChromium_ = function() {
+  return goog.labs.userAgent.util.matchUserAgent('Edg/');
+};
+
+
+/**
+ * @return {boolean} Whether the user's browser is Chromium based Opera.
+ * @private
+ */
+goog.labs.userAgent.browser.matchOperaChromium_ = function() {
+  return goog.labs.userAgent.util.matchUserAgent('OPR');
 };
 
 
@@ -69,7 +78,8 @@ goog.labs.userAgent.browser.matchEdge_ = function() {
  * @private
  */
 goog.labs.userAgent.browser.matchFirefox_ = function() {
-  return goog.labs.userAgent.util.matchUserAgent('Firefox');
+  return goog.labs.userAgent.util.matchUserAgent('Firefox') ||
+      goog.labs.userAgent.util.matchUserAgent('FxiOS');
 };
 
 
@@ -82,7 +92,10 @@ goog.labs.userAgent.browser.matchSafari_ = function() {
       !(goog.labs.userAgent.browser.matchChrome_() ||
         goog.labs.userAgent.browser.matchCoast_() ||
         goog.labs.userAgent.browser.matchOpera_() ||
-        goog.labs.userAgent.browser.matchEdge_() ||
+        goog.labs.userAgent.browser.matchEdgeHtml_() ||
+        goog.labs.userAgent.browser.matchEdgeChromium_() ||
+        goog.labs.userAgent.browser.matchOperaChromium_() ||
+        goog.labs.userAgent.browser.matchFirefox_() ||
         goog.labs.userAgent.browser.isSilk() ||
         goog.labs.userAgent.util.matchUserAgent('Android'));
 };
@@ -110,18 +123,20 @@ goog.labs.userAgent.browser.matchIosWebview_ = function() {
       !goog.labs.userAgent.browser.matchSafari_() &&
       !goog.labs.userAgent.browser.matchChrome_() &&
       !goog.labs.userAgent.browser.matchCoast_() &&
+      !goog.labs.userAgent.browser.matchFirefox_() &&
       goog.labs.userAgent.util.matchUserAgent('AppleWebKit');
 };
 
 
 /**
- * @return {boolean} Whether the user's browser is Chrome.
+ * @return {boolean} Whether the user's browser is any Chromium browser. This
+ * returns true for Chrome, Opera 15+, and Edge Chromium.
  * @private
  */
 goog.labs.userAgent.browser.matchChrome_ = function() {
   return (goog.labs.userAgent.util.matchUserAgent('Chrome') ||
           goog.labs.userAgent.util.matchUserAgent('CriOS')) &&
-      !goog.labs.userAgent.browser.matchEdge_();
+      !goog.labs.userAgent.browser.matchEdgeHtml_();
 };
 
 
@@ -153,10 +168,22 @@ goog.labs.userAgent.browser.isIE = goog.labs.userAgent.browser.matchIE_;
 
 
 /**
- * @return {boolean} Whether the user's browser is Edge.
+ * @return {boolean} Whether the user's browser is EdgeHTML based Edge.
  */
-goog.labs.userAgent.browser.isEdge = goog.labs.userAgent.browser.matchEdge_;
+goog.labs.userAgent.browser.isEdge = goog.labs.userAgent.browser.matchEdgeHtml_;
 
+
+/**
+ * @return {boolean} Whether the user's browser is Chromium based Edge.
+ */
+goog.labs.userAgent.browser.isEdgeChromium =
+    goog.labs.userAgent.browser.matchEdgeChromium_;
+
+/**
+ * @return {boolean} Whether the user's browser is Chromium based Opera.
+ */
+goog.labs.userAgent.browser.isOperaChromium =
+    goog.labs.userAgent.browser.matchOperaChromium_;
 
 /**
  * @return {boolean} Whether the user's browser is Firefox.
@@ -186,7 +213,8 @@ goog.labs.userAgent.browser.isIosWebview =
 
 
 /**
- * @return {boolean} Whether the user's browser is Chrome.
+ * @return {boolean} Whether the user's browser is any Chromium based browser (
+ * Chrome, Blink-based Opera (15+) and Edge Chromium).
  */
 goog.labs.userAgent.browser.isChrome = goog.labs.userAgent.browser.matchChrome_;
 
@@ -260,8 +288,13 @@ goog.labs.userAgent.browser.getVersion = function() {
     return lookUpValueWithKeys(['Edge']);
   }
 
+  // Check Chromium Edge before Chrome since it has Chrome in the string.
+  if (goog.labs.userAgent.browser.isEdgeChromium()) {
+    return lookUpValueWithKeys(['Edg']);
+  }
+
   if (goog.labs.userAgent.browser.isChrome()) {
-    return lookUpValueWithKeys(['Chrome', 'CriOS']);
+    return lookUpValueWithKeys(['Chrome', 'CriOS', 'HeadlessChrome']);
   }
 
   // Usually products browser versions are in the third tuple after "Mozilla"
@@ -277,7 +310,7 @@ goog.labs.userAgent.browser.getVersion = function() {
  *     given version.
  */
 goog.labs.userAgent.browser.isVersionOrHigher = function(version) {
-  return goog.string.compareVersions(
+  return goog.string.internal.compareVersions(
              goog.labs.userAgent.browser.getVersion(), version) >= 0;
 };
 

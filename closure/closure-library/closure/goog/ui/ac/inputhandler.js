@@ -1,16 +1,8 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Class for managing the interactions between an
@@ -85,7 +77,6 @@
  * If you need to change this algorithm, please note the OS, browser, language,
  * and behavior above so that we can avoid regressions. Contact mpd or yuzo
  * if you have questions or concerns.
- *
  */
 
 
@@ -205,7 +196,6 @@ goog.ui.ac.InputHandler = function(
   this.lastKeyCode_ = -1;  // Initialize to a non-existent value.
 };
 goog.inherits(goog.ui.ac.InputHandler, goog.Disposable);
-goog.tagUnsealableClass(goog.ui.ac.InputHandler);
 
 
 /**
@@ -337,7 +327,7 @@ goog.ui.ac.InputHandler.prototype.activeTimeoutId_ = null;
 
 /**
  * The element that is currently active.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.ui.ac.InputHandler.prototype.activeElement_ = null;
@@ -526,7 +516,7 @@ goog.ui.ac.InputHandler.prototype.detachInputs = function(var_args) {
 
 /**
  * Selects the given row.  Implements the SelectionHandler interface.
- * @param {Object} row The row to select.
+ * @param {?} row The row to select.
  * @param {boolean=} opt_multi Should this be treated as a single or multi-token
  *     auto-complete?  Overrides previous setting of opt_multi on constructor.
  * @return {boolean} Whether to suppress the update event.
@@ -549,7 +539,7 @@ goog.ui.ac.InputHandler.prototype.selectRow = function(row, opt_multi) {
  */
 goog.ui.ac.InputHandler.prototype.setTokenText = function(
     tokenText, opt_multi) {
-  if (goog.isDef(opt_multi) ? opt_multi : this.multi_) {
+  if (opt_multi !== undefined ? opt_multi : this.multi_) {
     var index = this.getTokenIndex_(this.getValue(), this.getCursorPosition());
 
     // Break up the current input string.
@@ -643,7 +633,7 @@ goog.ui.ac.InputHandler.prototype.disposeInternal = function() {
 goog.ui.ac.InputHandler.prototype.setSeparators = function(
     separators, opt_defaultSeparators) {
   this.separators_ = separators;
-  this.defaultSeparator_ = goog.isDefAndNotNull(opt_defaultSeparators) ?
+  this.defaultSeparator_ = (opt_defaultSeparators != null) ?
       opt_defaultSeparators :
       this.separators_.substring(0, 1);
 

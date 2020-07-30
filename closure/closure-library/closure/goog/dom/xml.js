@@ -1,27 +1,20 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview
  * XML utilities.
- *
  */
 
 goog.provide('goog.dom.xml');
 
 goog.require('goog.dom');
 goog.require('goog.dom.NodeType');
+goog.require('goog.dom.safe');
+goog.require('goog.html.legacyconversions');
 goog.require('goog.userAgent');
 
 
@@ -100,9 +93,9 @@ goog.dom.xml.createDocument = function(
     if (doc) {
       if (opt_rootTagName) {
         doc.appendChild(
-            doc.createNode(
+            /** @type {!Node} */ (doc.createNode(
                 goog.dom.NodeType.ELEMENT, opt_rootTagName,
-                opt_namespaceUri || ''));
+                opt_namespaceUri || '')));
       }
       return doc;
     }
@@ -124,7 +117,9 @@ goog.dom.xml.createDocument = function(
 goog.dom.xml.loadXml = function(xml, opt_preferActiveX) {
   if (typeof DOMParser != 'undefined' &&
       !(goog.dom.xml.ACTIVEX_SUPPORT && opt_preferActiveX)) {
-    return new DOMParser().parseFromString(xml, 'application/xml');
+    return goog.dom.safe.parseFromString(
+        new DOMParser(), goog.html.legacyconversions.safeHtmlFromString(xml),
+        'application/xml');
   } else if (goog.dom.xml.ACTIVEX_SUPPORT) {
     var doc = goog.dom.xml.createMsXmlDocument_();
     doc.loadXML(xml);
@@ -241,7 +236,7 @@ goog.dom.xml.createMsXmlDocument_ = function() {
   var doc = new ActiveXObject('MSXML2.DOMDocument');
   if (doc) {
     // Prevent potential vulnerabilities exposed by MSXML2, see
-    // http://b/1707300 and http://wiki/Main/ISETeamXMLAttacks for details.
+    // http://b/1707300 and http://go/xxe-attacks for details.
     doc.resolveExternals = false;
     doc.validateOnParse = false;
     // Add a try catch block because accessing these properties will throw an

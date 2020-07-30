@@ -1,61 +1,53 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 // Mock JScript functions
-goog.provide('goog.userAgent.jscriptTest');
-goog.setTestOnly('goog.userAgent.jscriptTest');
+goog.module('goog.userAgent.jscriptTest');
+goog.setTestOnly();
 
-goog.require('goog.testing.jsunit');
-goog.require('goog.userAgent.jscript');
+const jscript = goog.require('goog.userAgent.jscript');
+const testSuite = goog.require('goog.testing.testSuite');
 
-function ScriptEngine() {
+
+
+goog.global['ScriptEngine'] = function() {
   return 'JScript';
-}
+};
 
-function ScriptEngineMajorVersion() {
+goog.global['ScriptEngineMajorVersion'] = function() {
   return 1;
-}
+};
 
-function ScriptEngineMinorVersion() {
+goog.global['ScriptEngineMinorVersion'] = function() {
   return 2;
-}
+};
 
-function ScriptEngineBuildVersion() {
+goog.global['ScriptEngineBuildVersion'] = function() {
   return 3456;
-}
+};
 
-function setUpPage() {
-  goog.userAgent.jscript.init();
-}
 
-function testHasJscript() {
-  assertTrue('Should have jscript', goog.userAgent.jscript.HAS_JSCRIPT);
-}
+testSuite({
+  setUpPage() {
+    jscript.init();
+  },
 
-function testVersion() {
-  assertEquals(
-      'Version should be 1.2.3456', '1.2.3456', goog.userAgent.jscript.VERSION);
-}
+  testHasJscript() {
+    assertTrue('Should have jscript', jscript.HAS_JSCRIPT);
+  },
 
-function testIsVersion() {
-  assertTrue(
-      'Should be version 1.2.3456 or larger',
-      goog.userAgent.jscript.isVersion('1.2.3456'));
-  assertTrue(
-      'Should be version 1.2 or larger',
-      goog.userAgent.jscript.isVersion('1.2'));
-  assertFalse(
-      'Should not be version 8.9 or larger',
-      goog.userAgent.jscript.isVersion('8.9'));
-}
+  testVersion() {
+    assertEquals('Version should be 1.2.3456', '1.2.3456', jscript.VERSION);
+  },
+
+  testIsVersion() {
+    assertTrue(
+        'Should be version 1.2.3456 or larger', jscript.isVersion('1.2.3456'));
+    assertTrue('Should be version 1.2 or larger', jscript.isVersion('1.2'));
+    assertFalse(
+        'Should not be version 8.9 or larger', jscript.isVersion('8.9'));
+  },
+});

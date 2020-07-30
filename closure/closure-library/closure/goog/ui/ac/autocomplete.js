@@ -1,16 +1,8 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Gmail-like AutoComplete logic.
@@ -27,8 +19,7 @@ goog.require('goog.events');
 goog.require('goog.events.EventTarget');
 goog.require('goog.object');
 goog.require('goog.ui.ac.RenderOptions');
-
-goog.forwardDeclare('goog.ui.ac.InputHandler');
+goog.requireType('goog.ui.ac.InputHandler');
 
 
 /**
@@ -139,7 +130,7 @@ goog.ui.ac.AutoComplete = function(matcher, renderer, selectionHandler) {
 
   /**
    * The target HTML node for displaying.
-   * @type {Element}
+   * @type {?Element}
    * @protected
    * @suppress {underscore|visibility}
    */
@@ -375,6 +366,7 @@ goog.ui.ac.AutoComplete.prototype.getHighlightedId = function() {
 /**
  * Generic event handler that handles any events this object is listening to.
  * @param {goog.events.Event} e Event Object.
+ * @suppress {missingProperties} e.row
  */
 goog.ui.ac.AutoComplete.prototype.handleEvent = function(e) {
   var matcher = /** @type {?goog.ui.ac.AutoComplete.Matcher} */ (this.matcher_);
@@ -389,7 +381,7 @@ goog.ui.ac.AutoComplete.prototype.handleEvent = function(e) {
         var rowDisabled = false;
 
         // e.row can be either a valid row id or empty.
-        if (goog.isNumber(e.row)) {
+        if (typeof e.row === 'number') {
           var rowId = e.row;
           var index = this.getIndexOfId(rowId);
           var row = this.rows_[index];
@@ -642,7 +634,9 @@ goog.ui.ac.AutoComplete.prototype.selectHilited = function() {
   var index = this.getIndexOfId(this.hiliteId_);
   if (index != -1) {
     var selectedRow = this.rows_[index];
-    var suppressUpdate = this.selectionHandler_.selectRow(selectedRow);
+    var suppressUpdate =
+        /** @type {!goog.ui.ac.InputHandler} */ (this.selectionHandler_)
+            .selectRow(selectedRow);
     if (this.triggerSuggestionsOnUpdate_) {
       this.token_ = null;
       this.dismissOnDelay();

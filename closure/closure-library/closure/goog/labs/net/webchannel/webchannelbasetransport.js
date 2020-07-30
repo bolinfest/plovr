@@ -1,16 +1,8 @@
-// Copyright 2013 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Implementation of a WebChannel transport using WebChannelBase.
@@ -19,7 +11,6 @@
  * of the WebChannel are limited to what's supported by the implementation.
  * Particularly, multiplexing is not possible, and only strings are
  * supported as message types.
- *
  */
 
 goog.provide('goog.labs.net.webChannel.WebChannelBaseTransport');
@@ -29,12 +20,12 @@ goog.require('goog.events.EventTarget');
 goog.require('goog.json');
 goog.require('goog.labs.net.webChannel.ChannelRequest');
 goog.require('goog.labs.net.webChannel.WebChannelBase');
+goog.require('goog.labs.net.webChannel.Wire');
 goog.require('goog.log');
 goog.require('goog.net.WebChannel');
 goog.require('goog.net.WebChannelTransport');
 goog.require('goog.object');
 goog.require('goog.string');
-goog.require('goog.string.path');
 
 
 
@@ -58,6 +49,7 @@ goog.labs.net.webChannel.WebChannelBaseTransport = function() {
 goog.scope(function() {
 var WebChannelBaseTransport = goog.labs.net.webChannel.WebChannelBaseTransport;
 var WebChannelBase = goog.labs.net.webChannel.WebChannelBase;
+var Wire = goog.labs.net.webChannel.Wire;
 
 
 /**
@@ -95,16 +87,6 @@ WebChannelBaseTransport.Channel = function(url, opt_options) {
    * @private {string} The URL of the target server end-point.
    */
   this.url_ = url;
-
-  /**
-   * The test URL of the target server end-point. This value defaults to
-   * this.url_ + '/test'.
-   *
-   * @private {string}
-   */
-  this.testUrl_ = (opt_options && opt_options.testUrl) ?
-      opt_options.testUrl :
-      goog.string.path.join(this.url_, 'test');
 
   /**
    * @private {goog.log.Logger} The logger for this class.
@@ -230,8 +212,6 @@ WebChannelBaseTransport.Channel.prototype.removeEventListener = function(
 
 
 /**
- * Test path is always set to "/url/test".
- *
  * @override
  */
 WebChannelBaseTransport.Channel.prototype.open = function() {
@@ -239,8 +219,7 @@ WebChannelBaseTransport.Channel.prototype.open = function() {
   if (this.supportsCrossDomainXhr_) {
     this.channel_.setSupportsCrossDomainXhrs(true);
   }
-  this.channel_.connect(
-      this.testUrl_, this.url_, (this.messageUrlParams_ || undefined));
+  this.channel_.connect(this.url_, (this.messageUrlParams_ || undefined));
 };
 
 
@@ -270,16 +249,16 @@ WebChannelBaseTransport.Channel.prototype.halfClose = function() {
  */
 WebChannelBaseTransport.Channel.prototype.send = function(message) {
   goog.asserts.assert(
-      goog.isObject(message) || goog.isString(message),
+      goog.isObject(message) || typeof message === 'string',
       'only object type or raw string is supported');
 
-  if (goog.isString(message)) {
+  if (typeof message === 'string') {
     var rawJson = {};
-    rawJson['__data__'] = message;
+    rawJson[Wire.RAW_DATA_KEY] = message;
     this.channel_.sendMap(rawJson);
   } else if (this.sendRawJson_) {
     var rawJson = {};
-    rawJson['__data__'] = goog.json.serialize(message);
+    rawJson[Wire.RAW_DATA_KEY] = goog.json.serialize(message);
     this.channel_.sendMap(rawJson);
   } else {
     this.channel_.sendMap(message);
@@ -491,8 +470,10 @@ WebChannelBaseTransport.ChannelProperties.prototype.getHttpSessionId =
 /**
  * @override
  */
-WebChannelBaseTransport.ChannelProperties.prototype.commit =
-    goog.abstractMethod;
+WebChannelBaseTransport.ChannelProperties.prototype.commit = function(
+    callback) {
+  this.channel_.setForwardChannelFlushCallback(callback);
+};
 
 
 /**

@@ -1,16 +1,8 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Class for showing simple modal dialog boxes.
@@ -43,12 +35,13 @@ goog.require('goog.events');
 goog.require('goog.events.Event');
 goog.require('goog.events.EventType');
 goog.require('goog.events.KeyCodes');
+goog.require('goog.events.Keys');
 goog.require('goog.fx.Dragger');
 goog.require('goog.html.SafeHtml');
 goog.require('goog.math.Rect');
 goog.require('goog.string');
-goog.require('goog.structs.Map');
 goog.require('goog.style');
+goog.require('goog.ui.Map');
 goog.require('goog.ui.ModalPopup');
 
 
@@ -98,7 +91,6 @@ goog.ui.Dialog = function(opt_class, opt_useIframeMask, opt_domHelper) {
   this.buttons_ = goog.ui.Dialog.ButtonSet.createOkCancel();
 };
 goog.inherits(goog.ui.Dialog, goog.ui.ModalPopup);
-goog.tagUnsealableClass(goog.ui.Dialog);
 
 
 /**
@@ -159,7 +151,7 @@ goog.ui.Dialog.prototype.title_ = '';
 
 /**
  * Dialog's content (HTML).
- * @type {goog.html.SafeHtml}
+ * @type {?goog.html.SafeHtml}
  * @private
  */
 goog.ui.Dialog.prototype.content_ = null;
@@ -167,7 +159,7 @@ goog.ui.Dialog.prototype.content_ = null;
 
 /**
  * Dragger.
- * @type {goog.fx.Dragger}
+ * @type {?goog.fx.Dragger}
  * @private
  */
 goog.ui.Dialog.prototype.dragger_ = null;
@@ -183,7 +175,7 @@ goog.ui.Dialog.prototype.disposeOnHide_ = false;
 
 /**
  * Element for the title bar.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.ui.Dialog.prototype.titleEl_ = null;
@@ -191,7 +183,7 @@ goog.ui.Dialog.prototype.titleEl_ = null;
 
 /**
  * Element for the text area of the title bar.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.ui.Dialog.prototype.titleTextEl_ = null;
@@ -207,7 +199,7 @@ goog.ui.Dialog.prototype.titleTextId_ = null;
 
 /**
  * Element for the close box area of the title bar.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.ui.Dialog.prototype.titleCloseEl_ = null;
@@ -215,7 +207,7 @@ goog.ui.Dialog.prototype.titleCloseEl_ = null;
 
 /**
  * Element for the content area.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.ui.Dialog.prototype.contentEl_ = null;
@@ -223,7 +215,7 @@ goog.ui.Dialog.prototype.contentEl_ = null;
 
 /**
  * Element for the button bar.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.ui.Dialog.prototype.buttonEl_ = null;
@@ -392,6 +384,14 @@ goog.ui.Dialog.prototype.getTitleCloseElement = function() {
   return this.titleCloseEl_;
 };
 
+/**
+ * Get the dialog close message.
+ * @return {string}
+ * @protected
+ */
+goog.ui.Dialog.prototype.getDialogCloseMessage = function() {
+  return goog.ui.Dialog.MSG_GOOG_UI_DIALOG_CLOSE_;
+};
 
 /**
  * Returns the button element so that more complicated things can be done with
@@ -977,6 +977,7 @@ goog.ui.Dialog.prototype.getButtonSet = function() {
  * Handles a click on the button container.
  * @param {goog.events.BrowserEvent} e Browser's event object.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.Dialog.prototype.onButtonClick_ = function(e) {
   var button = this.findParentButton_(/** @type {Element} */ (e.target));
@@ -996,6 +997,7 @@ goog.ui.Dialog.prototype.onButtonClick_ = function(e) {
  * @param {Element} element The element that was clicked on.
  * @return {Element} Returns the parent button or null if not found.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.Dialog.prototype.findParentButton_ = function(element) {
   var el = element;
@@ -1015,6 +1017,7 @@ goog.ui.Dialog.prototype.findParentButton_ = function(element) {
  * fired.  Also prevents tabbing out of the dialog.
  * @param {goog.events.BrowserEvent} e Browser's event object.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.Dialog.prototype.onKey_ = function(e) {
   var close = false;
@@ -1083,7 +1086,9 @@ goog.ui.Dialog.prototype.onKey_ = function(e) {
           new goog.ui.Dialog.Event(key, String(buttonSet.get(key))));
     }
   } else if (
-      target == this.titleCloseEl_ && e.keyCode == goog.events.KeyCodes.SPACE) {
+      target == this.titleCloseEl_ &&
+      (e.keyCode == goog.events.KeyCodes.SPACE ||
+       e.key == goog.events.Keys.SPACE)) {
     // if the title 'close' button is in focus on 'SPACE,' close the dialog
     this.handleTitleClose_();
   }
@@ -1108,8 +1113,11 @@ goog.ui.Dialog.prototype.onKey_ = function(e) {
  * @extends {goog.events.Event}
  */
 goog.ui.Dialog.Event = function(key, caption) {
+  /** @const {!goog.ui.Dialog.EventType} */
   this.type = goog.ui.Dialog.EventType.SELECT;
+  /** @const */
   this.key = key;
+  /** @const */
   this.caption = caption;
 };
 goog.inherits(goog.ui.Dialog.Event, goog.events.Event);
@@ -1157,53 +1165,48 @@ goog.ui.Dialog.EventType = {
  * @param {goog.dom.DomHelper=} opt_domHelper Optional DOM helper; see {@link
  *    goog.ui.Component} for semantics.
  * @constructor
- * @extends {goog.structs.Map}
+ * @extends {goog.ui.Map}
  */
 goog.ui.Dialog.ButtonSet = function(opt_domHelper) {
+  goog.ui.Map.call(this);
   // TODO(attila):  Refactor ButtonSet to extend goog.ui.Component?
   this.dom_ = opt_domHelper || goog.dom.getDomHelper();
-  goog.structs.Map.call(this);
+
+
+  /**
+   * A CSS className for this component.
+   * @private @const {string}
+   */
+  this.class_ = goog.getCssName('goog-buttonset');
+
+
+  /**
+   * The button that has default focus (references key in buttons_ map).
+   * @private {?string}
+   */
+  this.defaultButton_ = null;
+
+
+  /**
+   * Optional container the button set should be rendered into.
+   * @private {?Element}
+   */
+  this.element_ = null;
+
+
+  /**
+   * The button whose action is associated with the escape key and the X button
+   * on the dialog.
+   * @private {?string}
+   */
+  this.cancelButton_ = null;
 };
-goog.inherits(goog.ui.Dialog.ButtonSet, goog.structs.Map);
-goog.tagUnsealableClass(goog.ui.Dialog.ButtonSet);
-
-
-/**
- * A CSS className for this component.
- * @type {string}
- * @private
- */
-goog.ui.Dialog.ButtonSet.prototype.class_ = goog.getCssName('goog-buttonset');
-
-
-/**
- * The button that has default focus (references key in buttons_ map).
- * @type {?string}
- * @private
- */
-goog.ui.Dialog.ButtonSet.prototype.defaultButton_ = null;
-
-
-/**
- * Optional container the button set should be rendered into.
- * @type {Element}
- * @private
- */
-goog.ui.Dialog.ButtonSet.prototype.element_ = null;
-
-
-/**
- * The button whose action is associated with the escape key and the X button
- * on the dialog.
- * @type {?string}
- * @private
- */
-goog.ui.Dialog.ButtonSet.prototype.cancelButton_ = null;
+goog.inherits(goog.ui.Dialog.ButtonSet, goog.ui.Map);
 
 
 /** @override */
 goog.ui.Dialog.ButtonSet.prototype.clear = function() {
-  goog.structs.Map.prototype.clear.call(this);
+  goog.ui.Map.prototype.clear.call(this);
   this.defaultButton_ = this.cancelButton_ = null;
 };
 
@@ -1225,7 +1228,7 @@ goog.ui.Dialog.ButtonSet.prototype.clear = function() {
  */
 goog.ui.Dialog.ButtonSet.prototype.set = function(
     key, caption, opt_isDefault, opt_isCancel) {
-  goog.structs.Map.prototype.set.call(this, key, caption);
+  goog.ui.Map.prototype.set.call(this, key, caption);
 
   if (opt_isDefault) {
     this.defaultButton_ = /** @type {?string} */ (key);
@@ -1406,6 +1409,7 @@ goog.ui.Dialog.ButtonSet.prototype.getAllButtons = function() {
  * does nothing.
  * @param {string} key The button to enable or disable.
  * @param {boolean} enabled True to enable; false to disable.
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.Dialog.ButtonSet.prototype.setButtonEnabled = function(key, enabled) {
   var button = this.getButton(key);
@@ -1418,6 +1422,7 @@ goog.ui.Dialog.ButtonSet.prototype.setButtonEnabled = function(key, enabled) {
 /**
  * Enables or disables all of the buttons in this set.
  * @param {boolean} enabled True to enable; false to disable.
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.Dialog.ButtonSet.prototype.setAllButtonsEnabled = function(enabled) {
   var allButtons = this.getAllButtons();

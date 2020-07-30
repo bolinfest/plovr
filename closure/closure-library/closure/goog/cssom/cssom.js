@@ -1,16 +1,8 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview CSS Object Model helper functions.
@@ -83,6 +75,7 @@ goog.cssom.getAllCssStyleRules = function(opt_styleSheet) {
  *     can  happen if a stylesheet object's rules are accessed before the rules
  *     have been downloaded and parsed and are "ready".
  * @return {CSSRuleList} An array of CSSRules or null.
+ * @suppress {strictMissingProperties} StyleSheet does not define cssRules
  */
 goog.cssom.getCssRulesFromStyleSheet = function(styleSheet) {
   var cssRuleList = null;
@@ -118,13 +111,14 @@ goog.cssom.getCssRulesFromStyleSheet = function(styleSheet) {
  * @param {boolean=} opt_includeDisabled If true, includes disabled stylesheets,
  *    defaults to false.
  * @return {!Array<StyleSheet>} A list of StyleSheet objects.
+ * @suppress {strictMissingProperties} StyleSheet does not define cssRules
  */
 goog.cssom.getAllCssStyleSheets = function(
     opt_styleSheet, opt_includeDisabled) {
   var styleSheetsOutput = [];
   var styleSheet = opt_styleSheet || document.styleSheets;
   var includeDisabled =
-      goog.isDef(opt_includeDisabled) ? opt_includeDisabled : false;
+      (opt_includeDisabled !== undefined) ? opt_includeDisabled : false;
 
   // Imports need to go first.
   if (styleSheet.imports && styleSheet.imports.length) {
@@ -184,10 +178,16 @@ goog.cssom.getAllCssStyleSheets = function(
 goog.cssom.getCssTextFromCssRule = function(cssRule) {
   var cssText = '';
 
-  if (cssRule.cssText) {
-    // W3C.
+  // Per github.com/microsoft/ChakraCore/issues/6165, IE/Edge errors when
+  // referencing the cssText property in some cases.
+  try {
     cssText = cssRule.cssText;
-  } else if (cssRule.style && cssRule.style.cssText && cssRule.selectorText) {
+  } catch (e) {
+    return '';
+  }
+
+  if (!cssText && cssRule.style && cssRule.style.cssText &&
+      /** @type {!CSSStyleRule} */ (cssRule).selectorText) {
     // IE: The spacing here is intended to make the result consistent with
     // FF and Webkit.
     // We also remove the special properties that we may have added in
@@ -196,7 +196,8 @@ goog.cssom.getCssTextFromCssRule = function(cssRule) {
         cssRule.style.cssText
             .replace(/\s*-closure-parent-stylesheet:\s*\[object\];?\s*/gi, '')
             .replace(/\s*-closure-rule-index:\s*[\d]+;?\s*/gi, '');
-    var thisCssText = cssRule.selectorText + ' { ' + styleCssText + ' }';
+    var thisCssText = /** @type {!CSSStyleRule} */ (cssRule).selectorText +
+        ' { ' + styleCssText + ' }';
     cssText = thisCssText;
   }
 
@@ -308,6 +309,7 @@ goog.cssom.addCssRule = function(cssStyleSheet, cssText, opt_index) {
     var rules = goog.cssom.getCssRulesFromStyleSheet(cssStyleSheet);
     index = rules.length;
   }
+  cssStyleSheet = /** @type {!CSSStyleSheet} */ (cssStyleSheet);
   if (cssStyleSheet.insertRule) {
     // W3C (including IE9+).
     cssStyleSheet.insertRule(cssText, index);
@@ -335,6 +337,7 @@ goog.cssom.addCssRule = function(cssStyleSheet, cssText, opt_index) {
  * @param {number} index The CSSRule's index in the parentStyleSheet.
  */
 goog.cssom.removeCssRule = function(cssStyleSheet, index) {
+  cssStyleSheet = /** @type {!CSSStyleSheet} */ (cssStyleSheet);
   if (cssStyleSheet.deleteRule) {
     // W3C.
     cssStyleSheet.deleteRule(index);

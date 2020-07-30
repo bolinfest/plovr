@@ -1,16 +1,8 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Tree-like drilldown components for HTML tables.
@@ -89,7 +81,7 @@ goog.ui.DrilldownRow = function(opt_properties, opt_domHelper) {
   // Initialize instance variables.
 
   var html;
-  if (!goog.isDefAndNotNull(properties.html)) {
+  if (properties.html == null) {
     html = goog.html.SafeHtml.EMPTY;
   } else {
     goog.asserts.assert(properties.html instanceof goog.html.SafeHtml);
@@ -367,8 +359,8 @@ goog.ui.DrilldownRow.prototype.getDepth = function() {
  * }
  *
  * These background images show whether the DrilldownRow is expanded.
- *
  * @param {goog.ui.DrilldownRow} selfObj DrilldownRow to be decorated.
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.DrilldownRow.decorate = function(selfObj) {
   var depth = selfObj.getDepth();
@@ -454,11 +446,11 @@ goog.ui.DrilldownRow.prototype.isVisible_ = function() {
 /**
  * Create and return a TR element from HTML that looks like
  * "<tr> ... </tr>".
- *
  * @param {!goog.html.SafeHtml} html for one row.
  * @param {!goog.dom.DomHelper} dom DOM to hold the Element.
  * @return {Element} table row node created from the HTML.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.DrilldownRow.createRowNode_ = function(html, dom) {
   // Note: this may be slow.

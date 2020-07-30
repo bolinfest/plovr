@@ -1,74 +1,66 @@
-// Copyright 2012 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 /**
- * @fileoverview Unit tests for goog.labs.net.Image.
- *
- * @author nnaze@google.com (Nathan Naze)
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-goog.provide('goog.labs.net.imageTest');
+/** @fileoverview Unit tests for goog.labs.net.Image. */
 
-goog.require('goog.labs.net.image');
-goog.require('goog.string');
-goog.require('goog.testing.TestCase');
-goog.require('goog.testing.jsunit');
-goog.require('goog.testing.recordFunction');
+goog.module('goog.labs.net.imageTest');
+goog.setTestOnly();
 
-goog.setTestOnly('goog.labs.net.imageTest');
+const TestCase = goog.require('goog.testing.TestCase');
+const googString = goog.require('goog.string');
+const netImage = goog.require('goog.labs.net.image');
+const recordFunction = goog.require('goog.testing.recordFunction');
+const testSuite = goog.require('goog.testing.testSuite');
 
+testSuite({
+  setUpPage() {
+    TestCase.getActiveTestCase().promiseTimeout = 10000;  // 10s
+  },
 
-function setUpPage() {
-  goog.testing.TestCase.getActiveTestCase().promiseTimeout = 10000;  // 10s
-}
+  testValidImage() {
+    const url = 'testdata/cleardot.gif';
 
-function testValidImage() {
-  var url = 'testdata/cleardot.gif';
+    return netImage.load(url).then((value) => {
+      assertEquals('IMG', value.tagName);
+      assertTrue(googString.endsWith(value.src, url));
+    });
+  },
 
-  return goog.labs.net.image.load(url).then(function(value) {
-    assertEquals('IMG', value.tagName);
-    assertTrue(goog.string.endsWith(value.src, url));
-  });
-}
+  testInvalidImage() {
+    const url = 'testdata/invalid.gif';  // This file does not exist.
 
-function testInvalidImage() {
-  var url = 'testdata/invalid.gif';  // This file does not exist.
+    return netImage.load(url).then(
+        () => {
+          fail('Invalid image should not resolve');
+        },
+        (errResult) => {
+          assertNull(errResult);
+        });
+  },
 
-  return goog.labs.net.image.load(url).then(
-      function() { fail('Invalid image should not resolve'); },
-      function(errResult) { assertNull(errResult); });
-}
+  testImageFactory() {
+    const returnedImage = new Image();
+    const factory = () => returnedImage;
+    const countedFactory = recordFunction(factory);
 
-function testImageFactory() {
-  var returnedImage = new Image();
-  var factory = function() { return returnedImage; };
-  var countedFactory = goog.testing.recordFunction(factory);
+    const url = 'testdata/cleardot.gif';
 
-  var url = 'testdata/cleardot.gif';
+    return netImage.load(url, countedFactory).then((value) => {
+      assertEquals(returnedImage, value);
+      assertEquals(1, countedFactory.getCallCount());
+    });
+  },
 
-  return goog.labs.net.image.load(url, countedFactory).then(function(value) {
-    assertEquals(returnedImage, value);
-    assertEquals(1, countedFactory.getCallCount());
-  });
-}
+  testExistingImage() {
+    const image = new Image();
 
-function testExistingImage() {
-  var image = new Image();
+    const url = 'testdata/cleardot.gif';
 
-  var url = 'testdata/cleardot.gif';
-
-  return goog.labs.net.image.load(url, image).then(function(value) {
-    assertEquals(image, value);
-  });
-}
+    return netImage.load(url, image).then((value) => {
+      assertEquals(image, value);
+    });
+  },
+});

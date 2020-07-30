@@ -17,8 +17,6 @@
  *
  * Based on the Dojo code which in turn is based on the MochiKit code.
  *
- * @author arv@google.com (Erik Arvidsson)
- * @author brenneman@google.com (Shawn Brenneman)
  */
 
 goog.provide('goog.async.Deferred');
@@ -161,7 +159,7 @@ goog.async.Deferred = function(opt_onCancelFunction, opt_defaultScope) {
   /**
    * If this Deferred was created by branch(), this will be the "parent"
    * Deferred.
-   * @type {goog.async.Deferred}
+   * @type {?goog.async.Deferred}
    * @private
    */
   this.parent_ = null;
@@ -199,14 +197,16 @@ goog.async.Deferred = function(opt_onCancelFunction, opt_defaultScope) {
  * @define {boolean} Whether unhandled errors should always get rethrown to the
  * global scope. Defaults to false.
  */
-goog.define('goog.async.Deferred.STRICT_ERRORS', false);
+goog.async.Deferred.STRICT_ERRORS =
+    goog.define('goog.async.Deferred.STRICT_ERRORS', false);
 
 
 /**
  * @define {boolean} Whether to attempt to make stack traces long.  Defaults to
  * false.
  */
-goog.define('goog.async.Deferred.LONG_STACK_TRACES', false);
+goog.async.Deferred.LONG_STACK_TRACES =
+    goog.define('goog.async.Deferred.LONG_STACK_TRACES', false);
 
 
 /**
@@ -346,6 +346,7 @@ goog.async.Deferred.prototype.errback = function(opt_result) {
  * current stack trace to give additional context.
  * @param {*} error
  * @private
+ * @suppress {missingProperties} error.stack
  */
 goog.async.Deferred.prototype.makeStackTraceLong_ = function(error) {
   if (!goog.async.Deferred.LONG_STACK_TRACES) {
@@ -446,7 +447,7 @@ goog.async.Deferred.prototype.addBoth = function(f, opt_scope) {
 goog.async.Deferred.prototype.addFinally = function(f, opt_scope) {
   return this.addCallbacks(f, function(err) {
     var result = f.call(/** @type {?} */ (this), err);
-    if (!goog.isDef(result)) {
+    if (result === undefined) {
       throw err;
     }
     return result;
@@ -610,6 +611,18 @@ goog.async.Deferred.prototype.hasErrback_ = function() {
 
 
 /**
+ * Return the most recent value fired.
+ *
+ * @return {VALUE|undefined}
+ * @deprecated This method is only for facilitating migrations from other async
+ *     primitives.
+ */
+goog.async.Deferred.prototype.getLastValueForMigration = function() {
+  return (this.hasFired() && !this.hadError_) ? this.result_ : undefined;
+};
+
+
+/**
  * Exhausts the execution sequence while a result is available. The result may
  * be modified by callbacks or errbacks, and execution will block if the
  * returned result is an incomplete Deferred.
@@ -648,7 +661,7 @@ goog.async.Deferred.prototype.fire_ = function() {
         var ret = f.call(scope || this.defaultScope_, res);
 
         // If no result, then use previous result.
-        if (goog.isDef(ret)) {
+        if (ret !== undefined) {
           // Bubble up the error as long as the return value hasn't changed.
           this.hadError_ = this.hadError_ && (ret == res || this.isError(ret));
           this.result_ = res = ret;

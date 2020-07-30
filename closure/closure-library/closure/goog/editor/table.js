@@ -1,16 +1,8 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Table editing support.
@@ -19,7 +11,6 @@
  * goog.editor.TableCell. Together these provide support for
  * high level table modifications: Adding and deleting rows and columns,
  * and merging and splitting cells.
- *
  */
 
 goog.provide('goog.editor.Table');
@@ -153,8 +144,7 @@ goog.editor.Table.getChildCellElements = function(tr) {
  * @return {!Element} The new row.
  */
 goog.editor.Table.prototype.insertRow = function(opt_rowIndex) {
-  var rowIndex =
-      goog.isDefAndNotNull(opt_rowIndex) ? opt_rowIndex : this.rows.length;
+  var rowIndex = (opt_rowIndex != null) ? opt_rowIndex : this.rows.length;
   var refRow;
   var insertAfter;
   if (rowIndex == 0) {
@@ -201,7 +191,7 @@ goog.editor.Table.prototype.insertRow = function(opt_rowIndex) {
  */
 goog.editor.Table.prototype.insertColumn = function(opt_colIndex) {
   // TODO(user): set column widths in a way that makes sense.
-  var colIndex = goog.isDefAndNotNull(opt_colIndex) ?
+  var colIndex = (opt_colIndex != null) ?
       opt_colIndex :
       (this.rows[0] && this.rows[0].columns.length) || 0;
   var newTds = [];

@@ -1,23 +1,14 @@
-// Copyright 2010 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview An abstract superclass for message channels that handles the
  * repetitive details of registering and dispatching to services. This is more
  * useful for full-fledged channels than for decorators, since decorators
  * generally delegate service registering anyway.
- *
  */
 
 
@@ -137,7 +128,7 @@ goog.messaging.AbstractChannel.prototype.deliver = function(
 
   var decodedPayload =
       this.decodePayload(serviceName, payload, service.objectPayload);
-  if (goog.isDefAndNotNull(decodedPayload)) {
+  if (decodedPayload != null) {
     service.callback(decodedPayload);
   }
 };
@@ -184,7 +175,7 @@ goog.messaging.AbstractChannel.prototype.getService = function(
  */
 goog.messaging.AbstractChannel.prototype.decodePayload = function(
     serviceName, payload, objectPayload) {
-  if (objectPayload && goog.isString(payload)) {
+  if (objectPayload && typeof payload === 'string') {
     try {
       return /** @type {!Object} */ (JSON.parse(payload));
     } catch (err) {
@@ -193,7 +184,7 @@ goog.messaging.AbstractChannel.prototype.decodePayload = function(
               payload + '"');
       return null;
     }
-  } else if (!objectPayload && !goog.isString(payload)) {
+  } else if (!objectPayload && typeof payload !== 'string') {
     return goog.json.serialize(payload);
   }
   return payload;

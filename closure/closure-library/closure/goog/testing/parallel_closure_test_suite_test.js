@@ -1,36 +1,28 @@
-// Copyright 2015 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the 'License');
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an 'AS-IS' BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 goog.module('goog.testing.parallelClosureTestSuiteTest');
 goog.setTestOnly('goog.testing.parallelClosureTestSuiteTest');
 
-var ArgumentMatcher = goog.require('goog.testing.mockmatchers.ArgumentMatcher');
-var MockControl = goog.require('goog.testing.MockControl');
-var MultiTestRunner = goog.require('goog.testing.MultiTestRunner');
-var PropertyReplacer = goog.require('goog.testing.PropertyReplacer');
-var TestCase = goog.require('goog.testing.TestCase');
-var dom = goog.require('goog.dom');
-var mockmatchers = goog.require('goog.testing.mockmatchers');
-var parallelClosureTestSuite = goog.require('goog.testing.parallelClosureTestSuite');
-var testSuite = goog.require('goog.testing.testSuite');
+const ArgumentMatcher = goog.require('goog.testing.mockmatchers.ArgumentMatcher');
+const MockControl = goog.require('goog.testing.MockControl');
+const MultiTestRunner = goog.require('goog.testing.MultiTestRunner');
+const PropertyReplacer = goog.require('goog.testing.PropertyReplacer');
+const TestCase = goog.require('goog.testing.TestCase');
+const dom = goog.require('goog.dom');
+const mockmatchers = goog.require('goog.testing.mockmatchers');
+const parallelClosureTestSuite = goog.require('goog.testing.parallelClosureTestSuite');
+const testSuite = goog.require('goog.testing.testSuite');
 
-var mocks = new MockControl();
-var stubs = new PropertyReplacer();
+const mocks = new MockControl();
+const stubs = new PropertyReplacer();
 
 function setTestRunnerGlobals(
     testTimeout, allTests, parallelFrames, parallelTimeout) {
-  var tr = goog.global['G_parallelTestRunner'] = {};
+  const tr = goog.global['G_parallelTestRunner'] = {};
   tr['testTimeout'] = testTimeout;
   tr['allTests'] = allTests;
   tr['parallelFrames'] = parallelFrames;
@@ -45,8 +37,8 @@ testSuite({
   },
 
   testProcessAllTestResultsEmptyResults: function() {
-    var testResults = [];
-    var allResults =
+    const testResults = [];
+    const allResults =
         parallelClosureTestSuite.processAllTestResults(testResults);
     assertEquals(0, allResults.totalTests);
     assertEquals(0, allResults.totalFailures);
@@ -55,8 +47,8 @@ testSuite({
   },
 
   testProcessAllTestResultsNoFailures: function() {
-    var testResults = [{'testA': []}, {'testB': []}];
-    var allResults =
+    const testResults = [{'testA': []}, {'testB': []}];
+    const allResults =
         parallelClosureTestSuite.processAllTestResults(testResults);
     assertEquals(2, allResults.totalTests);
     assertEquals(0, allResults.totalFailures);
@@ -65,8 +57,8 @@ testSuite({
   },
 
   testProcessAllTestResultsWithFailures: function() {
-    var testResults = [{'testA': []}, {'testB': ['testB Failed!']}];
-    var allResults =
+    let testResults = [{'testA': []}, {'testB': ['testB Failed!']}];
+    let allResults =
         parallelClosureTestSuite.processAllTestResults(testResults);
     assertEquals(2, allResults.totalTests);
     assertEquals(1, allResults.totalFailures);
@@ -74,10 +66,8 @@ testSuite({
     assertObjectEquals(
         {'testA': [], 'testB': ['testB Failed!']}, allResults.allResults);
 
-    var testResults =
-        [{'testA': ['testA Failed!']}, {'testB': ['testB Failed!']}];
-    var allResults =
-        parallelClosureTestSuite.processAllTestResults(testResults);
+    testResults = [{'testA': ['testA Failed!']}, {'testB': ['testB Failed!']}];
+    allResults = parallelClosureTestSuite.processAllTestResults(testResults);
     assertEquals(2, allResults.totalTests);
     assertEquals(2, allResults.totalFailures);
     assertContains('testB Failed!\n', allResults.failureReports);
@@ -89,12 +79,12 @@ testSuite({
 
   testSetUpPageTestRunnerInitializedProperly: function() {
     setTestRunnerGlobals(100, ['foo.html'], 8, 360);
-    var mockRender =
+    const mockRender =
         mocks.createMethodMock(MultiTestRunner.prototype, 'render');
-    var elementMatcher = new ArgumentMatcher(function(container) {
+    const elementMatcher = new ArgumentMatcher(function(container) {
       return dom.isElement(container);
     });
-    var testCaseObj = {promiseTimeout: -1};
+    const testCaseObj = {promiseTimeout: -1};
     stubs.set(
         TestCase, 'getActiveTestCase', function() { return testCaseObj; });
 
@@ -102,7 +92,7 @@ testSuite({
 
     mocks.$replayAll();
 
-    var testRunner = parallelClosureTestSuite.setUpPage();
+    const testRunner = parallelClosureTestSuite.setUpPage();
     assertArrayEquals(['foo.html'], testRunner.getAllTests());
     assertEquals(8, testRunner.getPoolSize());
     assertEquals(100000, testRunner.getTimeout());
@@ -113,9 +103,10 @@ testSuite({
 
   testRunAllTestsFailures: function() {
     setTestRunnerGlobals(100, ['foo.html', 'bar.html'], 8, 360);
-    var mockStart = mocks.createMethodMock(MultiTestRunner.prototype, 'start');
-    var mockFail = mocks.createMethodMock(goog.global, 'fail');
-    var failureMatcher = new ArgumentMatcher(function(failMsg) {
+    const mockStart =
+        mocks.createMethodMock(MultiTestRunner.prototype, 'start');
+    const mockFail = mocks.createMethodMock(goog.global, 'fail');
+    const failureMatcher = new ArgumentMatcher(function(failMsg) {
       return /testA Failed!/.test(failMsg) &&
           /1 of 2 test\(s\) failed/.test(failMsg);
     });
@@ -129,8 +120,8 @@ testSuite({
 
     mocks.$replayAll();
 
-    var testRunner = parallelClosureTestSuite.setUpPage();
-    var testPromise = parallelClosureTestSuite.testRunAllTests();
+    const testRunner = parallelClosureTestSuite.setUpPage();
+    const testPromise = parallelClosureTestSuite.testRunAllTests();
     testRunner.dispatchEvent({
       'type': MultiTestRunner.TESTS_FINISHED,
       'allTestResults': [{'testA': ['testA Failed!']}, {'testB': []}]
@@ -144,9 +135,10 @@ testSuite({
 
   testRunAllTestsSuccess: function() {
     setTestRunnerGlobals(100, ['foo.html', 'bar.html'], 8, 360);
-    var mockStart = mocks.createMethodMock(MultiTestRunner.prototype, 'start');
-    var mockFail = mocks.createMethodMock(goog.global, 'fail');
-    var failureMatcher = new ArgumentMatcher(function(failMsg) {
+    const mockStart =
+        mocks.createMethodMock(MultiTestRunner.prototype, 'start');
+    const mockFail = mocks.createMethodMock(goog.global, 'fail');
+    const failureMatcher = new ArgumentMatcher(function(failMsg) {
       return /testA Failed!/.test(failMsg) &&
           /1 of 2 test\(s\) failed/.test(failMsg);
     });
@@ -160,8 +152,8 @@ testSuite({
 
     mocks.$replayAll();
 
-    var testRunner = parallelClosureTestSuite.setUpPage();
-    var testPromise = parallelClosureTestSuite.testRunAllTests();
+    const testRunner = parallelClosureTestSuite.setUpPage();
+    const testPromise = parallelClosureTestSuite.testRunAllTests();
     testRunner.dispatchEvent({
       'type': MultiTestRunner.TESTS_FINISHED,
       'allTestResults': [{'testA': []}, {'testB': []}]

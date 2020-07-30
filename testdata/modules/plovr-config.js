@@ -3,6 +3,10 @@
   "paths": ".",
   "mode": "ADVANCED",
   "level": "VERBOSE",
+  "checks": {
+    "checkTypes": "ERROR",
+    "deprecated": "OFF"
+  },
 
   "modules": {
     "app": {

@@ -1,16 +1,8 @@
-// Copyright 2014 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview The SafeScript type and its builders.
@@ -21,6 +13,7 @@
 goog.provide('goog.html.SafeScript');
 
 goog.require('goog.asserts');
+goog.require('goog.html.trustedtypes');
 goog.require('goog.string.Const');
 goog.require('goog.string.TypedString');
 
@@ -71,7 +64,7 @@ goog.html.SafeScript = function() {
    * The contained value of this SafeScript.  The field has a purposely
    * ugly name to make (non-compiled) code that attempts to directly access this
    * field stand out.
-   * @private {string}
+   * @private {!TrustedScript|string}
    */
   this.privateDoNotAccessOrElseSafeScriptWrappedValue_ = '';
 
@@ -152,6 +145,18 @@ goog.html.SafeScript.fromConstantAndArgs = function(code, var_args) {
 
 
 /**
+ * Creates a SafeScript JSON representation from anything that could be passed
+ * to JSON.stringify.
+ * @param {*} val
+ * @return {!goog.html.SafeScript}
+ */
+goog.html.SafeScript.fromJson = function(val) {
+  return goog.html.SafeScript.createSafeScriptSecurityPrivateDoNotAccessOrElse(
+      goog.html.SafeScript.stringify_(val));
+};
+
+
+/**
  * Returns this SafeScript's value as a string.
  *
  * IMPORTANT: In code where it is security relevant that an object's type is
@@ -173,7 +178,7 @@ goog.html.SafeScript.fromConstantAndArgs = function(code, var_args) {
  * @override
  */
 goog.html.SafeScript.prototype.getTypedStringValue = function() {
-  return this.privateDoNotAccessOrElseSafeScriptWrappedValue_;
+  return this.privateDoNotAccessOrElseSafeScriptWrappedValue_.toString();
 };
 
 
@@ -205,6 +210,17 @@ if (goog.DEBUG) {
  *     `goog.asserts.AssertionError`.
  */
 goog.html.SafeScript.unwrap = function(safeScript) {
+  return goog.html.SafeScript.unwrapTrustedScript(safeScript).toString();
+};
+
+
+/**
+ * Unwraps value as TrustedScript if supported or as a string if not.
+ * @param {!goog.html.SafeScript} safeScript
+ * @return {!TrustedScript|string}
+ * @see goog.html.SafeScript.unwrap
+ */
+goog.html.SafeScript.unwrapTrustedScript = function(safeScript) {
   // Perform additional Run-time type-checking to ensure that
   // safeScript is indeed an instance of the expected type.  This
   // provides some additional protection against security bugs due to
@@ -266,7 +282,9 @@ goog.html.SafeScript.createSafeScriptSecurityPrivateDoNotAccessOrElse =
  */
 goog.html.SafeScript.prototype.initSecurityPrivateDoNotAccessOrElse_ = function(
     script) {
-  this.privateDoNotAccessOrElseSafeScriptWrappedValue_ = script;
+  const policy = goog.html.trustedtypes.getPolicyPrivateDoNotAccessOrElse();
+  this.privateDoNotAccessOrElseSafeScriptWrappedValue_ =
+      policy ? policy.createScript(script) : script;
   return this;
 };
 
@@ -275,5 +293,12 @@ goog.html.SafeScript.prototype.initSecurityPrivateDoNotAccessOrElse_ = function(
  * A SafeScript instance corresponding to the empty string.
  * @const {!goog.html.SafeScript}
  */
-goog.html.SafeScript.EMPTY =
-    goog.html.SafeScript.createSafeScriptSecurityPrivateDoNotAccessOrElse('');
+goog.html.SafeScript.EMPTY = /** @type {!goog.html.SafeScript} */ ({
+  // NOTE: this compiles to nothing, but hides the possible side effect of
+  // SafeScript creation (due to calling trustedTypes.createPolicy) from the
+  // compiler so that the entire call can be removed if the result is not used.
+  valueOf: function() {
+    return goog.html.SafeScript
+        .createSafeScriptSecurityPrivateDoNotAccessOrElse('');
+  },
+}.valueOf());

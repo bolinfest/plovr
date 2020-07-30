@@ -1,22 +1,13 @@
-// Copyright 2011 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Static methods for serializing and deserializing log
  * messages.  These methods are deliberately kept separate from logrecord.js
  * and logger.js because they add dependencies on goog.json and goog.object.
- *
  */
 
 goog.provide('goog.debug.logRecordSerializer');
@@ -89,7 +80,7 @@ goog.debug.logRecordSerializer.reconstitute_ = function(o) {
       level, o[param.MSG], o[param.LOGGER_NAME], o[param.TIME],
       o[param.SEQUENCE_NUMBER]);
   var exceptionMessage = o[param.EXCEPTION];
-  if (goog.isDefAndNotNull(exceptionMessage)) {
+  if (exceptionMessage != null) {
     ret.setException(new Error(exceptionMessage));
   }
   return ret;

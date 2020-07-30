@@ -1,16 +1,8 @@
-// Copyright 2014 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview The SafeStyleSheet type and its builders.
@@ -24,9 +16,9 @@ goog.require('goog.array');
 goog.require('goog.asserts');
 goog.require('goog.html.SafeStyle');
 goog.require('goog.object');
-goog.require('goog.string');
 goog.require('goog.string.Const');
 goog.require('goog.string.TypedString');
+goog.require('goog.string.internal');
 
 
 
@@ -122,7 +114,7 @@ goog.html.SafeStyleSheet.TYPE_MARKER_GOOG_HTML_SECURITY_PRIVATE_ = {};
  * @throws {Error} If invalid selector is provided.
  */
 goog.html.SafeStyleSheet.createRule = function(selector, style) {
-  if (goog.string.contains(selector, '<')) {
+  if (goog.string.internal.contains(selector, '<')) {
     throw new Error('Selector does not allow \'<\', got: ' + selector);
   }
 
@@ -145,7 +137,8 @@ goog.html.SafeStyleSheet.createRule = function(selector, style) {
   if (!(style instanceof goog.html.SafeStyle)) {
     style = goog.html.SafeStyle.create(style);
   }
-  var styleSheet = selector + '{' + goog.html.SafeStyle.unwrap(style) + '}';
+  var styleSheet = selector + '{' +
+      goog.html.SafeStyle.unwrap(style).replace(/</g, '\\3C ') + '}';
   return goog.html.SafeStyleSheet
       .createSafeStyleSheetSecurityPrivateDoNotAccessOrElse(styleSheet);
 };
@@ -188,7 +181,7 @@ goog.html.SafeStyleSheet.concat = function(var_args) {
    *     argument
    */
   var addArgument = function(argument) {
-    if (goog.isArray(argument)) {
+    if (Array.isArray(argument)) {
       goog.array.forEach(argument, addArgument);
     } else {
       result += goog.html.SafeStyleSheet.unwrap(argument);
@@ -220,8 +213,8 @@ goog.html.SafeStyleSheet.fromConstant = function(styleSheet) {
   // > is a valid character in CSS selectors and there's no strict need to
   // block it if we already block <.
   goog.asserts.assert(
-      !goog.string.contains(styleSheetString, '<'),
-      "Forbidden '<' character in style sheet string: " + styleSheetString);
+      !goog.string.internal.contains(styleSheetString, '<'),
+      'Forbidden \'<\' character in style sheet string: ' + styleSheetString);
   return goog.html.SafeStyleSheet
       .createSafeStyleSheetSecurityPrivateDoNotAccessOrElse(styleSheetString);
 };

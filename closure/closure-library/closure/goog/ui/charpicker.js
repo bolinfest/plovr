@@ -1,16 +1,8 @@
-// Copyright 2009 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Character Picker widget for picking any Unicode character.
@@ -164,7 +156,7 @@ goog.ui.CharPicker.prototype.selectedChar_ = null;
 /**
  * Set of formatting characters whose display need to be swapped with nbsp
  * to prevent layout issues.
- * @type {goog.structs.Set}
+ * @type {?goog.structs.Set}
  * @private
  */
 goog.ui.CharPicker.prototype.layoutAlteringChars_ = null;
@@ -172,7 +164,7 @@ goog.ui.CharPicker.prototype.layoutAlteringChars_ = null;
 
 /**
  * The top category menu.
- * @type {goog.ui.Menu}
+ * @type {?goog.ui.Menu}
  * @private
  */
 goog.ui.CharPicker.prototype.menu_ = null;
@@ -180,7 +172,7 @@ goog.ui.CharPicker.prototype.menu_ = null;
 
 /**
  * The top category menu button.
- * @type {goog.ui.MenuButton}
+ * @type {?goog.ui.MenuButton}
  * @private
  */
 goog.ui.CharPicker.prototype.menubutton_ = null;
@@ -188,7 +180,7 @@ goog.ui.CharPicker.prototype.menubutton_ = null;
 
 /**
  * The subcategory menu.
- * @type {goog.ui.Menu}
+ * @type {?goog.ui.Menu}
  * @private
  */
 goog.ui.CharPicker.prototype.submenu_ = null;
@@ -196,7 +188,7 @@ goog.ui.CharPicker.prototype.submenu_ = null;
 
 /**
  * The subcategory menu button.
- * @type {goog.ui.MenuButton}
+ * @type {?goog.ui.MenuButton}
  * @private
  */
 goog.ui.CharPicker.prototype.submenubutton_ = null;
@@ -221,7 +213,7 @@ goog.ui.CharPicker.prototype.keyHandler_;
 goog.ui.CharPicker.prototype.category;
 
 
-/** @private {Element} */
+/** @private {?Element} */
 goog.ui.CharPicker.prototype.stick_ = null;
 
 
@@ -229,7 +221,7 @@ goog.ui.CharPicker.prototype.stick_ = null;
  * The element representing the number of rows visible in the grid.
  * This along with goog.ui.CharPicker.stick_ would help to create a scrollbar
  * of right size.
- * @type {HTMLElement}
+ * @type {?HTMLElement}
  * @private
  */
 goog.ui.CharPicker.prototype.stickwrap_ = null;
@@ -237,7 +229,7 @@ goog.ui.CharPicker.prototype.stickwrap_ = null;
 
 /**
  * The component containing all the buttons for each character in display.
- * @type {goog.ui.Component}
+ * @type {?goog.ui.Component}
  * @private
  */
 goog.ui.CharPicker.prototype.grid_ = null;
@@ -245,7 +237,7 @@ goog.ui.CharPicker.prototype.grid_ = null;
 
 /**
  * The component used for extra information about the character set displayed.
- * @type {goog.ui.Component}
+ * @type {?goog.ui.Component}
  * @private
  */
 goog.ui.CharPicker.prototype.notice_ = null;
@@ -253,7 +245,7 @@ goog.ui.CharPicker.prototype.notice_ = null;
 
 /**
  * Grid displaying recently selected characters.
- * @type {goog.ui.Component}
+ * @type {?goog.ui.Component}
  * @private
  */
 goog.ui.CharPicker.prototype.recentgrid_ = null;
@@ -261,7 +253,7 @@ goog.ui.CharPicker.prototype.recentgrid_ = null;
 
 /**
  * Input field for entering the hex value of the character.
- * @type {goog.ui.Component}
+ * @type {?goog.ui.Component}
  * @private
  */
 goog.ui.CharPicker.prototype.input_ = null;
@@ -269,14 +261,14 @@ goog.ui.CharPicker.prototype.input_ = null;
 
 /**
  * OK button for entering hex value of the character.
- * @private {goog.ui.Button}
+ * @private {?goog.ui.Button}
  */
 goog.ui.CharPicker.prototype.okbutton_ = null;
 
 
 /**
  * Element displaying character name in preview.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.ui.CharPicker.prototype.charNameEl_ = null;
@@ -284,7 +276,7 @@ goog.ui.CharPicker.prototype.charNameEl_ = null;
 
 /**
  * Element displaying character in preview.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.ui.CharPicker.prototype.zoomEl_ = null;
@@ -292,7 +284,7 @@ goog.ui.CharPicker.prototype.zoomEl_ = null;
 
 /**
  * Element displaying character number (codepoint) in preview.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.ui.CharPicker.prototype.unicodeEl_ = null;
@@ -302,7 +294,7 @@ goog.ui.CharPicker.prototype.unicodeEl_ = null;
  * Hover card for displaying the preview of a character.
  * Preview would contain character in large size and its U+ notation. It would
  * also display the name, if available.
- * @type {goog.ui.HoverCard}
+ * @type {?goog.ui.HoverCard}
  * @private
  */
 goog.ui.CharPicker.prototype.hc_ = null;
@@ -805,7 +797,7 @@ goog.ui.CharPicker.prototype.updateGrid_ = function(grid, items) {
           this.stickwrap_.offsetHeight * items.length / this.gridsize_ + 'px';
     } else {
       // This is the last ditch effort if height is not avaialble.
-      // Maximum of 3em is assumed to the the cell height. Extra space after
+      // Maximum of 3em is assumed to the cell height. Extra space after
       // last character in the grid is OK.
       this.stick_.style.height =
           3 * this.columnCount_ * items.length / this.gridsize_ + 'em';

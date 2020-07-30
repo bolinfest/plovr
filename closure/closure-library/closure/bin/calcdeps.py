@@ -26,9 +26,6 @@ required for compilation.
 """
 
 
-
-
-
 try:
   import distutils.version
 except ImportError:
@@ -56,7 +53,7 @@ def IsValidFile(ref):
 
 
 def IsJsFile(ref):
-  """Returns true if the provided reference is a Javascript file."""
+  """Returns true if the provided reference is a JavaScript file."""
   return ref.endswith('.js')
 
 

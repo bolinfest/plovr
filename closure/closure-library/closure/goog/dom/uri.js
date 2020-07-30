@@ -1,16 +1,8 @@
-// Copyright 2017 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 goog.module('goog.dom.uri');
 
@@ -40,3 +32,22 @@ function normalizeUri(uri) {
   return anchor.href;
 }
 exports.normalizeUri = normalizeUri;
+
+/**
+ * Gets the href property of an anchor element, suppressing exceptions coming
+ * from certain URLs in IE.
+ * @param {!HTMLAnchorElement} element
+ * @return {?string}
+ * @deprecated This format is deprecated in RFC 3986. Use this function only for
+ * legacy behavior, and avoid accepting such URLs in new code.
+ */
+function getHref(element) {
+  try {
+    return element.href || null;
+  } catch (x) {
+    // IE throws a security exception for urls including username/password:
+    // http://user:password@example.com/
+    return null;
+  }
+}
+exports.getHref = getHref;

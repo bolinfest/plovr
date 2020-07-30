@@ -1,23 +1,14 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Class that retrieves rich autocomplete matches, represented as
  * a structured list of lists, via an ajax call.  The first element of each
  * sublist is the name of a client-side javascript function that converts the
  * remaining sublist elements into rich rows.
- *
  */
 
 goog.provide('goog.ui.ac.RichRemoteArrayMatcher');
@@ -47,7 +38,7 @@ goog.ui.ac.RichRemoteArrayMatcher = function(url, opt_noSimilar) {
    * A function(rows) that is called before the array matches are returned.
    * It runs client-side and filters the results given by the server before
    * being rendered by the client.
-   * @type {Function}
+   * @type {?Function}
    * @private
    */
   this.rowFilter_ = null;

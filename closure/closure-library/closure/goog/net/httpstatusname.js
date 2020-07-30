@@ -1,16 +1,8 @@
-// Copyright 2016 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Names for HTTP status codes
@@ -20,9 +12,10 @@ goog.provide('goog.net.HttpStatusName');
 
 
 /**
- * HTTP Status Code Names defined in RFC 2616 and RFC 6585.
+ * HTTP Status Code Names defined in RFC 2616, RFC 6585, and RFC 4918.
  * @see http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html
  * @see http://tools.ietf.org/html/rfc6585
+ * @see https://tools.ietf.org/html/rfc4918
  * @type {!Object<number, string>}
  */
 goog.net.HttpStatusName = {
@@ -38,6 +31,7 @@ goog.net.HttpStatusName = {
   204: 'No Content',
   205: 'Reset Content',
   206: 'Partial Content',
+  207: 'Multi-Status',
 
   // Redirection 3xx
   300: 'Multiple Choices',
@@ -67,6 +61,9 @@ goog.net.HttpStatusName = {
   415: 'Unsupported Media Type',
   416: 'Requested Range Not Satisfiable',
   417: 'Expectation Failed',
+  422: 'Unprocessable Entity',
+  423: 'Locked',
+  424: 'Failed Dependency',
   428: 'Precondition Required',
   429: 'Too Many Requests',
   431: 'Request Header Fields Too Large',
@@ -78,5 +75,6 @@ goog.net.HttpStatusName = {
   503: 'Service Unavailable',
   504: 'Gateway Timeout',
   505: 'HTTP Version Not Supported',
-  511: 'Network Authentication Required'
+  507: 'Insufficient Storage',
+  511: 'Network Authentication Required',
 };

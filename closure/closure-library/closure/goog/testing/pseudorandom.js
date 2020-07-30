@@ -1,22 +1,13 @@
-// Copyright 2011 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview PseudoRandom provides a mechanism for generating deterministic
  * pseudo random numbers based on a seed. Based on the Park-Miller algorithm.
- * See http://dx.doi.org/10.1145%2F63039.63042 for details.
- *
+ * See https://doi.org/10.1145%2F63039.63042 for details.
  */
 
 goog.setTestOnly('goog.testing.PseudoRandom');
@@ -40,7 +31,7 @@ goog.require('goog.Disposable');
 goog.testing.PseudoRandom = function(opt_seed, opt_install) {
   goog.Disposable.call(this);
 
-  if (!goog.isDef(opt_seed)) {
+  if (opt_seed === undefined) {
     opt_seed = goog.testing.PseudoRandom.seedUniquifier_++ + goog.now();
   }
   this.seed(opt_seed);
@@ -157,7 +148,7 @@ goog.testing.PseudoRandom.prototype.uninstall = function() {
  * @param {number=} opt_seed The seed to use.
  */
 goog.testing.PseudoRandom.prototype.seed = function(opt_seed) {
-  this.seed_ = opt_seed % (goog.testing.PseudoRandom.M - 1);
+  this.seed_ = (opt_seed || 0) % (goog.testing.PseudoRandom.M - 1);
   if (this.seed_ <= 0) {
     this.seed_ += goog.testing.PseudoRandom.M - 1;
   }

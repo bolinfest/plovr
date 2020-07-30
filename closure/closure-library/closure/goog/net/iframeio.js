@@ -1,16 +1,8 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Class for managing requests via iFrames.  Supports a number of
@@ -129,11 +121,11 @@
  *   function() { alert('request complete'); });
  * io.sendFromForm(...);
  * </pre>
- *
  */
 
 goog.provide('goog.net.IframeIo');
 goog.provide('goog.net.IframeIo.IncrementalDataEvent');
+goog.provide('goog.net.IframeIo.TEST_ONLY');
 
 goog.require('goog.Timer');
 goog.require('goog.Uri');
@@ -148,6 +140,8 @@ goog.require('goog.events');
 goog.require('goog.events.Event');
 goog.require('goog.events.EventTarget');
 goog.require('goog.events.EventType');
+goog.require('goog.html.SafeUrl');
+goog.require('goog.html.legacyconversions');
 goog.require('goog.html.uncheckedconversions');
 goog.require('goog.json');
 goog.require('goog.log');
@@ -357,7 +351,7 @@ goog.net.IframeIo.getForm_ = function() {
 goog.net.IframeIo.addFormInputs_ = function(form, data) {
   var helper = goog.dom.getDomHelper(form);
   goog.structs.forEach(data, function(value, key) {
-    if (!goog.isArray(value)) {
+    if (!Array.isArray(value)) {
       value = [value];
     }
     goog.array.forEach(value, function(value) {
@@ -390,7 +384,7 @@ goog.net.IframeIo.prototype.logger_ = goog.log.getLogger('goog.net.IframeIo');
 
 /**
  * Reference to form element that gets reused for requests to the iframe.
- * @type {HTMLFormElement}
+ * @type {?HTMLFormElement}
  * @private
  */
 goog.net.IframeIo.prototype.form_ = null;
@@ -399,7 +393,7 @@ goog.net.IframeIo.prototype.form_ = null;
 /**
  * Reference to the iframe being used for the current request, or null if no
  * request is currently active.
- * @type {HTMLIFrameElement}
+ * @type {?HTMLIFrameElement}
  * @private
  */
 goog.net.IframeIo.prototype.iframe_ = null;
@@ -448,7 +442,7 @@ goog.net.IframeIo.prototype.success_ = false;
 
 /**
  * The URI for the last request.
- * @type {goog.Uri}
+ * @type {?goog.Uri}
  * @private
  */
 goog.net.IframeIo.prototype.lastUri_ = null;
@@ -568,7 +562,9 @@ goog.net.IframeIo.prototype.send = function(
   }
 
   // Set the URI that the form will be posted
-  this.form_.action = uriObj.toString();
+  goog.dom.safe.setFormElementAction(
+      this.form_,
+      goog.html.legacyconversions.safeUrlFromString(uriObj.toString()));
   this.form_.method = method;
 
   this.sendFormInternal_();
@@ -613,7 +609,8 @@ goog.net.IframeIo.prototype.sendFromForm = function(
 
   this.lastUri_ = uri;
   this.form_ = form;
-  this.form_.action = uri.toString();
+  goog.dom.safe.setFormElementAction(
+      goog.asserts.assert(this.form_), uri.toString());
   this.sendFormInternal_();
 };
 
@@ -822,6 +819,7 @@ goog.net.IframeIo.prototype.setIgnoreResponse = function(ignore) {
 /**
  * Submits the internal form to the iframe.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.net.IframeIo.prototype.sendFormInternal_ = function() {
   this.active_ = true;
@@ -915,7 +913,7 @@ goog.net.IframeIo.prototype.sendFormInternal_ = function() {
     }
 
     // Append a cloned form to the iframe
-    var clone = doc.importNode(this.form_, true);
+    var clone = doc.importNode(goog.asserts.assert(this.form_), true);
     clone.target = innerFrameName;
     // Work around crbug.com/66987
     clone.action = this.form_.action;
@@ -1158,7 +1156,7 @@ goog.net.IframeIo.prototype.handleError_ = function(
     this.complete_ = true;
     this.lastErrorCode_ = errorCode;
     if (errorCode == goog.net.ErrorCode.CUSTOM_ERROR) {
-      goog.asserts.assert(goog.isDef(opt_customError));
+      goog.asserts.assert(opt_customError !== undefined);
       this.lastCustomError_ = opt_customError;
     }
     this.dispatchEvent(goog.net.EventType.COMPLETE);
@@ -1213,7 +1211,10 @@ goog.net.IframeIo.prototype.createIframe_ = function() {
   // Setting the source to javascript:"" is a fix to remove IE6 mixed content
   // warnings when being used in an https page.
   if (goog.userAgent.IE && Number(goog.userAgent.VERSION) < 7) {
-    this.iframe_.src = 'javascript:""';
+    goog.dom.safe.setFormElementAction(
+        this.iframe_,
+        goog.html.SafeUrl.fromConstant(
+            goog.string.Const.from('javascript:""')));
   }
 
   var s = this.iframe_.style;
@@ -1241,7 +1242,7 @@ goog.net.IframeIo.prototype.createIframe_ = function() {
 goog.net.IframeIo.prototype.appendIframe_ = function() {
   goog.dom.getDomHelper(this.form_)
       .getDocument()
-      .body.appendChild(this.iframe_);
+      .body.appendChild(/** @type {!Node} */ (this.iframe_));
 };
 
 
@@ -1251,6 +1252,7 @@ goog.net.IframeIo.prototype.appendIframe_ = function() {
  * will not detect that the response has correctly finished and the loading bar
  * will stay active forever.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.net.IframeIo.prototype.scheduleIframeDisposal_ = function() {
   var iframe = this.iframe_;
@@ -1421,3 +1423,13 @@ goog.net.IframeIo.IncrementalDataEvent = function(data) {
   this.data = data;
 };
 goog.inherits(goog.net.IframeIo.IncrementalDataEvent, goog.events.Event);
+
+
+
+/**
+ * Test-only exports.
+ * @const
+ */
+goog.net.IframeIo.TEST_ONLY = {
+  getForm: goog.net.IframeIo.getForm_,
+};

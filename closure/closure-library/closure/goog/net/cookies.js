@@ -1,21 +1,11 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Functions for setting, getting and deleting cookies.
- *
- * @author arv@google.com (Erik Arvidsson)
  */
 
 
@@ -48,7 +38,7 @@ goog.net.Cookies = function(context) {
  * to the size of a cookie. To make sure users can't break this limit, we
  * should truncate long cookies at 3950 bytes, to be extra careful with dumb
  * browsers/proxies that interpret 4K as 4000 rather than 4096.
- * @type {number}
+ * @const {number}
  */
 goog.net.Cookies.MAX_COOKIE_LENGTH = 3950;
 
@@ -117,20 +107,27 @@ goog.net.Cookies.prototype.isValidValue = function(value) {
  *
  * @param {string} name  The cookie name.
  * @param {string} value  The cookie value.
- * @param {number=} opt_maxAge  The max age in seconds (from now). Use -1 to
- *     set a session cookie. If not provided, the default is -1
- *     (i.e. set a session cookie).
- * @param {?string=} opt_path  The path of the cookie. If not present then this
- *     uses the full request path.
- * @param {?string=} opt_domain  The domain of the cookie, or null to not
- *     specify a domain attribute (browser will use the full request host name).
- *     If not provided, the default is null (i.e. let browser use full request
- *     host name).
- * @param {boolean=} opt_secure Whether the cookie should only be sent over
- *     a secure channel.
+ * @param {!goog.net.Cookies.SetOptions=} options  The options object.
  */
-goog.net.Cookies.prototype.set = function(
-    name, value, opt_maxAge, opt_path, opt_domain, opt_secure) {
+goog.net.Cookies.prototype.set = function(name, value, options) {
+  /** @type {number|undefined} */
+  let maxAge;
+  /** @type {string|undefined} */
+  let path;
+  /** @type {string|undefined} */
+  var domain;
+  /** @type {boolean} */
+  let secure = false;
+  /** @type {!goog.net.Cookies.SameSite|undefined} */
+  let sameSite;
+
+  if (typeof options === 'object') {
+    sameSite = options.sameSite;
+    secure = options.secure || false;
+    domain = options.domain || undefined;
+    path = options.path || undefined;
+    maxAge = options.maxAge;
+  }
   if (!this.isValidName(name)) {
     throw new Error('Invalid cookie name "' + name + '"');
   }
@@ -138,24 +135,24 @@ goog.net.Cookies.prototype.set = function(
     throw new Error('Invalid cookie value "' + value + '"');
   }
 
-  if (!goog.isDef(opt_maxAge)) {
-    opt_maxAge = -1;
+  if (maxAge === undefined) {
+    maxAge = -1;
   }
 
-  var domainStr = opt_domain ? ';domain=' + opt_domain : '';
-  var pathStr = opt_path ? ';path=' + opt_path : '';
-  var secureStr = opt_secure ? ';secure' : '';
+  var domainStr = domain ? ';domain=' + domain : '';
+  var pathStr = path ? ';path=' + path : '';
+  var secureStr = secure ? ';secure' : '';
 
   var expiresStr;
 
   // Case 1: Set a session cookie.
-  if (opt_maxAge < 0) {
+  if (maxAge < 0) {
     expiresStr = '';
 
     // Case 2: Remove the cookie.
     // Note: We don't tell people about this option in the function doc because
     // we prefer people to use remove() to remove cookies.
-  } else if (opt_maxAge == 0) {
+  } else if (maxAge == 0) {
     // Note: Don't use Jan 1, 1970 for date because NS 4.76 will try to convert
     // it to local time, and if the local time is before Jan 1, 1970, then the
     // browser will ignore the Expires attribute altogether.
@@ -164,12 +161,15 @@ goog.net.Cookies.prototype.set = function(
 
     // Case 3: Set a persistent cookie.
   } else {
-    var futureDate = new Date(goog.now() + opt_maxAge * 1000);
+    var futureDate = new Date(goog.now() + maxAge * 1000);
     expiresStr = ';expires=' + futureDate.toUTCString();
   }
 
+  var sameSiteStr = sameSite != null ? ';samesite=' + sameSite : '';
+
   this.setCookie_(
-      name + '=' + value + domainStr + pathStr + expiresStr + secureStr);
+      name + '=' + value + domainStr + pathStr + expiresStr + secureStr +
+      sameSiteStr);
 };
 
 
@@ -200,24 +200,23 @@ goog.net.Cookies.prototype.get = function(name, opt_default) {
 /**
  * Removes and expires a cookie.
  * @param {string} name  The cookie name.
- * @param {string=} opt_path  The path of the cookie, or null to expire a cookie
- *     set at the full request path. If not provided, the default is '/'
- *     (i.e. path=/).
- * @param {string=} opt_domain  The domain of the cookie, or null to expire a
+ * @param {?string=} opt_path  The path of the cookie. If null or not present,
+ *     expires the cookie set at the full request path.
+ * @param {?string=} opt_domain  The domain of the cookie, or null to expire a
  *     cookie set at the full request host name. If not provided, the default is
  *     null (i.e. cookie at full request host name).
  * @return {boolean} Whether the cookie existed before it was removed.
  */
 goog.net.Cookies.prototype.remove = function(name, opt_path, opt_domain) {
   var rv = this.containsKey(name);
-  this.set(name, '', 0, opt_path, opt_domain);
+  this.set(name, '', {maxAge: 0, path: opt_path, domain: opt_domain});
   return rv;
 };
 
 
 /**
  * Gets the names for all the cookies.
- * @return {Array<string>} An array with the names of the cookies.
+ * @return {!Array<string>} An array with the names of the cookies.
  */
 goog.net.Cookies.prototype.getKeys = function() {
   return this.getKeyValues_().keys;
@@ -226,7 +225,7 @@ goog.net.Cookies.prototype.getKeys = function() {
 
 /**
  * Gets the values for all the cookies.
- * @return {Array<string>} An array with the values of the cookies.
+ * @return {!Array<string>} An array with the values of the cookies.
  */
 goog.net.Cookies.prototype.getValues = function() {
   return this.getKeyValues_().values;
@@ -261,7 +260,7 @@ goog.net.Cookies.prototype.getCount = function() {
 goog.net.Cookies.prototype.containsKey = function(key) {
   // substring will return empty string if the key is not found, so the get
   // function will only return undefined
-  return goog.isDef(this.get(key));
+  return this.get(key) !== undefined;
 };
 
 
@@ -352,6 +351,71 @@ goog.net.Cookies.prototype.getKeyValues_ = function() {
 };
 
 
+/**
+ * Options object for calls to Cookies.prototype.set.
+ * @record
+ */
+goog.net.Cookies.SetOptions = function() {
+  /**
+   * The max age in seconds (from now). Use -1 to set a session cookie. If not
+   * provided, the default is -1 (i.e. set a session cookie).
+   * @type {number|undefined}
+   */
+  this.maxAge;
+  /**
+   * The path of the cookie. If not present then this uses the full request
+   * path.
+   * @type {?string|undefined}
+   */
+  this.path;
+  /**
+   * The domain of the cookie, or null to not specify a domain attribute
+   * (browser will use the full request host name). If not provided, the default
+   * is null (i.e. let browser use full request host name).
+   * @type {?string|undefined}
+   */
+  this.domain;
+  /**
+   * Whether the cookie should only be sent over a secure channel.
+   * @type {boolean|undefined}
+   */
+  this.secure;
+  /**
+   * The SameSite attribute for the cookie (default is NONE).
+   * @type {!goog.net.Cookies.SameSite|undefined}
+   */
+  this.sameSite;
+};
+
+
+/**
+ * Valid values for the SameSite cookie attribute.  In 2019, browsers began the
+ * process of changing the default from NONE to LAX.
+ *
+ * @see https://web.dev/samesite-cookies-explained
+ * @see https://tools.ietf.org/html/draft-ietf-httpbis-rfc6265bis-03#section-5.3.7
+ * @enum {string}
+ */
+goog.net.Cookies.SameSite = {
+  /**
+   * The cookie will be sent in first-party contexts, including initial
+   * navigation from external referrers.
+   */
+  LAX: 'lax',
+  /**
+   * The cookie will be sent in all first-party or third-party contexts. This
+   * was the original default behavior of the web, but will need to be set
+   * explicitly starting in 2020.
+   */
+  NONE: 'none',
+  /**
+   * The cookie will only be sent in first-party contexts. It will not be sent
+   * on initial navigation from external referrers.
+   */
+  STRICT: 'strict',
+};
+
+
 // TODO(closure-team): This should be a singleton getter instead of a static
 // instance.
 /**
@@ -369,12 +433,3 @@ goog.net.cookies =
 goog.net.Cookies.getInstance = function() {
   return goog.net.cookies;
 };
-
-
-/**
- * Define the constant on the instance in order not to break many references to
- * it.
- * @type {number}
- * @deprecated Use goog.net.Cookies.MAX_COOKIE_LENGTH instead.
- */
-goog.net.cookies.MAX_COOKIE_LENGTH = goog.net.Cookies.MAX_COOKIE_LENGTH;

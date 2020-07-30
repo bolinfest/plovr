@@ -1,16 +1,8 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Provides the namesspace for client-side communication
@@ -32,24 +24,15 @@
  * @suppress {underscore}
  */
 
-/*
-TODO(user)
-- resolve fastback issues in Safari (IframeRelayTransport)
- */
-
-
-/**
- * Namespace for CrossPageChannel
- */
 goog.provide('goog.net.xpc');
 goog.provide('goog.net.xpc.CfgFields');
 goog.provide('goog.net.xpc.ChannelStates');
 goog.provide('goog.net.xpc.TransportNames');
 goog.provide('goog.net.xpc.TransportTypes');
 goog.provide('goog.net.xpc.UriCfgFields');
-goog.require('goog.log');
 
 goog.forwardDeclare('goog.net.xpc.CrossPageChannel');  // circular
+goog.require('goog.log');
 
 
 /**
@@ -57,13 +40,10 @@ goog.forwardDeclare('goog.net.xpc.CrossPageChannel');  // circular
  * @enum {number}
  */
 goog.net.xpc.TransportTypes = {
+  UNDEFINED: 0,
   NATIVE_MESSAGING: 1,
-  FRAME_ELEMENT_METHOD: 2,
-  IFRAME_RELAY: 3,
-  IFRAME_POLLING: 4,
-  FLASH: 5,
-  NIX: 6,
-  DIRECT: 7
+  IFRAME_POLLING: 2,
+  DIRECT: 3,
 };
 
 
@@ -74,12 +54,8 @@ goog.net.xpc.TransportTypes = {
  */
 goog.net.xpc.TransportNames = {
   '1': 'NativeMessagingTransport',
-  '2': 'FrameElementMethodTransport',
-  '3': 'IframeRelayTransport',
-  '4': 'IframePollingTransport',
-  '5': 'FlashTransport',
-  '6': 'NixTransport',
-  '7': 'DirectTransport'
+  '2': 'IframePollingTransport',
+  '3': 'DirectTransport',
 };
 
 
@@ -199,7 +175,7 @@ goog.net.xpc.CfgFields = {
    * circumstances where syncronous calls are required. If this property is
    * set to true, the transport will send the messages synchronously.
    */
-  DIRECT_TRANSPORT_SYNC_MODE: 'directSyncMode'
+  DIRECT_TRANSPORT_SYNC_MODE: 'directSyncMode',
 };
 
 
@@ -208,9 +184,11 @@ goog.net.xpc.CfgFields = {
  * @type {Array<string>}
  */
 goog.net.xpc.UriCfgFields = [
-  goog.net.xpc.CfgFields.PEER_URI, goog.net.xpc.CfgFields.LOCAL_RELAY_URI,
-  goog.net.xpc.CfgFields.PEER_RELAY_URI, goog.net.xpc.CfgFields.LOCAL_POLL_URI,
-  goog.net.xpc.CfgFields.PEER_POLL_URI
+  goog.net.xpc.CfgFields.PEER_URI,
+  goog.net.xpc.CfgFields.LOCAL_RELAY_URI,
+  goog.net.xpc.CfgFields.PEER_RELAY_URI,
+  goog.net.xpc.CfgFields.LOCAL_POLL_URI,
+  goog.net.xpc.CfgFields.PEER_POLL_URI,
 ];
 
 
@@ -220,7 +198,7 @@ goog.net.xpc.UriCfgFields = [
 goog.net.xpc.ChannelStates = {
   NOT_CONNECTED: 1,
   CONNECTED: 2,
-  CLOSED: 3
+  CLOSED: 3,
 };
 
 

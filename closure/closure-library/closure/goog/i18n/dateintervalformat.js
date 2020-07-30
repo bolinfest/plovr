@@ -1,16 +1,8 @@
-// Copyright 2017 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview DateIntervalFormat provides methods to format a date interval
@@ -45,7 +37,6 @@
  * var dt5 = new DateTime(2016, 8, 23, 14, 53, 0);
  * var itv = new Interval(0, 1); // One month.
  * dtIntFmt.format(dt5, itv); // --> 'Sep 23 – Oct 23, 2016'
- *
  */
 
 goog.module('goog.i18n.DateIntervalFormat');
@@ -79,13 +70,13 @@ var object = goog.require('goog.object');
  */
 var DateIntervalFormat = function(
     pattern, opt_dateIntervalSymbols, opt_dateTimeSymbols) {
-  asserts.assert(goog.isDef(pattern), 'Pattern must be defined.');
+  asserts.assert(pattern !== undefined, 'Pattern must be defined.');
   asserts.assert(
-      goog.isDef(opt_dateIntervalSymbols) ||
-          goog.isDef(dateIntervalSymbols.getDateIntervalSymbols()),
+      opt_dateIntervalSymbols !== undefined ||
+          dateIntervalSymbols.getDateIntervalSymbols() !== undefined,
       'goog.i18n.DateIntervalSymbols or explicit symbols must be defined');
   asserts.assert(
-      goog.isDef(opt_dateTimeSymbols) || goog.isDef(DateTimeSymbols),
+      opt_dateTimeSymbols !== undefined || DateTimeSymbols !== undefined,
       'goog.i18n.DateTimeSymbols or explicit symbols must be defined');
 
   /**
@@ -210,7 +201,7 @@ var ALL_PATTERN_LETTERS_ = /[a-zA-Z]/;
  * @private
  */
 DateIntervalFormat.prototype.getIntervalPattern_ = function(pattern) {
-  if (goog.isNumber(pattern)) {
+  if (typeof pattern === 'number') {
     switch (pattern) {
       case DateTimeFormat.Format.FULL_DATE:
         return this.dateIntervalSymbols_.FULL_DATE;

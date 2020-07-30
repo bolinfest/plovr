@@ -1,16 +1,8 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview This file defines a factory that can be used to mock and
@@ -32,7 +24,6 @@
  * </ul>
  *
  * For examples, please see the unit test.
- *
  */
 
 
@@ -94,7 +85,7 @@ goog.testing.MockClassRecord = function(
   /**
    * A mocks that will be constructed by their argument list.  The entries are
    * objects with the format {'args': args, 'mock': mock}.
-   * @type {Array<Object>}
+   * @type {!Array<{'args', 'mock'}>}
    * @private
    */
   this.instancesByArgs_ = [];
@@ -103,7 +94,7 @@ goog.testing.MockClassRecord = function(
 
 /**
  * A mock associated with the static functions for a given class.
- * @type {goog.testing.StrictMock|goog.testing.LooseMock|null}
+ * @type {?goog.testing.StrictMock|?goog.testing.LooseMock|null}
  * @private
  */
 goog.testing.MockClassRecord.prototype.staticMock_ = null;
@@ -302,8 +293,9 @@ goog.testing.MockClassFactory.prototype.classHasMock_ = function(className) {
 goog.testing.MockClassFactory.prototype.getProxyCtor_ = function(
     className, mockFinder) {
   return /** @type {function(new:?)} */ (function() {
-    this.$mock_ = mockFinder(className, arguments);
-    if (!this.$mock_) {
+    var self = /** @type {?} */ (this);  // unknown this is expected.
+    self.$mock_ = mockFinder(className, arguments);
+    if (!self.$mock_) {
       // The "arguments" variable is not a proper Array so it must be converted.
       var args = Array.prototype.slice.call(arguments, 0);
       throw new Error(
@@ -324,7 +316,8 @@ goog.testing.MockClassFactory.prototype.getProxyCtor_ = function(
  */
 goog.testing.MockClassFactory.prototype.getProxyFunction_ = function(fnName) {
   return /** @type {function(this:?,...?):?} */ (function() {
-    return this.$mock_[fnName].apply(this.$mock_, arguments);
+    var self = /** @type {?} */ (this);  // unknown this is expected.
+    return self.$mock_[fnName].apply(self.$mock_, arguments);
   });
 };
 
@@ -353,6 +346,7 @@ goog.testing.MockClassFactory.prototype.findMockInstance_ = function(
  * @param {string} className The name of the class.
  * @return {!Function} The proxy for provided class.
  * @private
+ * @suppress {missingProperties} Function does not defined base.
  */
 goog.testing.MockClassFactory.prototype.createProxy_ = function(
     namespace, classToMock, className) {

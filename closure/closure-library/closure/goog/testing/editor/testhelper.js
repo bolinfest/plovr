@@ -1,21 +1,11 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Class that allows for simple text editing tests.
- *
- * @author robbyw@google.com (Robby Walker)
  */
 
 goog.setTestOnly('goog.testing.editor.TestHelper');
@@ -159,12 +149,12 @@ goog.testing.editor.TestHelper.prototype.findTextNode = function(textOrRegexp) {
 goog.testing.editor.TestHelper.prototype.select = function(
     from, fromOffset, opt_to, opt_toOffset) {
   var end;
-  var start = end = goog.isString(from) ? this.findTextNode(from) : from;
+  var start = end = (typeof from === 'string') ? this.findTextNode(from) : from;
   var endOffset;
   var startOffset = endOffset = fromOffset;
 
-  if (opt_to && goog.isNumber(opt_toOffset)) {
-    end = goog.isString(opt_to) ? this.findTextNode(opt_to) : opt_to;
+  if (opt_to && typeof opt_toOffset === 'number') {
+    end = (typeof opt_to === 'string') ? this.findTextNode(opt_to) : opt_to;
     endOffset = opt_toOffset;
   }
 

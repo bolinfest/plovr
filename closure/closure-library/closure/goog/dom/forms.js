@@ -1,21 +1,12 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Utilities for manipulating a form and elements.
  *
- * @author arv@google.com (Erik Arvidsson)
  * @suppress {strictMissingProperties}
  */
 
@@ -23,9 +14,9 @@ goog.provide('goog.dom.forms');
 
 goog.require('goog.dom.InputType');
 goog.require('goog.dom.TagName');
+goog.require('goog.dom.safe');
 goog.require('goog.structs.Map');
 goog.require('goog.window');
-
 
 
 /**
@@ -95,7 +86,7 @@ goog.dom.forms.submitFormDataInNewWindow = function(
   var newForm =
       /** @type {!HTMLFormElement} */ (newDocument.createElement('form'));
   newForm.method = method;
-  newForm.action = actionUri;
+  goog.dom.safe.setFormElementAction(newForm, actionUri);
 
   // After this point, do not directly reference the form object's functions as
   // field names can shadow the form's properties.
@@ -157,7 +148,7 @@ goog.dom.forms.getFormDataString = function(form) {
  */
 goog.dom.forms.getFormDataHelper_ = function(form, result, fnAppend) {
   var els = form.elements;
-  for (var el, i = 0; el = els[i]; i++) {
+  for (var el, i = 0; el = els.item(i); i++) {
     if (  // Make sure we don't include elements that are not part of the form.
         // Some browsers include non-form elements. Check for 'form' property.
         // See http://code.google.com/p/closure-library/issues/detail?id=227
@@ -263,7 +254,7 @@ goog.dom.forms.setDisabled = function(el, disabled) {
   // disable all elements in a form
   if (el.tagName == goog.dom.TagName.FORM) {
     var els = /** @type {!HTMLFormElement} */ (el).elements;
-    for (var i = 0; el = els[i]; i++) {
+    for (var i = 0; el = els.item(i); i++) {
       goog.dom.forms.setDisabled(el, disabled);
     }
   } else {
@@ -314,25 +305,32 @@ goog.dom.forms.hasValueByName = function(form, name) {
 
 /**
  * Gets the current value of any element with a type.
- * @param {Element} el The element.
+ * @param {null|!Element|!RadioNodeList<?>} input The element.
  * @return {string|Array<string>|null} The current value of the element
  *     (or null).
  */
-goog.dom.forms.getValue = function(el) {
+goog.dom.forms.getValue = function(input) {
   // Elements with a type may need more specialized logic.
-  var type = /** @type {!HTMLInputElement} */ (el).type;
-  switch (goog.isString(type) && type.toLowerCase()) {
-    case goog.dom.InputType.CHECKBOX:
-    case goog.dom.InputType.RADIO:
-      return goog.dom.forms.getInputChecked_(el);
-    case goog.dom.InputType.SELECT_ONE:
-      return goog.dom.forms.getSelectSingle_(el);
-    case goog.dom.InputType.SELECT_MULTIPLE:
-      return goog.dom.forms.getSelectMultiple_(el);
-    default:
-      // Not every element with a value has a type (e.g. meter and progress).
-      return el.value != null ? el.value : null;
+  var type = /** {{type: (string|undefined)}} */ (input).type;
+
+  if (typeof type === 'string') {
+    var el = /** @type {!Element} */ (input);
+
+    switch (type.toLowerCase()) {
+      case goog.dom.InputType.CHECKBOX:
+      case goog.dom.InputType.RADIO:
+        return goog.dom.forms.getInputChecked_(el);
+      case goog.dom.InputType.SELECT_ONE:
+        return goog.dom.forms.getSelectSingle_(el);
+      case goog.dom.InputType.SELECT_MULTIPLE:
+        return goog.dom.forms.getSelectMultiple_(el);
+      default:
+        // Not every element with a value has a type (e.g. meter and progress).
+    }
   }
+
+  // Coerce `undefined` to `null`.
+  return input.value != null ? input.value : null;
 };
 
 
@@ -349,19 +347,19 @@ goog.dom.forms.getValue = function(el) {
 goog.dom.forms.getValueByName = function(form, name) {
   var els = form.elements[name];
 
-  if (els) {
-    if (els.type) {
-      return goog.dom.forms.getValue(els);
-    } else {
-      for (var i = 0; i < els.length; i++) {
-        var val = goog.dom.forms.getValue(els[i]);
-        if (val) {
-          return val;
-        }
+  if (!els) {
+    return null;
+  } else if (els.type) {
+    return goog.dom.forms.getValue(/** @type {!Element} */ (els));
+  } else {
+    for (var i = 0; i < els.length; i++) {
+      var val = goog.dom.forms.getValue(els[i]);
+      if (val) {
+        return val;
       }
     }
+    return null;
   }
-  return null;
 };
 
 
@@ -418,7 +416,7 @@ goog.dom.forms.getSelectMultiple_ = function(el) {
 goog.dom.forms.setValue = function(el, opt_value) {
   // Elements with a type may need more specialized logic.
   var type = /** @type {!HTMLInputElement} */ (el).type;
-  switch (goog.isString(type) && type.toLowerCase()) {
+  switch (typeof type === 'string' && type.toLowerCase()) {
     case goog.dom.InputType.CHECKBOX:
     case goog.dom.InputType.RADIO:
       goog.dom.forms.setInputChecked_(
@@ -466,7 +464,7 @@ goog.dom.forms.setInputChecked_ = function(el, opt_value) {
 goog.dom.forms.setSelectSingle_ = function(el, opt_value) {
   // unset any prior selections
   el.selectedIndex = -1;
-  if (goog.isString(opt_value)) {
+  if (typeof opt_value === 'string') {
     for (var option, i = 0;
          option = /** @type {!HTMLSelectElement} */ (el).options[i]; i++) {
       if (option.value == opt_value) {
@@ -487,7 +485,7 @@ goog.dom.forms.setSelectSingle_ = function(el, opt_value) {
  */
 goog.dom.forms.setSelectMultiple_ = function(el, opt_value) {
   // reset string opt_values as an array
-  if (goog.isString(opt_value)) {
+  if (typeof opt_value === 'string') {
     opt_value = [opt_value];
   }
   for (var option, i = 0;

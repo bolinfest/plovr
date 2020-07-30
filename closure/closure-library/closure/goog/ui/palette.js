@@ -1,33 +1,26 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview A palette control.  A palette is a grid that the user can
  * highlight or select via the keyboard or the mouse.
  *
- * @author attila@google.com (Attila Bodis)
  * @see ../demos/palette.html
  */
 
 goog.provide('goog.ui.Palette');
 
 goog.require('goog.array');
+goog.require('goog.asserts');
 goog.require('goog.dom');
 goog.require('goog.events');
 goog.require('goog.events.EventType');
 goog.require('goog.events.KeyCodes');
 goog.require('goog.math.Size');
+goog.require('goog.style');
 goog.require('goog.ui.Component');
 goog.require('goog.ui.Control');
 goog.require('goog.ui.PaletteRenderer');
@@ -77,7 +70,6 @@ goog.ui.Palette = function(items, opt_renderer, opt_domHelper) {
   this.lastHighlightedIndex_ = -1;
 };
 goog.inherits(goog.ui.Palette, goog.ui.Control);
-goog.tagUnsealableClass(goog.ui.Palette);
 
 
 /**
@@ -92,7 +84,7 @@ goog.ui.Palette.EventType = {
 /**
  * Palette dimensions (columns x rows).  If the number of rows is undefined,
  * it is calculated on first use.
- * @type {goog.math.Size}
+ * @type {?goog.math.Size}
  * @private
  */
 goog.ui.Palette.prototype.size_ = null;
@@ -108,7 +100,7 @@ goog.ui.Palette.prototype.highlightedIndex_ = -1;
 
 /**
  * Selection model controlling the palette's selection state.
- * @type {goog.ui.SelectionModel}
+ * @type {?goog.ui.SelectionModel}
  * @private
  */
 goog.ui.Palette.prototype.selectionModel_ = null;
@@ -305,10 +297,10 @@ goog.ui.Palette.prototype.handleKeyEvent = function(e) {
 
   // User hit HOME or END; move highlight.
   if (e.keyCode == goog.events.KeyCodes.HOME) {
-    this.setHighlightedIndex(0);
+    this.setHighlightedIndexInternal_(0, true /* scrollIntoView */);
     return true;
   } else if (e.keyCode == goog.events.KeyCodes.END) {
-    this.setHighlightedIndex(numItems - 1);
+    this.setHighlightedIndexInternal_(numItems - 1, true /* scrollIntoView */);
     return true;
   }
 
@@ -324,7 +316,8 @@ goog.ui.Palette.prototype.handleKeyEvent = function(e) {
       if (highlightedIndex == -1 || highlightedIndex == 0) {
         highlightedIndex = numItems;
       }
-      this.setHighlightedIndex(highlightedIndex - 1);
+      this.setHighlightedIndexInternal_(
+          highlightedIndex - 1, true /* scrollIntoView */);
       e.preventDefault();
       return true;
       break;
@@ -334,7 +327,8 @@ goog.ui.Palette.prototype.handleKeyEvent = function(e) {
       if (highlightedIndex == numItems - 1) {
         highlightedIndex = -1;
       }
-      this.setHighlightedIndex(highlightedIndex + 1);
+      this.setHighlightedIndexInternal_(
+          highlightedIndex + 1, true /* scrollIntoView */);
       e.preventDefault();
       return true;
       break;
@@ -344,7 +338,8 @@ goog.ui.Palette.prototype.handleKeyEvent = function(e) {
         highlightedIndex = numItems + numColumns - 1;
       }
       if (highlightedIndex >= numColumns) {
-        this.setHighlightedIndex(highlightedIndex - numColumns);
+        this.setHighlightedIndexInternal_(
+            highlightedIndex - numColumns, true /* scrollIntoView */);
         e.preventDefault();
         return true;
       }
@@ -355,7 +350,8 @@ goog.ui.Palette.prototype.handleKeyEvent = function(e) {
         highlightedIndex = -numColumns;
       }
       if (highlightedIndex < numItems - numColumns) {
-        this.setHighlightedIndex(highlightedIndex + numColumns);
+        this.setHighlightedIndexInternal_(
+            highlightedIndex + numColumns, true /* scrollIntoView */);
         e.preventDefault();
         return true;
       }
@@ -403,7 +399,7 @@ goog.ui.Palette.prototype.setSize = function(size, opt_rows) {
     throw new Error(goog.ui.Component.Error.ALREADY_RENDERED);
   }
 
-  this.size_ = goog.isNumber(size) ?
+  this.size_ = (typeof size === 'number') ?
       new goog.math.Size(size, /** @type {number} */ (opt_rows)) :
       size;
 
@@ -449,11 +445,32 @@ goog.ui.Palette.prototype.getHighlightedCellElement_ = function() {
  * @param {number} index 0-based index of the item to highlight.
  */
 goog.ui.Palette.prototype.setHighlightedIndex = function(index) {
+  this.setHighlightedIndexInternal_(index, false /* scrollIntoView */);
+};
+
+
+/**
+ * @param {number} index 0-based index of the item to highlight.
+ * @param {boolean} scrollIntoView Whether to bring the highlighted item into
+ *     view by potentially scrolling the palette's container. This has no effect
+ *     if the palette is not in a scrollbale container.
+ * @private
+ */
+goog.ui.Palette.prototype.setHighlightedIndexInternal_ = function(
+    index, scrollIntoView) {
   if (index != this.highlightedIndex_) {
     this.highlightIndex_(this.highlightedIndex_, false);
     this.lastHighlightedIndex_ = this.highlightedIndex_;
     this.highlightedIndex_ = index;
     this.highlightIndex_(index, true);
+    if (scrollIntoView) {
+      var highlightedElement = goog.asserts.assert(
+          this.getHighlightedCellElement_(),
+          'Highlighted item must exist to scroll to make it visible in ' +
+              'container. Please check that index is non-negative and valid.');
+      goog.style.scrollIntoContainerView(
+          highlightedElement, this.getParent().getElementStrict());
+    }
     this.dispatchEvent(goog.ui.Palette.EventType.AFTER_HIGHLIGHT);
   }
 };
@@ -591,7 +608,8 @@ goog.ui.Palette.prototype.adjustSize_ = function() {
       // There is already a size set; honor the number of columns (if >0), but
       // increase the number of rows if needed.
       var minRows = Math.ceil(items.length / this.size_.width);
-      if (!goog.isNumber(this.size_.height) || this.size_.height < minRows) {
+      if (typeof this.size_.height !== 'number' ||
+          this.size_.height < minRows) {
         this.size_.height = minRows;
       }
     } else {

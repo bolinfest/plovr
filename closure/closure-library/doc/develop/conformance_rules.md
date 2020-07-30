@@ -3,8 +3,6 @@ title: JavaScript Conformance Rules for Closure Library
 section: develop
 layout: article
 ---
-
-
 <!-- Documentation licensed under CC BY 4.0 -->
 <!-- License available at https://creativecommons.org/licenses/by/4.0/ -->
 
@@ -12,6 +10,7 @@ layout: article
 
 The config file:
 [closure/goog/conformance\_proto.txt](https://github.com/google/closure-library/tree/master/closure/goog/conformance_proto.txt)
+
 
 ## Introduction
 
@@ -92,37 +91,13 @@ Summing it up:
 
 ## Explanation of conformance rules
 
-### goog.base
-
-goog.base is not compatible with EcmaScript 5+ strict mode.  As part of the
-migration to strict mode Closure Library has moved away from goog.base and
-instead uses the "base" method defined on the class constructor by
-goog.inherits.
-
-Calling a super class constructor:
-
-```js
-var MyClass = function(arg) {
-  MyClass.base(this, 'constructor', arg);
-};
-```
-
-Calling a super class method:
-
-```js
-MyClass.prototype.method = function(arg) {
-  MyClass.base(this, 'method', arg);
-}
-```
-
-
 {: #logger}
 ### goog.debug.Logger 
 
 goog.debug.Logger should not be used directly. Instead use the goog.log static
 wrappers. goog.log is safely strippable from production code. However,
 goog.debug.Logger is only stripped from code if the logger\_ suffix is used in
-the name.
+the name. 
 
 Note:  You may see "possible violations" for code that is not a logger if the
 code is badly typed. Verify that you have a dependency on the type you are
@@ -140,7 +115,6 @@ IE's `execScript` is also banned.
 `Function`, `setTimeout`, `setInterval` and `requestAnimationFrame` with string
 argument are also banned.
 
-
 {: #throwOfNonErrorTypes}
 ### throw 'message' 
 
@@ -148,14 +122,12 @@ argument are also banned.
 debugging significantly more difficult.  Use `throw new Error('message')`
 instead.
 
-
 {: #callee}
 ### Arguments.prototype.callee 
 
 `Arguments.prototype.callee` is not allowed in EcmaScript
 "[strict mode](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Strict_mode)"
 code.
-
 
 {: #documentWrite}
 ### Calls to Document.prototype.write 
@@ -173,8 +145,7 @@ completely new window such as a popup or an iframe.
 
 If you need to use it, use the type-safe [`goog.dom.safe.documentWrite`]
 wrapper, or directly render a Strict Soy template using
-`goog.soy.Renderer.prototype.renderElement` (or similar).
-
+[`goog.soy.Renderer.prototype.renderElement`] \(or similar\).
 
 {: #innerHtml}
 ### Assignment to Element.prototype.innerHTML/outerHTML 
@@ -187,10 +158,9 @@ vulnerabilities.
 
 Instead, use the type-safe [`goog.dom.safe.setInnerHtml`] wrapper, or directly
 render a Strict Soy template using [`goog.soy.Renderer.prototype.renderElement`]
-(or similar).
+\(or similar\).
 
 Note: Reads of these properties are permitted.
-
 
 {: #untypedElements}
 ### Creating untyped elements is forbidden 
@@ -210,20 +180,6 @@ For this reason, we ban creating untyped `'script'`, `'iframe'`, `'frame'`,
 `'embed'`, and `'object'` elements and require using `goog.dom` methods with
 `goog.dom.TagName` with them.
 
-
-{: #soyDeprecatedAutoescaping}
-### Non-strict escaping in Soy templates 
-
-Rendering non-strict templates is prohibited for security reasons. We check if
-functions `soy.renderAsElement`, `soy.renderAsFragment` and `soy.renderElement`
-plus their versions in `goog.soy` and `goog.soy.Renderer` are called with
-strict-autoescaping templates. Calling them with non-strict templates is banned.
-
-This violation might be a false positive if you pass strict templates around
-with type `{Function}` or `function(): *`. Pass them with type
-`{goog.soy.StrictTemplate}` instead.
-
-
 {: #location}
 ### Assignment to Location.prototype.href and Window.prototype.location 
 
@@ -236,11 +192,10 @@ Instead of directly assigning to Location.prototype.href or
 Window.prototype.location, use the safe wrapper function
 [`goog.dom.safe.setLocationHref`]. When passed
 a string, this wrapper sanitizes the URL before passing it to the underlying DOM
-property. If passed a value of type`goog.html.SafeUrl`, the value is assigned
+property. If passed a value of type `goog.html.SafeUrl`, the value is assigned
 without further sanitization.
 
 Note: Reads of this property are permitted.
-
 
 {: #href}
 ### Assignment to .href property of Anchor, Link, etc elements 
@@ -253,11 +208,10 @@ via "javascript:evil()" URLs.
 Instead of directly assigning to the href property, use safe wrapper functions
 such as [`goog.dom.safe.setAnchorHref`]. When passed a
 string, this wrapper sanitizes the URL before passing it to the underlying DOM
-property. If passed a value of type goog.html.SafeUrl, the value is assigned
+property. If passed a value of type `goog.html.SafeUrl`, the value is assigned
 without further sanitization.
 
 Note: Reads of this property are permitted.
-
 
 {: #trustedResourceUrl}
 ### Assignment to property requires a TrustedResourceUrl via goog.dom.safe 
@@ -277,7 +231,6 @@ Instead of directly assigning to these properties use safe wrapper functions
 which take TrustedResourceUrl, such as goog.dom.safe.setScriptSrc.
 
 Note: Reads of this property are permitted.
-
 
 {: #createDom}
 ### Assigning a variable to a dangerous property via createDom is forbidden. 
@@ -312,7 +265,6 @@ goog.dom.createDom('img', {'src': ''});
 Note that string literal values assigned to banned attributes are allowed as
 they couldn't be attacker controlled.
 
-
 {: #scriptContent}
 ### Setting content of Script element is not allowed 
 
@@ -320,17 +272,11 @@ Setting content of `<script>` and then appending it to the document has the same
 effect as calling eval(). This coding pattern is prone to XSS vulnerabilities,
 and therefore disallowed.
 
-
 {: #postMessage}
 ### Window.prototype.postMessage 
 
-Raw "postMessage" can create security vulnerabilities. Use gapi.rpc instead.
-gapi.rpc conceptually augments window.postmessage with more security and other
-features.
-
-Valid reasons for using raw "postMessage" include when it is used for
-communication to/from an iframe hosted on the same domain as the page containing
-the iframe. However, be sure to get a security review to allow usage of this.
+Raw `postMessage()` does not restrict target and sender origins by default. This
+can cause security vulnerabilities.
 
 
 {: #expose}
@@ -338,14 +284,12 @@ the iframe. However, be sure to get a security review to allow usage of this.
 
 @expose has non-obvious global side-effects that can cause errors.
 
-
 {: #globalVars}
 ### Global declarations 
 
 Global functions and var declarations are not allowed, these pollute global
 scope.  Top level namespaces are allowed if declared with "goog.provide" or
 "goog.module".
-
 
 {: #unknownThis}
 ### Unknown types 
@@ -356,14 +300,12 @@ forbidden so that accidental unknowns (which are far more common) can be
 caught.
 
 
-
 {: #storage}
 ### Client Side Storage (Closure library specific) 
 
 Client side storage mechanisms are dangerous because of PII and security
 implications. TODO(johnlenz): Document what someone submitting code to Closure
 should in the case they see this warning.
-
 
 
 {: #legacyApis}
@@ -373,7 +315,7 @@ Closure (as well as some libraries built on top of
 Closure)
 include several APIs that consume plain strings, and pass them on to an API that
 process that string in an injection-vulnerability-prone way (most commonly, an
-assigmnent to `.innerHTML`). Thus, use of such APIs incurs similar risks of
+assignment to `.innerHTML`). Thus, use of such APIs incurs similar risks of
 injection vulnerabilities as the underlying DOM API (e.g., `innerHTML`
 assignment). Due to these risks, conformance rules disallow the use of such
 APIs. The respective conformance rules' error message refers to the equivalent,

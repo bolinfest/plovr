@@ -1,16 +1,8 @@
-// Copyright 2009 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Utilties for working with the styles of DOM nodes, and
@@ -25,8 +17,6 @@
  * more permissive than the goog.style API should be. For example,
  * goog.style.getComputedStyle will throw an exception if you give it a
  * text node.
- *
- * @author nicksantos@google.com (Nick Santos)
  */
 
 goog.provide('goog.editor.style');
@@ -128,6 +118,7 @@ goog.editor.style.SELECTABLE_INPUT_TYPES_ =
  * Prevent the default action on mousedown events.
  * @param {goog.events.Event} e The mouse down event.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.editor.style.cancelMouseDownHelper_ = function(e) {
   var targetTagName = e.target.tagName;
@@ -179,7 +170,7 @@ goog.editor.style.makeUnselectable = function(element, eventHandler) {
  *
  * For IE this simply turns off the "unselectable" property.
  *
- * Under FF no descendent of an unselectable node can be selectable:
+ * Under FF no descendant of an unselectable node can be selectable:
  *
  * https://bugzilla.mozilla.org/show_bug.cgi?id=203291
  *

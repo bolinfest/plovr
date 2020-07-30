@@ -1,16 +1,8 @@
-// Copyright 2014 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Base class for the 64-bit SHA-2 cryptographic hashes.
@@ -20,8 +12,6 @@
  *
  * This code borrows heavily from the 32-bit SHA2 implementation written by
  * Yue Zhang (zysxqn@).
- *
- * @author fy@google.com (Frank Yellin)
  */
 
 goog.provide('goog.crypt.Sha2_64bit');
@@ -146,7 +136,7 @@ goog.crypt.Sha2_64bit.prototype.reset = function() {
 
 /** @override */
 goog.crypt.Sha2_64bit.prototype.update = function(message, opt_length) {
-  var length = goog.isDef(opt_length) ? opt_length : message.length;
+  var length = (opt_length !== undefined) ? opt_length : message.length;
 
   // Make sure this hasher is usable.
   if (this.needsReset_) {
@@ -161,7 +151,7 @@ goog.crypt.Sha2_64bit.prototype.update = function(message, opt_length) {
   var chunkBytes = this.chunkBytes_;
 
   // The input message could be either byte array or string.
-  if (goog.isString(message)) {
+  if (typeof message === 'string') {
     for (var i = 0; i < length; i++) {
       var b = message.charCodeAt(i);
       if (b > 255) {
@@ -178,7 +168,7 @@ goog.crypt.Sha2_64bit.prototype.update = function(message, opt_length) {
       var b = message[i];
       // Hack:  b|0 coerces b to an integer, so the last part confirms that
       // b has no fractional part.
-      if (!goog.isNumber(b) || b < 0 || b > 255 || b != (b | 0)) {
+      if (typeof b !== 'number' || b < 0 || b > 255 || b != (b | 0)) {
         throw new Error('message must be a byte array');
       }
       this.chunk_[chunkBytes++] = b;

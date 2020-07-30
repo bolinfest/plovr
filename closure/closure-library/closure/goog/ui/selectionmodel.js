@@ -1,24 +1,14 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Single-selection model implemenation.
  *
  * TODO(attila): Add keyboard & mouse event hooks?
  * TODO(attila): Add multiple selection?
- *
- * @author attila@google.com (Attila Bodis)
  */
 
 
@@ -51,12 +41,11 @@ goog.ui.SelectionModel = function(opt_items) {
   this.addItems(opt_items);
 };
 goog.inherits(goog.ui.SelectionModel, goog.events.EventTarget);
-goog.tagUnsealableClass(goog.ui.SelectionModel);
 
 
 /**
  * The currently selected item (null if none).
- * @type {Object}
+ * @type {?Object}
  * @private
  */
 goog.ui.SelectionModel.prototype.selectedItem_ = null;
@@ -66,7 +55,7 @@ goog.ui.SelectionModel.prototype.selectedItem_ = null;
  * Selection handler function.  Called with two arguments (the item to be
  * selected or deselected, and a Boolean indicating whether the item is to
  * be selected or deselected).
- * @type {Function}
+ * @type {?Function}
  * @private
  */
 goog.ui.SelectionModel.prototype.selectionHandler_ = null;

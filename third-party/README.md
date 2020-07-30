@@ -7,19 +7,20 @@ To update `closure-compiler`, `closure-templates`, or `closure-spreadsheets`, fi
 Then update the maven version in the pom.xml. Then run:
 
 ```
-mvn de.evosec:export-dependencies-maven-plugin:buck
+mvn de.evosec:export-dependencies-maven-plugin:buck && mv target/BUCK ./BUCK
 ```
 
-Maven will resolve all the transitive dependencies and write the output to `target/BUCK`.
-Manually inspect the file and copy it over the BUCK file in this dir.
+Maven will resolve all the transitive dependencies and write the output to
+`target/BUCK`.  Then we move it over the BUCK file in this dir.
 
 Extra Steps for Closure Templates
 ---------------------------------
 
 Closure Templates relies on a small JS support library [soyutils_usegoog.js](javascript/soyutils_usegoog.js).
 
-You need to manually build this by checking out the Closure Templates repo, running `mvn install`, and
-copying the computed file into this repo. I wish there was a better way to do this.
+You need to manually copy this from the [javascript
+directory](https://github.com/google/closure-templates/tree/master/javascript)
+of the Closure Templates repo.
 
 Extra Steps for Closure Compiler
 --------------------------------

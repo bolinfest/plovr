@@ -1,16 +1,8 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Mock Clock implementation for working with setTimeout,
@@ -18,7 +10,6 @@
  *
  * Derived from jsUnitMockTimeout.js, contributed to JsUnit by
  * Pivotal Computer Systems, www.pivotalsf.com
- *
  */
 
 goog.setTestOnly('goog.testing.MockClock');
@@ -69,9 +60,7 @@ goog.testing.MockClock = function(opt_autoInstall) {
    * right.  For example, the expiration times for each element of the queue
    * might be in the order 300, 200, 200.
    *
-   * @type {Array<{
-   *    timeoutKey: number, millis: number,
-   *    runAtMillis: number, funcToCall: Function, recurring: boolean}>}
+   * @type {?Array<!goog.testing.MockClock.QueueObjType_>}
    * @private
    */
   this.queue_ = [];
@@ -88,12 +77,25 @@ goog.testing.MockClock = function(opt_autoInstall) {
    */
   this.deletedKeys_ = {};
 
+  /**
+   * Whether we should skip mocking Date.now().
+   * @private {boolean}
+   */
+  this.unmockDateNow_ = false;
+
   if (opt_autoInstall) {
     this.install();
   }
 };
 goog.inherits(goog.testing.MockClock, goog.Disposable);
 
+
+/**
+ * @typedef {{
+ *    timeoutKey: number, millis: number,
+ *    runAtMillis: number, funcToCall: Function, recurring: boolean}}
+ */
+goog.testing.MockClock.QueueObjType_;
 
 /**
  * Default wait timeout for mocking requestAnimationFrame (in milliseconds).
@@ -133,7 +135,7 @@ goog.testing.MockClock.prototype.callbacksTriggered_ = 0;
 /**
  * PropertyReplacer instance which overwrites and resets setTimeout,
  * setInterval, etc. or null if the MockClock is not installed.
- * @type {goog.testing.PropertyReplacer}
+ * @type {?goog.testing.PropertyReplacer}
  * @private
  */
 goog.testing.MockClock.prototype.replacer_ = null;
@@ -165,6 +167,9 @@ goog.testing.MockClock.prototype.timeoutDelay_ = 0;
 goog.testing.MockClock.REAL_SETTIMEOUT_ = goog.global.setTimeout;
 
 
+/** @type {function():number} */
+goog.testing.MockClock.prototype.oldGoogNow_;
+
 /**
  * Installs the MockClock by overriding the global object's implementation of
  * setTimeout, setInterval, clearTimeout and clearInterval.
@@ -187,6 +192,9 @@ goog.testing.MockClock.prototype.install = function() {
     r.set(goog.global, 'setImmediate', goog.bind(this.setImmediate_, this));
     r.set(goog.global, 'clearTimeout', goog.bind(this.clearTimeout_, this));
     r.set(goog.global, 'clearInterval', goog.bind(this.clearInterval_, this));
+    if (!this.unmockDateNow_) {
+      r.set(Date, 'now', goog.bind(this.getCurrentTime, this));
+    }
     // goog.Promise uses goog.async.run. In order to be able to test
     // Promise-based code, we need to make sure that goog.async.run uses
     // nextTick instead of native browser Promises. This means that it will
@@ -202,6 +210,23 @@ goog.testing.MockClock.prototype.install = function() {
     // PropertyReplacer#set can't be called with renameable functions.
     this.oldGoogNow_ = goog.now;
     goog.now = goog.bind(this.getCurrentTime, this);
+  }
+};
+
+
+/**
+ * Unmocks the Date.now() function for tests that aren't expecting it to be
+ * mocked. See b/141619890.
+ * @deprecated
+ */
+goog.testing.MockClock.prototype.unmockDateNow = function() {
+  this.unmockDateNow_ = true;
+  if (this.replacer_) {
+    try {
+      this.replacer_.restore(Date, 'now');
+    } catch (e) {
+      // Ignore error thrown if Date.now was not already mocked.
+    }
   }
 };
 
@@ -322,9 +347,13 @@ goog.testing.MockClock.prototype.tick = function(opt_millis) {
   if (typeof opt_millis != 'number') {
     opt_millis = 1;
   }
+  if (opt_millis < 0) {
+    throw new Error(
+        'Time cannot go backwards (cannot tick by ' + opt_millis + ')');
+  }
   var endTime = this.nowMillis_ + opt_millis;
   this.runFunctionsWithinRange_(endTime);
-  this.nowMillis_ = endTime;
+  this.nowMillis_ = Math.max(this.nowMillis_, endTime);
   return endTime;
 };
 
@@ -344,6 +373,12 @@ goog.testing.MockClock.prototype.tick = function(opt_millis) {
  *     If not specified, clock ticks 1 millisecond.
  * @return {T}
  * @template T
+ *
+ * @deprecated Treating Promises as synchronous values is incompatible with
+ *     native promises and async functions. More generally, this code relies on
+ *     promises "pumped" by setTimeout which is not done in production code,
+ *     even for goog.Promise and results unnatural timing between resolved
+ *     promises callback and setTimeout/setInterval callbacks in tests.
  */
 goog.testing.MockClock.prototype.tickPromise = function(promise, opt_millis) {
   var value;
@@ -459,7 +494,7 @@ goog.testing.MockClock.prototype.scheduleFunction_ = function(
         'The provided callback must be a function, not a ' + typeof funcToCall);
   }
 
-  var timeout = {
+  var /** !goog.testing.MockClock.QueueObjType_ */ timeout = {
     runAtMillis: this.nowMillis_ + millis,
     funcToCall: funcToCall,
     recurring: recurring,
@@ -477,10 +512,10 @@ goog.testing.MockClock.prototype.scheduleFunction_ = function(
  * Later-inserted duplicates appear at lower indices.  For example, the
  * asterisk in (5,4,*,3,2,1) would be the insertion point for 3.
  *
- * @param {Object} timeout The timeout to insert, with numerical runAtMillis
- *     property.
- * @param {Array<Object>} queue The queue to insert into, with each element
- *     having a numerical runAtMillis property.
+ * @param {goog.testing.MockClock.QueueObjType_} timeout The timeout to insert,
+ *     with numerical runAtMillis property.
+ * @param {Array<!goog.testing.MockClock.QueueObjType_>} queue The queue to
+ *     insert into, with each element having a numerical runAtMillis property.
  * @private
  */
 goog.testing.MockClock.insert_ = function(timeout, queue) {

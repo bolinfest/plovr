@@ -1,16 +1,8 @@
-// Copyright 2015 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Conditionally add "adapter" methods to allow JSTD test cases
@@ -38,6 +30,7 @@ goog.require('goog.testing.jsunit');
  *     JSTD testing queue.
  * @return {!Function}
  * @private
+ * @suppress {checkPrototypalTypes}
  */
 goog.testing.JsTdTestCaseAdapter.TestCaseFactory_ = function(
     testCaseName, condition, opt_proto, opt_isAsync) {
@@ -55,10 +48,7 @@ goog.testing.JsTdTestCaseAdapter.TestCaseFactory_ = function(
     testCase.shouldRunTests = condition;
     testCase.setTestObj(t);
     testCase.autoDiscoverTests();
-    // TODO(goktug): Remove suppression when the verification is removed.
-    var suppressEnsureNoAutoDiscovery = true;
-    goog.testing.TestCase.initializeTestRunner(
-        testCase, undefined, suppressEnsureNoAutoDiscovery);
+    goog.testing.TestCase.initializeTestRunner(testCase, undefined);
   });
 
   return T;

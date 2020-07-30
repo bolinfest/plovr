@@ -1,16 +1,8 @@
-// Copyright 2013 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 
 ////////////////////////// NOTE ABOUT EDITING THIS FILE ///////////////////////
@@ -31,7 +23,6 @@
  *
  * See the README for notes about the design and structure of the API
  * (especially related to performance).
- *
  */
 goog.provide('goog.vec.vec3f');
 goog.provide('goog.vec.vec3f.Type');
@@ -39,7 +30,7 @@ goog.provide('goog.vec.vec3f.Type');
 /** @suppress {extraRequire} */
 goog.require('goog.vec');
 
-/** @typedef {goog.vec.Float32} */ goog.vec.vec3f.Type;
+/** @typedef {!goog.vec.Float32} */ goog.vec.vec3f.Type;
 
 
 /**
@@ -497,7 +488,7 @@ goog.vec.vec3f.slerp = function(v0, v1, f, resultVec) {
  *     chained together.
  */
 goog.vec.vec3f.max = function(vec0, limit, resultVec) {
-  if (goog.isNumber(limit)) {
+  if (typeof limit === 'number') {
     resultVec[0] = Math.max(vec0[0], limit);
     resultVec[1] = Math.max(vec0[1], limit);
     resultVec[2] = Math.max(vec0[2], limit);
@@ -522,7 +513,7 @@ goog.vec.vec3f.max = function(vec0, limit, resultVec) {
  *     chained together.
  */
 goog.vec.vec3f.min = function(vec0, limit, resultVec) {
-  if (goog.isNumber(limit)) {
+  if (typeof limit === 'number') {
     resultVec[0] = Math.min(vec0[0], limit);
     resultVec[1] = Math.min(vec0[1], limit);
     resultVec[2] = Math.min(vec0[2], limit);

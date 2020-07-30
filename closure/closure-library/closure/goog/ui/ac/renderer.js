@@ -1,21 +1,12 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Class for rendering the results of an auto complete and
  * allow the user to select an row.
- *
  */
 
 goog.provide('goog.ui.ac.Renderer');
@@ -92,7 +83,7 @@ goog.ui.ac.Renderer = function(
 
   /**
    * Reference to the main element that controls the rendered autocomplete
-   * @type {Element}
+   * @type {?Element}
    * @private
    */
   this.element_ = null;
@@ -537,6 +528,7 @@ goog.ui.ac.Renderer.prototype.isVisible = function() {
 /**
  * Sets the 'active' class of the nth item.
  * @param {number} index Index of the item to highlight.
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.ac.Renderer.prototype.hiliteRow = function(index) {
   var row =
@@ -581,6 +573,7 @@ goog.ui.ac.Renderer.prototype.hiliteNone = function() {
  * Sets the 'active' class of the item with a given id.
  * @param {number} id Id of the row to hilight. If id is -1 then no rows get
  *     hilited.
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.ac.Renderer.prototype.hiliteId = function(id) {
   if (id == -1) {
@@ -648,6 +641,7 @@ goog.ui.ac.Renderer.prototype.maybeCreateElement_ = function() {
 /**
  * Redraw (or draw if this is the first call) the rendered auto-complete drop
  * down.
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.ac.Renderer.prototype.redraw = function() {
   // Create the element if it doesn't yet exist
@@ -819,11 +813,11 @@ goog.ui.ac.Renderer.prototype.disposeInternal = function() {
  *
  * Normally this will only be matching a maximum of 20 or so items.  Even with
  * 40 rows, DOM this building is fine.
- *
  * @param {Object} row Object representing row.
  * @param {string} token Token to highlight.
  * @param {Node} node The node to render into.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.ac.Renderer.prototype.renderRowContents_ = function(row, token, node) {
   goog.dom.setTextContent(node, row.data.toString());
@@ -864,7 +858,7 @@ goog.ui.ac.Renderer.prototype.hiliteMatchingText_ = function(
 
   if (node.nodeType == goog.dom.NodeType.TEXT) {
     var rest = null;
-    if (goog.isArray(tokenOrArray) && tokenOrArray.length > 1 &&
+    if (Array.isArray(tokenOrArray) && tokenOrArray.length > 1 &&
         !this.highlightAllTokens_) {
       rest = goog.array.slice(tokenOrArray, 1);
     }
@@ -962,7 +956,7 @@ goog.ui.ac.Renderer.prototype.getTokenRegExp_ = function(tokenOrArray) {
     return token;
   }
 
-  if (goog.isArray(tokenOrArray)) {
+  if (Array.isArray(tokenOrArray)) {
     // Remove invalid tokens from the array, which may leave us with nothing.
     tokenOrArray = goog.array.filter(tokenOrArray, function(str) {
       return !goog.string.isEmptyOrWhitespace(goog.string.makeSafe(str));
@@ -972,7 +966,7 @@ goog.ui.ac.Renderer.prototype.getTokenRegExp_ = function(tokenOrArray) {
   // If highlighting all tokens, join them with '|' so the regular expression
   // will match on any of them.
   if (this.highlightAllTokens_) {
-    if (goog.isArray(tokenOrArray)) {
+    if (Array.isArray(tokenOrArray)) {
       var tokenArray = goog.array.map(tokenOrArray, goog.string.regExpEscape);
       token = tokenArray.join('|');
     } else {
@@ -989,7 +983,7 @@ goog.ui.ac.Renderer.prototype.getTokenRegExp_ = function(tokenOrArray) {
     // array.
     // TODO(user): why is this this way?. We should match against all
     // tokens in the array, but only accept the first match.
-    if (goog.isArray(tokenOrArray)) {
+    if (Array.isArray(tokenOrArray)) {
       token = tokenOrArray.length > 0 ?
           goog.string.regExpEscape(tokenOrArray[0]) :
           '';
@@ -1062,6 +1056,7 @@ goog.ui.ac.Renderer.prototype.getRowFromEventTarget_ = function(et) {
  * which then makes a callback to select the correct row.
  * @param {goog.events.Event} e Browser event object.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.ac.Renderer.prototype.handleClick_ = function(e) {
   var index = this.getRowFromEventTarget_(/** @type {Element} */ (e.target));
@@ -1093,6 +1088,7 @@ goog.ui.ac.Renderer.prototype.handleMouseDown_ = function(e) {
  * duplicating the code
  * @param {goog.events.Event} e Browser event object.
  * @private
+ * @suppress {strictMissingProperties} Part of the go/strict_warnings_migration
  */
 goog.ui.ac.Renderer.prototype.handleMouseOver_ = function(e) {
   var index = this.getRowFromEventTarget_(/** @type {Element} */ (e.target));

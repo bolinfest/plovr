@@ -25,7 +25,7 @@ final class CompilationError {
   }
 
   String getSourceName() {
-    return jsError.sourceName;
+    return jsError.getSourceName();
   }
 
   String getMessage() {
@@ -34,11 +34,11 @@ final class CompilationError {
       // http://code.google.com/p/closure-compiler/issues/detail?id=277
       // Please help track it down!
       // System.err.println("Why is CheckLevel OFF???");
-      return jsError.description;
+      return jsError.getDescription();
     }
 
     if (sourceExcerptProvider == null) {
-      return jsError.description;
+      return jsError.getDescription();
     } else {
       LightweightMessageFormatter formatter = new LightweightMessageFormatter(sourceExcerptProvider);
       return jsError.format(jsError.getDefaultLevel(), formatter);
@@ -50,6 +50,6 @@ final class CompilationError {
   }
 
   int getLineNumber() {
-    return jsError.lineNumber;
+    return jsError.getLineNumber();
   }
 }

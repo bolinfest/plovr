@@ -1,16 +1,8 @@
-// Copyright 2016 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Potentially unsafe API for the HTML sanitizer.
@@ -35,7 +27,8 @@ goog.require('goog.string.Const');
 
 
 /**
- * Extends the tag whitelist with the list of tags provided.
+ * Extends the tag whitelist with the list of tags provided. If the tag is
+ * blacklisted, this method also removes it from the blacklist.
  *
  * IMPORTANT: Uses of this method must be carefully security-reviewed to ensure
  * that the new tags do not introduce untrusted code execution or unsanctioned
@@ -47,9 +40,7 @@ goog.require('goog.string.Const');
  * @param {!goog.html.sanitizer.HtmlSanitizer.Builder} builder The builder
  *     whose tag whitelist should be extended.
  * @param {!Array<string>} tags A list of additional tags to allow through the
- *     sanitizer. Note that if the tag is also present in the blacklist,
- *     its addition to the whitelist has no effect. The tag names are
- *     case-insensitive.
+ *     sanitizer. The tag names are case-insensitive.
  * @return {!goog.html.sanitizer.HtmlSanitizer.Builder}
  */
 goog.html.sanitizer.unsafe.alsoAllowTags = function(

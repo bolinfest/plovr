@@ -1,16 +1,8 @@
-// Copyright 2009 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Wrapper on a Flash object embedded in the HTML page.
@@ -23,7 +15,7 @@
  * Based on the following compatibility test suite:
  * http://www.bobbyvandersluis.com/flashembed/testsuite/
  *
- * TODO(user): take a look at swfobject, and maybe use it instead of the current
+ * TODO(goto): take a look at swfobject, and maybe use it instead of the current
  * flash embedding method.
  *
  * Examples of usage:
@@ -36,10 +28,9 @@
  *   flash.render(goog.dom.getElement('parent'));
  * </pre>
  *
- * TODO(user, jessan): create a goog.ui.media.BrowserInterfaceFlashObject that
+ * TODO(goto, jessan): create a goog.ui.media.BrowserInterfaceFlashObject that
  * subclasses goog.ui.media.FlashObject to provide all the goodness of
  * http://go/browserinterface.as
- *
  */
 
 goog.provide('goog.ui.media.FlashObject');
@@ -323,7 +314,7 @@ goog.ui.media.FlashObject.prototype.setFlashVar = function(key, value) {
  * Sets flash variables. You can either pass a Map of key->value pairs or you
  * can pass a key, value pair to set a specific variable.
  *
- * TODO(user, martino): Get rid of this method.
+ * TODO(goto, user): Get rid of this method.
  *
  * @deprecated Use {@link #addFlashVars} or {@link #setFlashVar} instead.
  * @param {goog.structs.Map|Object|string} flashVar A map of variables (given
@@ -339,7 +330,7 @@ goog.ui.media.FlashObject.prototype.setFlashVars = function(
     this.addFlashVars(/**@type {!goog.structs.Map|!Object}*/ (flashVar));
   } else {
     goog.asserts.assert(
-        goog.isString(flashVar) && goog.isDef(opt_value),
+        typeof flashVar === 'string' && opt_value !== undefined,
         'Invalid argument(s)');
     this.setFlashVar(
         /**@type {string}*/ (flashVar),
@@ -405,8 +396,9 @@ goog.ui.media.FlashObject.prototype.getAllowScriptAccess = function() {
  * @return {!goog.ui.media.FlashObject} The flash object instance for chaining.
  */
 goog.ui.media.FlashObject.prototype.setSize = function(width, height) {
-  this.width_ = goog.isString(width) ? width : Math.round(width) + 'px';
-  this.height_ = goog.isString(height) ? height : Math.round(height) + 'px';
+  this.width_ = (typeof width === 'string') ? width : Math.round(width) + 'px';
+  this.height_ =
+      (typeof height === 'string') ? height : Math.round(height) + 'px';
   if (this.getElement()) {
     goog.style.setSize(this.getFlashElement(), this.width_, this.height_);
   }
@@ -480,7 +472,7 @@ goog.ui.media.FlashObject.prototype.enterDocument = function() {
   // To overcome this inconsistency, all events from/to the plugin are sinked,
   // since you can't assume that the events will be propagated.
   //
-  // NOTE(user): we only sink events on the bubbling phase, since there are no
+  // NOTE(goto): we only sink events on the bubbling phase, since there are no
   // inexpensive/scalable way to stop events on the capturing phase unless we
   // added an event listener on the document for each flash object.
   this.eventHandler_.listen(

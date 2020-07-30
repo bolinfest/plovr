@@ -1,24 +1,24 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Utilities for working with IE control ranges.
  *
- * @author robbyw@google.com (Robby Walker)
  * @suppress {strictMissingProperties}
  */
 
+
+
+// TODO(user): We're trying to migrate all ES5 subclasses of Closure
+// Library to ES6. In ES6 this cannot be referenced before super is called. This
+// file has at least one this before a super call (in ES5) and cannot be
+// automatically upgraded to ES6 as a result. Please fix this if you have a
+// chance. Note: This can sometimes be caused by not calling the super
+// constructor at all. You can run the conversion tool yourself to see what it
+// does on this file: blaze run //javascript/refactoring/es6_classes:convert.
 
 goog.provide('goog.dom.ControlRange');
 goog.provide('goog.dom.ControlRangeIterator');
@@ -29,6 +29,7 @@ goog.require('goog.dom.AbstractMultiRange');
 goog.require('goog.dom.AbstractRange');
 goog.require('goog.dom.RangeIterator');
 goog.require('goog.dom.RangeType');
+goog.require('goog.dom.SavedCaretRange');
 goog.require('goog.dom.SavedRange');
 goog.require('goog.dom.TagWalkType');
 goog.require('goog.dom.TextRange');
@@ -47,19 +48,19 @@ goog.require('goog.userAgent');
 goog.dom.ControlRange = function() {
   /**
    * The IE control range obejct.
-   * @private {Object}
+   * @private {?Object}
    */
   this.range_ = null;
 
   /**
    * Cached list of elements.
-   * @private {Array<Element>}
+   * @private {?Array<?Element>}
    */
   this.elements_ = null;
 
   /**
    * Cached sorted list of elements.
-   * @private {Array<Element>}
+   * @private {?Array<?Element>}
    */
   this.sortedElements_ = null;
 };
@@ -323,6 +324,12 @@ goog.dom.ControlRange.prototype.saveUsingDom = function() {
   return new goog.dom.DomSavedControlRange_(this);
 };
 
+/** @override */
+goog.dom.ControlRange.prototype.saveUsingCarets = function() {
+  return (this.getStartNode() && this.getEndNode()) ?
+      new goog.dom.SavedCaretRange(this) :
+      null;
+};
 
 // RANGE MODIFICATION
 
@@ -393,19 +400,19 @@ goog.dom.DomSavedControlRange_.prototype.disposeInternal = function() {
 goog.dom.ControlRangeIterator = function(range) {
   /**
    * The first node in the selection.
-   * @private {Node}
+   * @private {?Node}
    */
   this.startNode_ = null;
 
   /**
    * The last node in the selection.
-   * @private {Node}
+   * @private {?Node}
    */
   this.endNode_ = null;
 
   /**
    * The list of elements left to traverse.
-   * @private {Array<Element>?}
+   * @private {Array<?Element>?}
    */
   this.elements_ = null;
 

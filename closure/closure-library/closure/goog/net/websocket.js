@@ -1,16 +1,8 @@
-// Copyright 2011 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Definition of the WebSocket class.  A WebSocket provides a
@@ -32,7 +24,6 @@
  *  } catch (e) {
  *    ...
  *  }
- *
  */
 
 goog.provide('goog.net.WebSocket');
@@ -52,22 +43,15 @@ goog.require('goog.log');
 /**
  * Class encapsulating the logic for using a WebSocket.
  *
- * @param {boolean|!goog.net.WebSocket.Options=} opt_params
- *     Parameters describing behavior of the WebSocket. The boolean 'true' is
- *     equivalent to setting Options.autoReconnect to be true.
- * @param {function(number): number=} opt_getNextReconnect
- *     @see goog.net.WebSocket.Options.getNextReconnect. This parameter is
- *     ignored if Options is passed for the first argument.
+ * @param {!goog.net.WebSocket.Options=} opt_params Parameters describing
+ *     behavior of the WebSocket.
  * @constructor
  * @extends {goog.events.EventTarget}
  */
-goog.net.WebSocket = function(opt_params, opt_getNextReconnect) {
+goog.net.WebSocket = function(opt_params) {
   goog.net.WebSocket.base(this, 'constructor');
-  if (typeof opt_params != 'object') {
-    opt_params = /**@type {!goog.net.WebSocket.Options} */ ({
-      autoReconnect: opt_params,
-      getNextReconnect: opt_getNextReconnect,
-    });
+  if (!opt_params) {
+    opt_params = /** @type {!goog.net.WebSocket.Options} */ ({});
   }
   /** @private {boolean} @see goog.net.WebSocket.Options.autoReconnect */
   this.autoReconnect_ = opt_params.autoReconnect != false;
@@ -209,7 +193,7 @@ goog.net.WebSocket.EventType = {
   /**
    * Fired when the WebSocket connection has been established.
    */
-  OPENED: goog.events.getUniqueId('opened')
+  OPENED: goog.events.getUniqueId('opened'),
 };
 
 
@@ -227,7 +211,7 @@ goog.net.WebSocket.ReadyState_ = {
   // Note that this is a valid state even if the OPEN state was never achieved.
   CLOSING: 2,
   // This is when the socket is actually closed.
-  CLOSED: 3
+  CLOSED: 3,
 };
 
 /**
@@ -451,12 +435,13 @@ goog.net.WebSocket.prototype.onClose_ = function(event) {
 /**
  * Called when a new message arrives from the server.
  *
- * @param {MessageEvent<string>} event The web socket message event.
+ * @param {!MessageEvent<string|!ArrayBuffer|!Blob>} event The web socket
+ *     message event.
+ * @return {void}
  * @private
  */
 goog.net.WebSocket.prototype.onMessage_ = function(event) {
-  var message = event.data;
-  this.dispatchEvent(new goog.net.WebSocket.MessageEvent(message));
+  this.dispatchEvent(new goog.net.WebSocket.MessageEvent(event.data));
 };
 
 
@@ -479,7 +464,7 @@ goog.net.WebSocket.prototype.onError_ = function(event) {
  * @private
  */
 goog.net.WebSocket.prototype.clearReconnectTimer_ = function() {
-  if (goog.isDefAndNotNull(this.reconnectTimer_)) {
+  if (this.reconnectTimer_ != null) {
     goog.Timer.clear(this.reconnectTimer_);
   }
   this.reconnectTimer_ = null;
@@ -496,7 +481,8 @@ goog.net.WebSocket.prototype.disposeInternal = function() {
 /**
  * Object representing a new incoming message event.
  *
- * @param {string} message The raw message coming from the web socket.
+ * @param {string|!ArrayBuffer|!Blob} message The raw message coming from the
+ *     web socket.
  * @extends {goog.events.Event}
  * @constructor
  * @final
@@ -505,9 +491,11 @@ goog.net.WebSocket.MessageEvent = function(message) {
   goog.net.WebSocket.MessageEvent.base(
       this, 'constructor', goog.net.WebSocket.EventType.MESSAGE);
 
+  // TODO this used to be just `string`, but that is incorrect. Until all usages
+  // have been cleaned up we need to leave this as ?.
   /**
    * The new message from the web socket.
-   * @type {string}
+   * @type {?}
    */
   this.message = message;
 };

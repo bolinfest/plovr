@@ -1,16 +1,8 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Additional mathematical functions.
@@ -429,7 +421,7 @@ goog.math.log10Floor = function(num) {
  * @return {number} The largest integer less than or equal to `num`.
  */
 goog.math.safeFloor = function(num, opt_epsilon) {
-  goog.asserts.assert(!goog.isDef(opt_epsilon) || opt_epsilon > 0);
+  goog.asserts.assert(opt_epsilon === undefined || opt_epsilon > 0);
   return Math.floor(num + (opt_epsilon || 2e-15));
 };
 
@@ -443,6 +435,6 @@ goog.math.safeFloor = function(num, opt_epsilon) {
  * @return {number} The smallest integer greater than or equal to `num`.
  */
 goog.math.safeCeil = function(num, opt_epsilon) {
-  goog.asserts.assert(!goog.isDef(opt_epsilon) || opt_epsilon > 0);
+  goog.asserts.assert(opt_epsilon === undefined || opt_epsilon > 0);
   return Math.ceil(num - (opt_epsilon || 2e-15));
 };

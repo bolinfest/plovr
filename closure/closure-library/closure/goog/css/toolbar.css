@@ -7,10 +7,11 @@
 
 /*
  * Standard styling for toolbars and toolbar items.
- *
- * @author attila@google.com (Attila Bodis)
  */
 
+@provide 'goog.css.toolbar';
+
+@require './common';
 
 /*
  * Styles used by goog.ui.ToolbarRenderer.

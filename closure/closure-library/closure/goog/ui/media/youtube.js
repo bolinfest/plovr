@@ -1,16 +1,8 @@
-// Copyright 2009 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview provides a reusable youtube UI component given a youtube data
@@ -60,7 +52,6 @@
  * </pre>
  *
  * Requires flash to actually work.
- *
  */
 
 
@@ -243,13 +234,17 @@ goog.inherits(goog.ui.media.YoutubeModel, goog.ui.media.MediaModel);
 goog.ui.media.YoutubeModel.MATCHER_ = new RegExp(
     // Lead in.
     'https?://(?:[a-zA-Z]{1,3}\\.)?' +
-        // Watch short URL prefix. This should handle URLs of the form:
+        // Watch short URL prefix and /embed/ URLs. This should handle URLs
+        // like:
         // https://youtu.be/jqxENMKaeCU?cgiparam=value
-        '(?:(?:youtu\\.be/([\\w-]+)(?:\\?[\\w=&-]+)?)|' +
+        // https://youtube.com/embed/jqxENMKaeCU?cgiparam=value
+        // https://youtube-nocookie.com/jqxENMKaeCU?cgiparam=value
+        '(?:(?:(?:youtu\\.be|youtube(?:-nocookie)?\\.com/embed)/([\\w-]+)(?:\\?[\\w=&-]+)?)|' +
         // Watch URL prefix.  This should handle new URLs of the form:
         // https://www.youtube.com/watch#!v=jqxENMKaeCU&feature=related
+        // https://www.youtube-nocookie.com/watch#!v=jqxENMKaeCU&feature=related
         // where the parameters appear after "#!" instead of "?".
-        '(?:youtube\\.com/watch)' +
+        '(?:youtube(?:-nocookie)?\\.com/watch)' +
         // Get the video id:
         // The video ID is a parameter v=[videoid] either right after the "?"
         // or after some other parameters.
@@ -314,9 +309,9 @@ goog.ui.media.YoutubeModel.buildUrl = function(videoId) {
  * A static auxiliary method that builds a static image URL with a preview of
  * the youtube video.
  *
- * NOTE(user): patterned after Gmail's gadgets/youtube,
+ * NOTE(goto): patterned after Gmail's gadgets/youtube,
  *
- * TODO(user): how do I specify the width/height of the resulting image on the
+ * TODO(goto): how do I specify the width/height of the resulting image on the
  * url ? is there an official API for https://ytimg.com ?
  *
  * @param {string} youtubeId The youtube video ID.

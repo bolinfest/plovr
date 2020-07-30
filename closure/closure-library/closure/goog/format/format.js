@@ -1,20 +1,11 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Provides utility functions for formatting strings, numbers etc.
- *
  */
 
 goog.provide('goog.format');
@@ -112,7 +103,7 @@ goog.format.numericValueToString = function(val, opt_decimals) {
 goog.format.numBytesToString = function(
     val, opt_decimals, opt_suffix, opt_useSeparator) {
   var suffix = '';
-  if (!goog.isDef(opt_suffix) || opt_suffix) {
+  if (opt_suffix === undefined || opt_suffix) {
     suffix = 'B';
   }
   return goog.format.numericValueToString_(
@@ -181,7 +172,7 @@ goog.format.numericValueToString_ = function(
       separator = ' ';
     }
   }
-  var ex = Math.pow(10, goog.isDef(opt_decimals) ? opt_decimals : 2);
+  var ex = Math.pow(10, opt_decimals !== undefined ? opt_decimals : 2);
   return Math.round(orig_val / scale * ex) / ex + separator + symbol;
 };
 
@@ -477,9 +468,9 @@ goog.format.IS_IE8_OR_ABOVE_ =
 
 /**
  * Constant for the WBR replacement used by insertWordBreaks.  Safari requires
- * <wbr></wbr>, Opera needs the &shy; entity, though this will give a visible
- * hyphen at breaks.  IE8 uses a zero width space.
- * Other browsers just use <wbr>.
+ * &lt;wbr&gt;&lt;/wbr&gt;, Opera needs the &shy; entity, though this will give
+ * a visible hyphen at breaks.  IE8 uses a zero width space. Other browsers just
+ * use &lt;wbr&gt;.
  * @type {string}
  */
 goog.format.WORD_BREAK_HTML =

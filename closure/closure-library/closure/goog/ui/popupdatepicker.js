@@ -1,16 +1,8 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Popup Date Picker implementation.  Pairs a goog.ui.DatePicker
@@ -22,9 +14,8 @@
 goog.provide('goog.ui.PopupDatePicker');
 
 goog.require('goog.events.EventType');
-goog.require('goog.positioning.AnchoredPosition');
+goog.require('goog.positioning.AnchoredViewportPosition');
 goog.require('goog.positioning.Corner');
-goog.require('goog.positioning.Overflow');
 goog.require('goog.style');
 goog.require('goog.ui.Component');
 goog.require('goog.ui.DatePicker');
@@ -47,9 +38,16 @@ goog.ui.PopupDatePicker = function(opt_datePicker, opt_domHelper) {
   goog.ui.Component.call(this, opt_domHelper);
 
   this.datePicker_ = opt_datePicker || new goog.ui.DatePicker();
+
+  /**
+   * Whether to reposition the popup when the date picker size changes (due to
+   * going to a different month with more weeks) so that all weeks are visible
+   * in the viewport.
+   * @private {boolean}
+   */
+  this.keepAllWeeksInViewport_ = false;
 };
 goog.inherits(goog.ui.PopupDatePicker, goog.ui.Component);
-goog.tagUnsealableClass(goog.ui.PopupDatePicker);
 
 
 /**
@@ -70,7 +68,7 @@ goog.ui.PopupDatePicker.prototype.popup_ = null;
 
 /**
  * Reference to the element that triggered the last popup.
- * @type {Element}
+ * @type {?Element}
  * @private
  */
 goog.ui.PopupDatePicker.prototype.lastTarget_ = null;
@@ -159,6 +157,13 @@ goog.ui.PopupDatePicker.prototype.getDatePicker = function() {
   return this.datePicker_;
 };
 
+/**
+ * @return {?goog.ui.Popup} The popup instance.
+ */
+goog.ui.PopupDatePicker.prototype.getPopup = function() {
+  return this.popup_;
+};
+
 
 /**
  * @return {goog.date.Date?} The selected date, if any.  See
@@ -226,6 +231,26 @@ goog.ui.PopupDatePicker.prototype.getAllowAutoFocus = function() {
 
 
 /**
+ * Sets whether to reposition the popup when the date picker size changes so
+ * that all weeks are visible in the viewport.
+ * @param {boolean} keepAllWeeksInViewport
+ */
+goog.ui.PopupDatePicker.prototype.setKeepAllWeeksInViewport = function(
+    keepAllWeeksInViewport) {
+  this.keepAllWeeksInViewport_ = keepAllWeeksInViewport;
+};
+
+
+/**
+ * @return {boolean} Whether to reposition the popup when the date picker size
+ *     changes so that all weeks are visible in the viewport.
+ */
+goog.ui.PopupDatePicker.prototype.getKeepAllWeeksInViewport = function() {
+  return this.keepAllWeeksInViewport_;
+};
+
+
+/**
  * Show the popup at the bottom-left corner of the specified element.
  * @param {Element} element Reference element for displaying the popup -- popup
  *     will appear at the bottom-left corner of this element.
@@ -234,21 +259,23 @@ goog.ui.PopupDatePicker.prototype.getAllowAutoFocus = function() {
  */
 goog.ui.PopupDatePicker.prototype.showPopup = function(element, opt_keepDate) {
   this.lastTarget_ = element;
-  this.popup_.setPosition(
-      new goog.positioning.AnchoredPosition(
-          element, goog.positioning.Corner.BOTTOM_START,
-          (goog.positioning.Overflow.ADJUST_X_EXCEPT_OFFSCREEN |
-           goog.positioning.Overflow.ADJUST_Y_EXCEPT_OFFSCREEN)));
+  this.popup_.setPosition(new goog.positioning.AnchoredViewportPosition(
+      element, goog.positioning.Corner.BOTTOM_START, true));
 
   // Don't listen to date changes while we're setting up the popup so we don't
-  // have to worry about change events when we call setDate().
+  // have to worry about change events when we call setDate(). Don't listen to
+  // grid size changes since the popup will position itself when we call
+  // setVisible().
   this.getHandler()
       .unlisten(
           this.datePicker_, goog.ui.DatePicker.Events.CHANGE,
           this.onDateChanged_)
       .unlisten(
           this.datePicker_, goog.ui.DatePicker.Events.SELECT,
-          this.onDateSelected_);
+          this.onDateSelected_)
+      .unlisten(
+          this.datePicker_, goog.ui.DatePicker.Events.GRID_SIZE_INCREASE,
+          this.onGridSizeIncrease_);
 
   var keepDate = !!opt_keepDate;
   if (!keepDate) {
@@ -272,6 +299,12 @@ goog.ui.PopupDatePicker.prototype.showPopup = function(element, opt_keepDate) {
       .listen(
           this.datePicker_, goog.ui.DatePicker.Events.SELECT,
           this.onDateSelected_);
+
+  if (this.keepAllWeeksInViewport_) {
+    this.getHandler().listen(
+        this.datePicker_, goog.ui.DatePicker.Events.GRID_SIZE_INCREASE,
+        this.onGridSizeIncrease_);
+  }
 };
 
 
@@ -319,4 +352,13 @@ goog.ui.PopupDatePicker.prototype.onDateSelected_ = function(event) {
 goog.ui.PopupDatePicker.prototype.onDateChanged_ = function(event) {
   // Forward the change event onto our listeners.
   this.dispatchEvent(event);
+};
+
+
+/**
+ * Called when the container DatePicker's size increases.
+ * @private
+ */
+goog.ui.PopupDatePicker.prototype.onGridSizeIncrease_ = function() {
+  this.popup_ && this.popup_.reposition();
 };

@@ -1,16 +1,8 @@
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview A utility class for representing three-dimensional points.
@@ -36,19 +28,19 @@ goog.math.Coordinate3 = function(opt_x, opt_y, opt_z) {
    * X-value
    * @type {number}
    */
-  this.x = goog.isDef(opt_x) ? opt_x : 0;
+  this.x = (opt_x !== undefined) ? opt_x : 0;
 
   /**
    * Y-value
    * @type {number}
    */
-  this.y = goog.isDef(opt_y) ? opt_y : 0;
+  this.y = (opt_y !== undefined) ? opt_y : 0;
 
   /**
    * Z-value
    * @type {number}
    */
-  this.z = goog.isDef(opt_z) ? opt_z : 0;
+  this.z = (opt_z !== undefined) ? opt_z : 0;
 };
 
 
@@ -101,9 +93,9 @@ goog.math.Coordinate3.equals = function(a, b) {
  * @return {number} The distance between `a` and `b`.
  */
 goog.math.Coordinate3.distance = function(a, b) {
-  var dx = a.x - b.x;
-  var dy = a.y - b.y;
-  var dz = a.z - b.z;
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dz = a.z - b.z;
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 };
 
@@ -121,9 +113,9 @@ goog.math.Coordinate3.distance = function(a, b) {
  * @return {number} The squared distance between `a` and `b`.
  */
 goog.math.Coordinate3.squaredDistance = function(a, b) {
-  var dx = a.x - b.x;
-  var dy = a.y - b.y;
-  var dz = a.z - b.z;
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dz = a.z - b.z;
   return dx * dx + dy * dy + dz * dz;
 };
 

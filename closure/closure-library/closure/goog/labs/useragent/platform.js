@@ -1,16 +1,8 @@
-// Copyright 2013 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Closure user agent platform detection.
@@ -18,7 +10,6 @@
  * For more information on browser brand, rendering engine, or device see the
  * other sub-namespaces in goog.labs.userAgent (browser, engine, and device
  * respectively).
- *
  */
 
 goog.provide('goog.labs.userAgent.platform');
@@ -112,6 +103,13 @@ goog.labs.userAgent.platform.isChromecast = function() {
 };
 
 /**
+ * @return {boolean} Whether the platform is KaiOS.
+ */
+goog.labs.userAgent.platform.isKaiOS = function() {
+  return goog.labs.userAgent.util.matchUserAgentIgnoreCase('KaiOS');
+};
+
+/**
  * The version of the platform. We only determine the version for Windows,
  * Mac, and Chrome OS. It doesn't make much sense on Linux. For Windows, we only
  * look at the NT version. Non-NT-based versions (e.g. 95, 98, etc.) are given
@@ -142,6 +140,10 @@ goog.labs.userAgent.platform.getVersion = function() {
     // Note: some old versions of Camino do not report an OSX version.
     // Default to 10.
     version = match ? match[1].replace(/_/g, '.') : '10';
+  } else if (goog.labs.userAgent.platform.isKaiOS()) {
+    re = /(?:KaiOS)\/(\S+)/i;
+    var match = re.exec(userAgentString);
+    version = match && match[1];
   } else if (goog.labs.userAgent.platform.isAndroid()) {
     re = /Android\s+([^\);]+)(\)|;)/;
     var match = re.exec(userAgentString);

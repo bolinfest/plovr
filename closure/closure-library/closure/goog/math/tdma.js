@@ -1,23 +1,14 @@
-// Copyright 2011 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview The Tridiagonal matrix algorithm solver solves a special
  * version of a sparse linear system Ax = b where A is tridiagonal.
  *
  * See http://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
- *
  */
 
 goog.provide('goog.math.tdma');
@@ -53,18 +44,19 @@ goog.math.tdma.solve = function(
   vecRight = vecRight.slice();
 
   // The dimension of the matrix.
-  var nDim = mainDiag.length;
+  const nDim = mainDiag.length;
 
   // Construct a modified linear system of equations with the same solution
   // as the input one.
-  for (var i = 1; i < nDim; ++i) {
-    var m = subDiag[i - 1] / mainDiag[i - 1];
+  let i;
+  for (i = 1; i < nDim; ++i) {
+    const m = subDiag[i - 1] / mainDiag[i - 1];
     mainDiag[i] = mainDiag[i] - m * supDiag[i - 1];
     vecRight[i] = vecRight[i] - m * vecRight[i - 1];
   }
 
   // Solve the new system of equations by simple back-substitution.
-  var result = opt_result || new Array(vecRight.length);
+  const result = opt_result || new Array(vecRight.length);
   result[nDim - 1] = vecRight[nDim - 1] / mainDiag[nDim - 1];
   for (i = nDim - 2; i >= 0; --i) {
     result[i] = (vecRight[i] - supDiag[i] * result[i + 1]) / mainDiag[i];
