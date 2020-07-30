@@ -1,34 +1,25 @@
-// Copyright 2009 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
+// Copyright The Closure Library Authors.
+// SPDX-License-Identifier: Apache-2.0
 var _allTests = [
   'closure/goog/a11y/aria/announcer_test.html',
   'closure/goog/a11y/aria/aria_test.html',
   'closure/goog/array/array_test.html',
   'closure/goog/asserts/asserts_test.html',
+  'closure/goog/asserts/dom_test.html',
   'closure/goog/async/animationdelay_test.html',
   'closure/goog/async/conditionaldelay_test.html',
   'closure/goog/async/debouncer_test.html',
   'closure/goog/async/delay_test.html',
   'closure/goog/async/freelist_test.html',
   'closure/goog/async/nexttick_test.html',
+  'closure/goog/async/promises_test.html',
   'closure/goog/async/run_next_tick_test.html',
   'closure/goog/async/run_test.html',
   'closure/goog/async/throttle_test.html',
   'closure/goog/async/workqueue_test.html',
   'closure/goog/base_module_test.html',
   'closure/goog/base_test.html',
+  'closure/goog/collections/sets_test.html',
   'closure/goog/color/alpha_test.html',
   'closure/goog/color/color_test.html',
   'closure/goog/crypt/aes_test.html',
@@ -61,6 +52,7 @@ var _allTests = [
   'closure/goog/debug/console_test.html',
   'closure/goog/debug/debug_test.html',
   'closure/goog/debug/debugwindow_test.html',
+  'closure/goog/debug/deepfreeze_test.html',
   'closure/goog/debug/devcss/devcss_test.html',
   'closure/goog/debug/enhanceerror_test.html',
   'closure/goog/debug/entrypointregistry_test.html',
@@ -86,12 +78,14 @@ var _allTests = [
   'closure/goog/dom/browserfeature_test.html',
   'closure/goog/dom/browserrange/browserrange_test.html',
   'closure/goog/dom/bufferedviewportsizemonitor_test.html',
+  'closure/goog/dom/classes_quirks_test.html',
   'closure/goog/dom/classes_test.html',
   'closure/goog/dom/classlist_test.html',
   'closure/goog/dom/controlrange_test.html',
   'closure/goog/dom/dataset_test.html',
   'closure/goog/dom/dom_compile_test.html',
   'closure/goog/dom/dom_test.html',
+  'closure/goog/dom/element_test.html',
   'closure/goog/dom/fontsizemonitor_test.html',
   'closure/goog/dom/forms_test.html',
   'closure/goog/dom/fullscreen_test.html',
@@ -250,7 +244,7 @@ var _allTests = [
   'closure/goog/json/hybrid_test.html',
   'closure/goog/json/json_test.html',
   'closure/goog/json/processor_test.html',
-  'closure/goog/labs/collections/iterables_test.html',
+  'closure/goog/labs/collections/iters_test.html',
   'closure/goog/labs/dom/pagevisibilitymonitor_test.html',
   'closure/goog/labs/events/nondisposableeventtarget_test.html',
   'closure/goog/labs/events/nondisposableeventtarget_via_googevents_test.html',
@@ -284,6 +278,7 @@ var _allTests = [
   'closure/goog/labs/useragent/browser_test.html',
   'closure/goog/labs/useragent/device_test.html',
   'closure/goog/labs/useragent/engine_test.html',
+  'closure/goog/labs/useragent/extra_test.html',
   'closure/goog/labs/useragent/platform_test.html',
   'closure/goog/labs/useragent/util_test.html',
   'closure/goog/labs/useragent/verifier_test.html',
@@ -328,6 +323,9 @@ var _allTests = [
   'closure/goog/messaging/portnetwork_test.html',
   'closure/goog/messaging/portoperator_test.html',
   'closure/goog/messaging/respondingchannel_test.html',
+  'closure/goog/mochikit/async/deferred_async_test.html',
+  'closure/goog/mochikit/async/deferredlist_test.html',
+  'closure/goog/mochikit/async/deferred_test.html',
   'closure/goog/module/moduleinfo_test.html',
   'closure/goog/module/moduleloadcallback_test.html',
   'closure/goog/module/moduleloader_test.html',
@@ -379,12 +377,12 @@ var _allTests = [
   'closure/goog/proto2/pbliteserializer_test.html',
   'closure/goog/proto2/proto_test.html',
   'closure/goog/proto2/textformatserializer_test.html',
+  'closure/goog/proto/serializer_test.html',
   'closure/goog/pubsub/pubsub_test.html',
   'closure/goog/pubsub/typedpubsub_test.html',
   'closure/goog/reflect/reflect_test.html',
   'closure/goog/result/chain_test.html',
   'closure/goog/result/combine_test.html',
-  'closure/goog/result/deferredadaptor_test.html',
   'closure/goog/result/resultutil_test.html',
   'closure/goog/result/simpleresult_test.html',
   'closure/goog/result/transform_test.html',
@@ -437,6 +435,7 @@ var _allTests = [
   'closure/goog/style/bidi_test.html',
   'closure/goog/style/cursor_test.html',
   'closure/goog/style/style_document_scroll_test.html',
+  'closure/goog/style/style_quirks_test.html',
   'closure/goog/style/style_test.html',
   'closure/goog/style/style_webkit_scrollbars_test.html',
   'closure/goog/style/transform_test.html',
@@ -547,6 +546,7 @@ var _allTests = [
   'closure/goog/ui/iframemask_test.html',
   'closure/goog/ui/inputdatepicker_test.html',
   'closure/goog/ui/keyboardshortcuthandler_test.html',
+  'closure/goog/ui/map_test.html',
   'closure/goog/ui/media/flashobject_test.html',
   'closure/goog/ui/media/flickr_test.html',
   'closure/goog/ui/media/googlevideo_test.html',
@@ -607,6 +607,7 @@ var _allTests = [
   'closure/goog/ui/zippy_test.html',
   'closure/goog/uri/uri_test.html',
   'closure/goog/uri/utils_test.html',
+  'closure/goog/url/url_test.html',
   'closure/goog/useragent/adobereader_test.html',
   'closure/goog/useragent/flash_test.html',
   'closure/goog/useragent/jscript_test.html',
@@ -632,12 +633,7 @@ var _allTests = [
   'closure/goog/vec/vec3_test.html',
   'closure/goog/vec/vec4d_test.html',
   'closure/goog/vec/vec4f_test.html',
-  'closure/goog/vec/vec4_test.html',
-  'closure/goog/collections/sets_test.html',
-  'closure/goog/proto/serializer_test.html',
-  'closure/goog/dom/classes_quirks_test.html',
-  'closure/goog/style/style_quirks_test.html',
-  'closure/goog/useragent/useragent_quirks_test.html'
+  'closure/goog/vec/vec4_test.html'
 ];
 
 // If we're running in a nodejs context, export tests. Used when running tests

@@ -1,16 +1,8 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Definition of the Tracer class and associated classes.
@@ -269,6 +261,26 @@ goog.debug.Trace_.Event_.prototype.id;
  * @type {string|undefined}
  */
 goog.debug.Trace_.Event_.prototype.comment;
+
+/**
+ * @type {number|undefined}
+ */
+goog.debug.Trace_.Event_.prototype.eventTime;
+
+/**
+ * @type {number|undefined}
+ */
+goog.debug.Trace_.Event_.prototype.startTime;
+
+/**
+ * @type {number|undefined}
+ */
+goog.debug.Trace_.Event_.prototype.stopTime;
+
+/**
+ * @type {number|undefined}
+ */
+goog.debug.Trace_.Event_.prototype.totalVarAlloc;
 
 
 /**
@@ -768,7 +780,7 @@ goog.debug.Trace_.prototype.toString = function() {
       indent.pop();
     }
     sb.push(' ', e.toTraceString(this.startTime_, etime, indent.join('')));
-    etime = e.eventTime;
+    etime = /** @type {number} */ (e.eventTime);
     sb.push('\n');
     if (e.eventType == goog.debug.Trace_.EventType.START) {
       indent.push('|  ');

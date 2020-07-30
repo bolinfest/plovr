@@ -1,34 +1,23 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Functions and objects for date representation and manipulation.
  * @suppress {checkPrototypalTypes}
- *
- * @author eae@google.com (Emil A Eklund)
  */
 
 goog.provide('goog.date');
 goog.provide('goog.date.Date');
+goog.provide('goog.date.DateLike');
 goog.provide('goog.date.DateTime');
 goog.provide('goog.date.Interval');
 goog.provide('goog.date.month');
 goog.provide('goog.date.weekDay');
 
 goog.require('goog.asserts');
-/** @suppress {extraRequire} */
-goog.require('goog.date.DateLike');
 goog.require('goog.i18n.DateTimeSymbols');
 goog.require('goog.string');
 
@@ -784,6 +773,11 @@ goog.date.Interval.prototype.add = function(interval) {
   this.seconds += interval.seconds;
 };
 
+
+/**
+ * @typedef {(?Date|?goog.date.Date)}
+ */
+goog.date.DateLike;
 
 
 /**
@@ -1665,7 +1659,7 @@ goog.date.DateTime.prototype.toIsoString = function(opt_verbose, opt_tz) {
   var dateString = goog.date.Date.prototype.toIsoString.call(this, opt_verbose);
 
   if (opt_verbose) {
-    return dateString + ' ' + goog.string.padNumber(this.getHours(), 2) + ':' +
+    return dateString + 'T' + goog.string.padNumber(this.getHours(), 2) + ':' +
         goog.string.padNumber(this.getMinutes(), 2) + ':' +
         goog.string.padNumber(this.getSeconds(), 2) +
         (opt_tz ? this.getTimezoneOffsetString() : '');
@@ -1711,7 +1705,7 @@ goog.date.DateTime.prototype.toUTCIsoString = function(opt_verbose, opt_tz) {
   var dateStr = goog.date.Date.prototype.toUTCIsoString.call(this, opt_verbose);
 
   if (opt_verbose) {
-    return dateStr + ' ' + goog.string.padNumber(this.getUTCHours(), 2) + ':' +
+    return dateStr + 'T' + goog.string.padNumber(this.getUTCHours(), 2) + ':' +
         goog.string.padNumber(this.getUTCMinutes(), 2) + ':' +
         goog.string.padNumber(this.getUTCSeconds(), 2) + (opt_tz ? 'Z' : '');
   }
@@ -1728,7 +1722,7 @@ goog.date.DateTime.prototype.toUTCIsoString = function(opt_verbose, opt_tz) {
  * @return {string} A UTC datetime expressed in RFC 3339 format.
  */
 goog.date.DateTime.prototype.toUTCRfc3339String = function() {
-  var date = this.toUTCIsoString(true).replace(' ', 'T');
+  var date = this.toUTCIsoString(true);
   var millis = this.getUTCMilliseconds();
   return (millis ? date + '.' + goog.string.padNumber(millis, 3) : date) + 'Z';
 };

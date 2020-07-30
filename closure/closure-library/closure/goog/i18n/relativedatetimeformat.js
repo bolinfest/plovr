@@ -1,16 +1,8 @@
-// Copyright 2018 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview RelativeDateTimeFormat provides methods to format simple
@@ -167,20 +159,10 @@ RelativeDateTimeFormat.prototype.format = function(quantity, relativeUnit) {
    * http://bugs.icu-project.org/trac/ticket/12171
    */
 
-  /**
-   * TODO(icu/12171): re-examine this if/when ICU4J and CLDR data are
-   *  updated with correct correct relative strings.
-   */
-  var useNumeric = this.alwaysNumeric_;
-  if ((relativeUnit == RelativeDateTimeFormat.Unit.MINUTE) ||
-      (relativeUnit == RelativeDateTimeFormat.Unit.HOUR)) {
-    useNumeric = true;
-  }
-
   if (LocaleFeature.USE_ECMASCRIPT_I18N_RDTF) {
-    return this.formatNative_(quantity, relativeUnit, useNumeric);
+    return this.formatNative_(quantity, relativeUnit, this.alwaysNumeric_);
   } else {
-    return this.formatPolyfill_(quantity, relativeUnit, useNumeric);
+    return this.formatPolyfill_(quantity, relativeUnit, this.alwaysNumeric_);
   }
 };
 
@@ -200,17 +182,11 @@ RelativeDateTimeFormat.prototype.formatPolyfill_ = function(
    * Find the right data based on Unit, quantity, and plural.
    */
   var rdtfUnitPattern = this.getUnitStylePattern_(relativeUnit);
-  var dirString = quantity.toString();
-
-  if ((relativeUnit == RelativeDateTimeFormat.Unit.MINUTE) ||
-      (relativeUnit == RelativeDateTimeFormat.Unit.HOUR)) {
-    useNumeric = true;
-  }
   // Formats using Closure Javascript. Check for forcing numeric and having
   // relative value with the given quantity.
   if (!useNumeric && rdtfUnitPattern && rdtfUnitPattern.R &&
-      rdtfUnitPattern.R[dirString]) {
-    return rdtfUnitPattern.R[dirString];
+      rdtfUnitPattern.R[quantity]) {
+    return rdtfUnitPattern.R[quantity];
   } else {
     // Direction data doesn't exist. Fallback to format numeric.
     return this.formatNumericInternal_(quantity, rdtfUnitPattern);
@@ -429,8 +405,8 @@ RelativeDateTimeFormat.prototype.isOffsetDefinedForUnit = function(
 
   var rdtfUnitPattern = this.getUnitStylePattern_(unit);
   // Check for force numeric and requested unit and offset.
-  if (typeof (offset) == 'number') {
-    offset = offset.toString();
+  if (typeof (offset) == 'string') {
+    offset = Number(offset);
   }
   if (rdtfUnitPattern && rdtfUnitPattern.R && rdtfUnitPattern.R[offset]) {
     return rdtfUnitPattern.R[offset];

@@ -1,16 +1,8 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Utilities for manipulating the browser's Document Object Model
@@ -20,7 +12,6 @@
  * to a different document object.  This is useful if you are working with
  * frames or multiple windows.
  *
- * @author arv@google.com (Erik Arvidsson)
  * @suppress {strictMissingProperties}
  */
 
@@ -856,7 +847,7 @@ goog.dom.createDom_ = function(doc, args) {
   if (attributes) {
     if (typeof attributes === 'string') {
       element.className = attributes;
-    } else if (goog.isArray(attributes)) {
+    } else if (Array.isArray(attributes)) {
       element.className = attributes.join(' ');
     } else {
       goog.dom.setProperties(element, attributes);
@@ -1260,7 +1251,8 @@ goog.dom.insertChildAt = function(parent, child, index) {
   // will append the child at the end of the list of children.
   goog.asserts.assert(
       parent != null, 'goog.dom.insertChildAt expects a non-null parent');
-  parent.insertBefore(child, parent.childNodes[index] || null);
+  parent.insertBefore(
+      /** @type {!Node} */ (child), parent.childNodes[index] || null);
 };
 
 

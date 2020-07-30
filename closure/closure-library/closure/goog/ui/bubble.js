@@ -1,16 +1,8 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Definition of the Bubble class.
@@ -38,11 +30,6 @@ goog.require('goog.string.Const');
 goog.require('goog.style');
 goog.require('goog.ui.Component');
 goog.require('goog.ui.Popup');
-
-
-goog.scope(function() {
-var SafeHtml = goog.html.SafeHtml;
-
 
 
 /**
@@ -108,7 +95,6 @@ goog.ui.Bubble = function(message, opt_config, opt_domHelper) {
 
 };
 goog.inherits(goog.ui.Bubble, goog.ui.Component);
-goog.tagUnsealableClass(goog.ui.Bubble);
 
 
 /**
@@ -259,7 +245,7 @@ goog.ui.Bubble.prototype.configureElement_ = function() {
   goog.dom.safe.setInnerHtml(
       /** @type {!Element} */ (element), this.computeHtmlForCorner_(corner));
 
-  if (!(this.message_ instanceof SafeHtml)) {
+  if (!(this.message_ instanceof goog.html.SafeHtml)) {
     var messageDiv = this.getDomHelper().getElement(this.messageId_);
     this.getDomHelper().appendChild(messageDiv, this.message_);
   }
@@ -421,37 +407,41 @@ goog.ui.Bubble.prototype.computeHtmlForCorner_ = function(corner) {
       throw new Error('This corner type is not supported by bubble!');
   }
   var message = null;
-  if (this.message_ instanceof SafeHtml) {
+  if (this.message_ instanceof goog.html.SafeHtml) {
     message = this.message_;
   } else {
-    message = SafeHtml.create('div', {'id': this.messageId_});
+    message = goog.html.SafeHtml.create('div', {'id': this.messageId_});
   }
 
   var tableRows = goog.html.SafeHtml.concat(
-      SafeHtml.create(
+      goog.html.SafeHtml.create(
           'tr', {},
-          SafeHtml.create('td', {'colspan': 4, 'class': bubbleTopClass})),
-      SafeHtml.create(
+          goog.html.SafeHtml.create(
+              'td', {'colspan': 4, 'class': bubbleTopClass})),
+      goog.html.SafeHtml.create(
           'tr', {},
-          SafeHtml.concat(
-              SafeHtml.create('td', {'class': this.config_.cssBubbleLeft}),
-              SafeHtml.create(
+          goog.html.SafeHtml.concat(
+              goog.html.SafeHtml.create(
+                  'td', {'class': this.config_.cssBubbleLeft}),
+              goog.html.SafeHtml.create(
                   'td', {
                     'class': this.config_.cssBubbleFont,
                     'style':
                         goog.string.Const.from('padding:0 4px;background:white')
                   },
                   message),
-              SafeHtml.create('td', {
+              goog.html.SafeHtml.create('td', {
                 'id': this.closeButtonId_,
                 'class': this.config_.cssCloseButton
               }),
-              SafeHtml.create('td', {'class': this.config_.cssBubbleRight}))),
-      SafeHtml.create(
+              goog.html.SafeHtml.create(
+                  'td', {'class': this.config_.cssBubbleRight}))),
+      goog.html.SafeHtml.create(
           'tr', {},
-          SafeHtml.create('td', {'colspan': 4, 'class': bubbleBottomClass})));
+          goog.html.SafeHtml.create(
+              'td', {'colspan': 4, 'class': bubbleBottomClass})));
 
-  return SafeHtml.create(
+  return goog.html.SafeHtml.create(
       'table', {
         'border': 0,
         'cellspacing': 0,
@@ -495,4 +485,3 @@ goog.ui.Bubble.corners_ = [
   goog.positioning.Corner.BOTTOM_RIGHT, goog.positioning.Corner.BOTTOM_LEFT,
   goog.positioning.Corner.TOP_RIGHT, goog.positioning.Corner.TOP_LEFT
 ];
-});  // goog.scope

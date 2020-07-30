@@ -1,16 +1,8 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Mock Clock implementation for working with setTimeout,
@@ -18,7 +10,6 @@
  *
  * Derived from jsUnitMockTimeout.js, contributed to JsUnit by
  * Pivotal Computer Systems, www.pivotalsf.com
- *
  */
 
 goog.setTestOnly('goog.testing.MockClock');
@@ -85,6 +76,12 @@ goog.testing.MockClock = function(opt_autoInstall) {
    * @private {Object<number, boolean>}
    */
   this.deletedKeys_ = {};
+
+  /**
+   * Whether we should skip mocking Date.now().
+   * @private {boolean}
+   */
+  this.unmockDateNow_ = false;
 
   if (opt_autoInstall) {
     this.install();
@@ -195,6 +192,9 @@ goog.testing.MockClock.prototype.install = function() {
     r.set(goog.global, 'setImmediate', goog.bind(this.setImmediate_, this));
     r.set(goog.global, 'clearTimeout', goog.bind(this.clearTimeout_, this));
     r.set(goog.global, 'clearInterval', goog.bind(this.clearInterval_, this));
+    if (!this.unmockDateNow_) {
+      r.set(Date, 'now', goog.bind(this.getCurrentTime, this));
+    }
     // goog.Promise uses goog.async.run. In order to be able to test
     // Promise-based code, we need to make sure that goog.async.run uses
     // nextTick instead of native browser Promises. This means that it will
@@ -220,7 +220,14 @@ goog.testing.MockClock.prototype.install = function() {
  * @deprecated
  */
 goog.testing.MockClock.prototype.unmockDateNow = function() {
-  // TODO(b/141619890): Implement.
+  this.unmockDateNow_ = true;
+  if (this.replacer_) {
+    try {
+      this.replacer_.restore(Date, 'now');
+    } catch (e) {
+      // Ignore error thrown if Date.now was not already mocked.
+    }
+  }
 };
 
 
@@ -340,9 +347,13 @@ goog.testing.MockClock.prototype.tick = function(opt_millis) {
   if (typeof opt_millis != 'number') {
     opt_millis = 1;
   }
+  if (opt_millis < 0) {
+    throw new Error(
+        'Time cannot go backwards (cannot tick by ' + opt_millis + ')');
+  }
   var endTime = this.nowMillis_ + opt_millis;
   this.runFunctionsWithinRange_(endTime);
-  this.nowMillis_ = endTime;
+  this.nowMillis_ = Math.max(this.nowMillis_, endTime);
   return endTime;
 };
 

@@ -1,16 +1,8 @@
-// Copyright 2012 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /** @fileoverview Shared code for classlist_test.html. */
 
@@ -47,10 +39,22 @@ testSuite({
     assertElementsEquals(['C'], classlist.get(el));
   },
 
+  testGetSvg() {
+    const el = dom.createElement(TagName.SVG);
+    assertTrue(classlist.get(el).length == 0);
+    el.setAttribute('class', 'C');
+    assertElementsEquals(['C'], classlist.get(el));
+    el.setAttribute('class', 'C D');
+    assertElementsEquals(['C', 'D'], classlist.get(el));
+    el.setAttribute('class', 'C\nD');
+    assertElementsEquals(['C', 'D'], classlist.get(el));
+    el.setAttribute('class', ' C ');
+    assertElementsEquals(['C'], classlist.get(el));
+  },
+
   testContainsWithNewlines() {
     const el = dom.getElement('p1');
-    assertTrue(
-        'Should not have SOMECLASS', classlist.contains(el, 'SOMECLASS'));
+    assertTrue('Should have SOMECLASS', classlist.contains(el, 'SOMECLASS'));
     assertTrue(
         'Should also have OTHERCLASS', classlist.contains(el, 'OTHERCLASS'));
     assertFalse(
@@ -72,8 +76,18 @@ testSuite({
     assertEquals('A', el.className);
     classlist.add(el, 'A');
     assertEquals('A', el.className);
-    classlist.add(el, 'B', 'B');
+    classlist.add(el, 'B');
     assertEquals('A B', el.className);
+  },
+
+  testAddNotAddingMultiplesSvg() {
+    const el = dom.createElement(TagName.SVG);
+    classlist.add(el, 'A');
+    assertEquals('A', el.getAttribute('class'));
+    classlist.add(el, 'A');
+    assertEquals('A', el.getAttribute('class'));
+    classlist.add(el, 'B');
+    assertEquals('A B', el.getAttribute('class'));
   },
 
   testAddCaseSensitive() {
@@ -87,9 +101,31 @@ testSuite({
     assertEquals('A a', el.className);
   },
 
+  testAddCaseSensitiveSvg() {
+    const el = dom.createElement(TagName.SVG);
+    classlist.add(el, 'A');
+    assertTrue(classlist.contains(el, 'A'));
+    assertFalse(classlist.contains(el, 'a'));
+    classlist.add(el, 'a');
+    assertTrue(classlist.contains(el, 'A'));
+    assertTrue(classlist.contains(el, 'a'));
+    assertEquals('A a', el.getAttribute('class'));
+  },
+
   testAddAll() {
     const elem = dom.createElement(TagName.DIV);
     elem.className = 'foo goog-bar';
+
+    classlist.addAll(elem, ['goog-baz', 'foo']);
+    assertEquals(3, classlist.get(elem).length);
+    assertTrue(classlist.contains(elem, 'foo'));
+    assertTrue(classlist.contains(elem, 'goog-bar'));
+    assertTrue(classlist.contains(elem, 'goog-baz'));
+  },
+
+  testAddAllSvg() {
+    const elem = dom.createElement(TagName.SVG);
+    elem.setAttribute('class', 'foo goog-bar');
 
     classlist.addAll(elem, ['goog-baz', 'foo']);
     assertEquals(3, classlist.get(elem).length);
@@ -114,6 +150,13 @@ testSuite({
     assertEquals('A C', el.className);
   },
 
+  testRemoveSvg() {
+    const el = dom.createElement(TagName.SVG);
+    el.setAttribute('class', 'A B C');
+    classlist.remove(el, 'B');
+    assertEquals('A C', el.getAttribute('class'));
+  },
+
   testRemoveCaseSensitive() {
     const el = dom.createElement(TagName.DIV);
     el.className = 'A B C';
@@ -124,6 +167,16 @@ testSuite({
   testRemoveAll() {
     const elem = dom.createElement(TagName.DIV);
     elem.className = 'foo bar baz';
+
+    classlist.removeAll(elem, ['bar', 'foo']);
+    assertFalse(classlist.contains(elem, 'foo'));
+    assertFalse(classlist.contains(elem, 'bar'));
+    assertTrue(classlist.contains(elem, 'baz'));
+  },
+
+  testRemoveAllSvg() {
+    const elem = dom.createElement(TagName.SVG);
+    elem.setAttribute('class', 'foo bar baz');
 
     classlist.removeAll(elem, ['bar', 'foo']);
     assertFalse(classlist.contains(elem, 'foo'));

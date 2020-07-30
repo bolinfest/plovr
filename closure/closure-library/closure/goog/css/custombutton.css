@@ -7,9 +7,11 @@
 
 /*
  * Styling for custom buttons rendered by goog.ui.CustomButtonRenderer.
- *
- * @author attila@google.com (Attila Bodis)
  */
+
+@provide 'goog.css.custombutton';
+
+@require './common';
 
 .goog-custom-button {
   margin: 2px;

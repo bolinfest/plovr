@@ -1,16 +1,8 @@
-// Copyright 2011 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 goog.module('goog.ui.AnimatedZippyTest');
 goog.setTestOnly();
@@ -95,6 +87,54 @@ testSuite({
 
     assertEquals('animations must play', 2, animationsPlayed);
     assertEquals('TOGGLE events must fire', 2, toggleEventsFired);
+  },
+
+  testExpandCollapseWhileAnimationPlaying() {
+    let animationsRunning = 0;
+    let lastAnimation = null;
+
+    propertyReplacer.replace(Animation.prototype, 'play', function() {
+      animationsRunning++;
+      lastAnimation = this;
+    });
+    propertyReplacer.replace(Animation.prototype, 'stop', function() {
+      animationsRunning--;
+      this.dispatchAnimationEvent(Transition.EventType.END);
+    });
+    propertyReplacer.replace(
+        AnimatedZippy.prototype, 'onAnimate_', functions.NULL);
+
+    // Expand when expanding animation is playing.
+    animatedZippy.expand();
+    animatedZippy.expand();
+    assertEquals('exactly 1 animation must be running', 1, animationsRunning);
+    lastAnimation.stop();
+    assertEquals('animation must have finished', 0, animationsRunning);
+    assertEquals('expanded must be true', animatedZippy.isExpanded(), true);
+
+    // Expand when collapsing animation is playing.
+    animatedZippy.collapse();
+    animatedZippy.expand();
+    assertEquals('exactly 1 animation must be running', 1, animationsRunning);
+    lastAnimation.stop();
+    assertEquals('animation must have finished', 0, animationsRunning);
+    assertEquals('expanded must be true', animatedZippy.isExpanded(), true);
+
+    // Collapse when collapsing animation is playing.
+    animatedZippy.collapse();
+    animatedZippy.collapse();
+    assertEquals('exactly 1 animation must be running', 1, animationsRunning);
+    lastAnimation.stop();
+    assertEquals('animation must have finished', 0, animationsRunning);
+    assertEquals('expanded must be false', animatedZippy.isExpanded(), false);
+
+    // Collapse when expanding animation is playing.
+    animatedZippy.expand();
+    animatedZippy.collapse();
+    assertEquals('exactly 1 animation must be running', 1, animationsRunning);
+    lastAnimation.stop();
+    assertEquals('animation must have finished', 0, animationsRunning);
+    assertEquals('expanded must be false', animatedZippy.isExpanded(), false);
   },
 
   /** Tests the TOGGLE_ANIMATION_BEGIN event. */

@@ -1,16 +1,8 @@
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Bootstrap for the Google JS Library (Closure).
@@ -102,52 +94,6 @@ goog.global.CLOSURE_UNCOMPILED_DEFINES;
  * @type {Object<string, (string|number|boolean)>|undefined}
  */
 goog.global.CLOSURE_DEFINES;
-
-
-/**
- * Returns true if the specified value is not undefined.
- *
- * @param {?} val Variable to test.
- * @return {boolean} Whether variable is defined.
- * @deprecated Use `val !== undefined` instead.
- */
-goog.isDef = function(val) {
-  // void 0 always evaluates to undefined and hence we do not need to depend on
-  // the definition of the global variable named 'undefined'.
-  return val !== void 0;
-};
-
-/**
- * Returns true if the specified value is a string.
- * @param {?} val Variable to test.
- * @return {boolean} Whether variable is a string.
- * @deprecated Use `typeof val === 'string'` instead.
- */
-goog.isString = function(val) {
-  return typeof val == 'string';
-};
-
-
-/**
- * Returns true if the specified value is a boolean.
- * @param {?} val Variable to test.
- * @return {boolean} Whether variable is boolean.
- * @deprecated Use `typeof val === 'boolean'` instead.
- */
-goog.isBoolean = function(val) {
-  return typeof val == 'boolean';
-};
-
-
-/**
- * Returns true if the specified value is a number.
- * @param {?} val Variable to test.
- * @return {boolean} Whether variable is a number.
- * @deprecated Use `typeof val === 'number'` instead.
- */
-goog.isNumber = function(val) {
-  return typeof val == 'number';
-};
 
 
 /**
@@ -725,6 +671,7 @@ goog.setTestOnly = function(opt_message) {
  *
  * @param {string} name The namespace to forward declare in the form of
  *     "goog.package.part".
+ * @deprecated See go/noforwarddeclaration, Use `goog.requireType` instead.
  */
 goog.forwardDeclare = function(name) {};
 
@@ -826,8 +773,6 @@ goog.addDependency = function(relPath, provides, requires, opt_loadFlags) {
     goog.debugLoader_.addDependency(relPath, provides, requires, opt_loadFlags);
   }
 };
-
-
 
 
 // NOTE(nnaze): The debug DOM loader was included in base.js as an original way
@@ -1369,8 +1314,8 @@ goog.typeOf = function(value) {
       // Check these first, so we can avoid calling Object.prototype.toString if
       // possible.
       //
-      // IE improperly marshals typeof across execution contexts, but a
-      // cross-context object will still return false for "instanceof Object".
+      // IE9 and below improperly marshals typeof across execution contexts, but
+      // a cross-context object will still return false for "instanceof Object".
       if (value instanceof Array) {
         return 'array';
       } else if (value instanceof Object) {
@@ -1456,35 +1401,13 @@ goog.typeOf = function(value) {
 
 
 /**
- * Returns true if the specified value is null.
- * @param {?} val Variable to test.
- * @return {boolean} Whether variable is null.
- * @deprecated Use `val === null` instead.
- */
-goog.isNull = function(val) {
-  return val === null;
-};
-
-
-/**
- * Returns true if the specified value is defined and not null.
- * @param {?} val Variable to test.
- * @return {boolean} Whether variable is defined and not null.
- * @deprecated Use `val != null` instead.
- */
-goog.isDefAndNotNull = function(val) {
-  // Note that undefined == null.
-  return val != null;
-};
-
-
-/**
  * Returns true if the specified value is an array.
  * @param {?} val Variable to test.
  * @return {boolean} Whether variable is an array.
+ * @deprecated Use Array.isArray instead.
  */
 goog.isArray = function(val) {
-  return goog.typeOf(val) == 'array';
+  return Array.isArray(val);
 };
 
 
@@ -1552,12 +1475,8 @@ goog.isObject = function(val) {
  */
 goog.getUid = function(obj) {
   // TODO(arv): Make the type stricter, do not accept null.
-
-  // In Opera window.hasOwnProperty exists but always returns false so we avoid
-  // using it. As a consequence the unique ID generated for BaseClass.prototype
-  // and SubClass.prototype will be the same.
-  // TODO(b/141512323): UUIDs are broken for ctors with class-side inheritance.
-  return obj[goog.UID_PROPERTY_] ||
+  return Object.prototype.hasOwnProperty.call(obj, goog.UID_PROPERTY_) &&
+      obj[goog.UID_PROPERTY_] ||
       (obj[goog.UID_PROPERTY_] = ++goog.uidCounter_);
 };
 
@@ -1825,8 +1744,8 @@ goog.now = (goog.TRUSTED_SITE && Date.now) || (function() {
 
 /**
  * Evals JavaScript in the global scope.  In IE this uses execScript, other
- * browsers use goog.global.eval. If goog.global.eval does not evaluate in the
- * global scope (for example, in Safari), appends a script tag instead.
+ * browsers use goog.global.eval. If goog.global.eval does not evaluate,
+ * appends a script tag instead.
  * Throws an exception if neither execScript or eval is defined.
  * @param {string} script JavaScript string.
  */
@@ -1835,24 +1754,16 @@ goog.globalEval = function(script) {
     goog.global.execScript(script, 'JavaScript');
   } else if (goog.global.eval) {
     // Test to see if eval works
-    if (goog.evalWorksForGlobals_ == null) {
+    if (goog.evalWorks_ == null) {
       try {
-        goog.global.eval('var _evalTest_ = 1;');
+        goog.global.eval('');
+        goog.evalWorks_ = true;
       } catch (ignore) {
-      }
-      if (typeof goog.global['_evalTest_'] != 'undefined') {
-        try {
-          delete goog.global['_evalTest_'];
-        } catch (ignore) {
-          // Microsoft edge fails the deletion above in strict mode.
-        }
-        goog.evalWorksForGlobals_ = true;
-      } else {
-        goog.evalWorksForGlobals_ = false;
+        goog.evalWorks_ = false;
       }
     }
 
-    if (goog.evalWorksForGlobals_) {
+    if (goog.evalWorks_) {
       goog.global.eval(script);
     } else {
       /** @type {!Document} */
@@ -1880,7 +1791,7 @@ goog.globalEval = function(script) {
  * @type {?boolean}
  * @private
  */
-goog.evalWorksForGlobals_ = null;
+goog.evalWorks_ = null;
 
 
 /**
@@ -2202,91 +2113,6 @@ goog.inherits = function(childCtor, parentCtor) {
 
 
 /**
- * Call up to the superclass.
- *
- * If this is called from a constructor, then this calls the superclass
- * constructor with arguments 1-N.
- *
- * If this is called from a prototype method, then you must pass the name of the
- * method as the second argument to this function. If you do not, you will get a
- * runtime error. This calls the superclass' method with arguments 2-N.
- *
- * This function only works if you use goog.inherits to express inheritance
- * relationships between your classes.
- *
- * This function is a compiler primitive. At compile-time, the compiler will do
- * macro expansion to remove a lot of the extra overhead that this function
- * introduces. The compiler will also enforce a lot of the assumptions that this
- * function makes, and treat it as a compiler error if you break them.
- *
- * @param {!Object} me Should always be "this".
- * @param {*=} opt_methodName The method name if calling a super method.
- * @param {...*} var_args The rest of the arguments.
- * @return {*} The return value of the superclass method.
- * @suppress {es5Strict} This method can not be used in strict mode, but
- *     all Closure Library consumers must depend on this file.
- * @deprecated goog.base is not strict mode compatible.  Prefer the static
- *     "base" method added to the constructor by goog.inherits
- *     or ES6 classes and the "super" keyword.
- */
-goog.base = function(me, opt_methodName, var_args) {
-  var caller = arguments.callee.caller;
-
-  if (goog.STRICT_MODE_COMPATIBLE || (goog.DEBUG && !caller)) {
-    throw new Error(
-        'arguments.caller not defined.  goog.base() cannot be used ' +
-        'with strict mode code. See ' +
-        'http://www.ecma-international.org/ecma-262/5.1/#sec-C');
-  }
-
-  if (typeof caller.superClass_ !== 'undefined') {
-    // Copying using loop to avoid deop due to passing arguments object to
-    // function. This is faster in many JS engines as of late 2014.
-    var ctorArgs = new Array(arguments.length - 1);
-    for (var i = 1; i < arguments.length; i++) {
-      ctorArgs[i - 1] = arguments[i];
-    }
-    // This is a constructor. Call the superclass constructor.
-    return /** @type {!Function} */ (caller.superClass_)
-        .constructor.apply(me, ctorArgs);
-  }
-
-  if (typeof opt_methodName != 'string' && typeof opt_methodName != 'symbol') {
-    throw new Error(
-        'method names provided to goog.base must be a string or a symbol');
-  }
-
-  // Copying using loop to avoid deop due to passing arguments object to
-  // function. This is faster in many JS engines as of late 2014.
-  var args = new Array(arguments.length - 2);
-  for (var i = 2; i < arguments.length; i++) {
-    args[i - 2] = arguments[i];
-  }
-  var foundCaller = false;
-  for (var proto = me.constructor.prototype; proto;
-       proto = Object.getPrototypeOf(proto)) {
-    if (proto[opt_methodName] === caller) {
-      foundCaller = true;
-    } else if (foundCaller) {
-      return proto[opt_methodName].apply(me, args);
-    }
-  }
-
-  // If we did not find the caller in the prototype chain, then one of two
-  // things happened:
-  // 1) The caller is an instance method.
-  // 2) This method was not called by the right caller.
-  if (me[opt_methodName] === caller) {
-    return me.constructor.prototype[opt_methodName].apply(me, args);
-  } else {
-    throw new Error(
-        'goog.base called from a method of one name ' +
-        'to a method of a different name');
-  }
-};
-
-
-/**
  * Allow for aliasing within scope functions.  This function exists for
  * uncompiled code - in compiled code the calls will be inlined and the aliases
  * applied.  In uncompiled code the function is simply run since the aliases as
@@ -2296,6 +2122,7 @@ goog.base = function(me, opt_methodName, var_args) {
  * @param {function()} fn Function to call.  This function can contain aliases
  *     to namespaces (e.g. "var dom = goog.dom") or classes
  *     (e.g. "var Timer = goog.Timer").
+ * @deprecated Use goog.module instead.
  */
 goog.scope = function(fn) {
   if (goog.isInModuleLoader_()) {
@@ -2418,9 +2245,7 @@ goog.defineClass.createSealingConstructor_ = function(ctr, superClass) {
     return ctr;
   }
 
-  // Compute whether the constructor is sealable at definition time, rather
-  // than when the instance is being constructed.
-  var superclassSealable = !goog.defineClass.isUnsealable_(superClass);
+  // NOTE: The sealing behavior has been removed
 
   /**
    * @this {Object}
@@ -2432,27 +2257,12 @@ goog.defineClass.createSealingConstructor_ = function(ctr, superClass) {
     var instance = ctr.apply(this, arguments) || this;
     instance[goog.UID_PROPERTY_] = instance[goog.UID_PROPERTY_];
 
-    if (this.constructor === wrappedCtr && superclassSealable &&
-        Object.seal instanceof Function) {
-      Object.seal(instance);
-    }
     return instance;
   };
 
   return wrappedCtr;
 };
 
-
-/**
- * @param {Function} ctr The constructor to test.
- * @return {boolean} Whether the constructor has been tagged as unsealable
- *     using goog.tagUnsealableClass.
- * @private
- */
-goog.defineClass.isUnsealable_ = function(ctr) {
-  return ctr && ctr.prototype &&
-      ctr.prototype[goog.UNSEALABLE_CONSTRUCTOR_PROPERTY_];
-};
 
 
 // TODO(johnlenz): share these values with the goog.object
@@ -2496,28 +2306,6 @@ goog.defineClass.applyProperties_ = function(target, source) {
     }
   }
 };
-
-
-/**
- * Sealing classes breaks the older idiom of assigning properties on the
- * prototype rather than in the constructor. As such, goog.defineClass
- * must not seal subclasses of these old-style classes until they are fixed.
- * Until then, this marks a class as "broken", instructing defineClass
- * not to seal subclasses.
- * @param {!Function} ctr The legacy constructor to tag as unsealable.
- */
-goog.tagUnsealableClass = function(ctr) {
-  if (!COMPILED && goog.defineClass.SEAL_CLASS_INSTANCES) {
-    ctr.prototype[goog.UNSEALABLE_CONSTRUCTOR_PROPERTY_] = true;
-  }
-};
-
-
-/**
- * Name for unsealable tag property.
- * @const @private {string}
- */
-goog.UNSEALABLE_CONSTRUCTOR_PROPERTY_ = 'goog_defineClass_legacy_unsealable';
 
 
 // There's a bug in the compiler where without collapse properties the
@@ -2599,8 +2387,6 @@ if (!COMPILED && goog.DEPENDENCIES_ENABLED) {
     /** @private {string} */
     this.transpilationTarget_ = goog.TRANSPILE_TO_LANGUAGE;
   };
-
-
   /**
    * Returns a newly created map from language mode string to a boolean
    * indicating whether transpilation should be done for that mode as well as
@@ -4111,6 +3897,14 @@ if (!COMPILED && goog.DEPENDENCIES_ENABLED) {
   };
 
 
+  /**
+   * Trusted Types policy for the debug loader.
+   * @private @const {?TrustedTypePolicy}
+   */
+  goog.TRUSTED_TYPES_POLICY_ = goog.TRUSTED_TYPES_POLICY_NAME ?
+      goog.createTrustedTypesPolicy(goog.TRUSTED_TYPES_POLICY_NAME + '#base') :
+      null;
+
   if (!goog.global.CLOSURE_NO_DEPS) {
     goog.debugLoader_.loadClosureDeps();
   }
@@ -4164,12 +3958,11 @@ goog.identity_ = function(s) {
  */
 goog.createTrustedTypesPolicy = function(name) {
   var policy = null;
-  // TODO(koto): Remove window.TrustedTypes variant when the newer API ships.
-  var policyFactory = goog.global.trustedTypes || goog.global.TrustedTypes;
+  var policyFactory = goog.global.trustedTypes;
   if (!policyFactory || !policyFactory.createPolicy) {
     return policy;
   }
-  // TrustedTypes.createPolicy throws if called with a name that is already
+  // trustedTypes.createPolicy throws if called with a name that is already
   // registered, even in report-only mode. Until the API changes, catch the
   // error not to break the applications functionally. In such case, the code
   // will fall back to using regular Safe Types.
@@ -4178,8 +3971,7 @@ goog.createTrustedTypesPolicy = function(name) {
     policy = policyFactory.createPolicy(name, {
       createHTML: goog.identity_,
       createScript: goog.identity_,
-      createScriptURL: goog.identity_,
-      createURL: goog.identity_
+      createScriptURL: goog.identity_
     });
   } catch (e) {
     goog.logToConsole_(e.message);
@@ -4187,8 +3979,3 @@ goog.createTrustedTypesPolicy = function(name) {
   return policy;
 };
 
-
-/** @private @const {?TrustedTypePolicy} */
-goog.TRUSTED_TYPES_POLICY_ = goog.TRUSTED_TYPES_POLICY_NAME ?
-    goog.createTrustedTypesPolicy(goog.TRUSTED_TYPES_POLICY_NAME + '#base') :
-    null;

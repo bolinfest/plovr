@@ -1,16 +1,8 @@
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Implementation of a basic slider control.
@@ -35,8 +27,6 @@
  * - createDom
  * - decorateInternal
  * - getCssClass
- *
- * @author arv@google.com (Erik Arvidsson)
  */
 
 goog.provide('goog.ui.SliderBase');
@@ -117,7 +107,6 @@ goog.ui.SliderBase = function(opt_domHelper, opt_labelFn) {
       this.handleRangeModelChange, false, this);
 };
 goog.inherits(goog.ui.SliderBase, goog.ui.Component);
-goog.tagUnsealableClass(goog.ui.SliderBase);
 
 
 /**
@@ -1115,13 +1104,21 @@ goog.ui.SliderBase.prototype.getThumbCoordinateForValue = function(val) {
       var thumbHeight = this.valueThumb.offsetHeight;
       var h = this.getElement().clientHeight - thumbHeight;
       var bottom = Math.round(ratio * h);
-      coord.x = this.getOffsetStart_(this.valueThumb);  // Keep x the same.
+      if (this.moveToPointEnabled_) {
+        coord.x = 0;
+      } else {
+        coord.x = this.getOffsetStart_(this.valueThumb);  // Keep x the same.
+      }
       coord.y = h - bottom;
     } else {
       var w = this.getElement().clientWidth - this.valueThumb.offsetWidth;
       var left = Math.round(ratio * w);
       coord.x = left;
-      coord.y = this.valueThumb.offsetTop;  // Keep y the same.
+      if (this.moveToPointEnabled_) {
+        coord.y = 0;
+      } else {
+        coord.y = this.valueThumb.offsetTop;  // Keep y the same.
+      }
     }
   }
   return coord;

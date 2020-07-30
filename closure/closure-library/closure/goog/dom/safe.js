@@ -1,16 +1,8 @@
-// Copyright 2013 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Type-safe wrappers for unsafe DOM APIs.
@@ -205,7 +197,7 @@ goog.dom.safe.setFormElementAction = function(form, url) {
     safeUrl = goog.html.SafeUrl.sanitizeAssertUnchanged(url);
   }
   goog.dom.asserts.assertIsHTMLFormElement(form).action =
-      goog.html.SafeUrl.unwrapTrustedURL(safeUrl);
+      goog.html.SafeUrl.unwrap(safeUrl);
 };
 
 /**
@@ -236,7 +228,7 @@ goog.dom.safe.setButtonFormAction = function(button, url) {
     safeUrl = goog.html.SafeUrl.sanitizeAssertUnchanged(url);
   }
   goog.dom.asserts.assertIsHTMLButtonElement(button).formAction =
-      goog.html.SafeUrl.unwrapTrustedURL(safeUrl);
+      goog.html.SafeUrl.unwrap(safeUrl);
 };
 /**
  * Safely assigns a URL to an input element's formaction property.
@@ -266,7 +258,7 @@ goog.dom.safe.setInputFormAction = function(input, url) {
     safeUrl = goog.html.SafeUrl.sanitizeAssertUnchanged(url);
   }
   goog.dom.asserts.assertIsHTMLInputElement(input).formAction =
-      goog.html.SafeUrl.unwrapTrustedURL(safeUrl);
+      goog.html.SafeUrl.unwrap(safeUrl);
 };
 
 /**
@@ -318,7 +310,7 @@ goog.dom.safe.setAnchorHref = function(anchor, url) {
   } else {
     safeUrl = goog.html.SafeUrl.sanitizeAssertUnchanged(url);
   }
-  anchor.href = goog.html.SafeUrl.unwrapTrustedURL(safeUrl);
+  anchor.href = goog.html.SafeUrl.unwrap(safeUrl);
 };
 
 
@@ -344,7 +336,7 @@ goog.dom.safe.setImageSrc = function(imageElement, url) {
     var allowDataUrl = /^data:image\//i.test(url);
     safeUrl = goog.html.SafeUrl.sanitizeAssertUnchanged(url, allowDataUrl);
   }
-  imageElement.src = goog.html.SafeUrl.unwrapTrustedURL(safeUrl);
+  imageElement.src = goog.html.SafeUrl.unwrap(safeUrl);
 };
 
 /**
@@ -369,7 +361,7 @@ goog.dom.safe.setAudioSrc = function(audioElement, url) {
     var allowDataUrl = /^data:audio\//i.test(url);
     safeUrl = goog.html.SafeUrl.sanitizeAssertUnchanged(url, allowDataUrl);
   }
-  audioElement.src = goog.html.SafeUrl.unwrapTrustedURL(safeUrl);
+  audioElement.src = goog.html.SafeUrl.unwrap(safeUrl);
 };
 
 /**
@@ -394,7 +386,7 @@ goog.dom.safe.setVideoSrc = function(videoElement, url) {
     var allowDataUrl = /^data:video\//i.test(url);
     safeUrl = goog.html.SafeUrl.sanitizeAssertUnchanged(url, allowDataUrl);
   }
-  videoElement.src = goog.html.SafeUrl.unwrapTrustedURL(safeUrl);
+  videoElement.src = goog.html.SafeUrl.unwrap(safeUrl);
 };
 
 /**
@@ -433,7 +425,7 @@ goog.dom.safe.setEmbedSrc = function(embed, url) {
  */
 goog.dom.safe.setFrameSrc = function(frame, url) {
   goog.dom.asserts.assertIsHTMLFrameElement(frame);
-  frame.src = goog.html.TrustedResourceUrl.unwrapTrustedURL(url);
+  frame.src = goog.html.TrustedResourceUrl.unwrap(url);
 };
 
 
@@ -453,7 +445,7 @@ goog.dom.safe.setFrameSrc = function(frame, url) {
  */
 goog.dom.safe.setIframeSrc = function(iframe, url) {
   goog.dom.asserts.assertIsHTMLIFrameElement(iframe);
-  iframe.src = goog.html.TrustedResourceUrl.unwrapTrustedURL(url);
+  iframe.src = goog.html.TrustedResourceUrl.unwrap(url);
 };
 
 
@@ -508,14 +500,14 @@ goog.dom.safe.setLinkHrefAndRel = function(link, url, rel) {
     goog.asserts.assert(
         url instanceof goog.html.TrustedResourceUrl,
         'URL must be TrustedResourceUrl because "rel" contains "stylesheet"');
-    link.href = goog.html.TrustedResourceUrl.unwrapTrustedURL(url);
+    link.href = goog.html.TrustedResourceUrl.unwrap(url);
   } else if (url instanceof goog.html.TrustedResourceUrl) {
-    link.href = goog.html.TrustedResourceUrl.unwrapTrustedURL(url);
+    link.href = goog.html.TrustedResourceUrl.unwrap(url);
   } else if (url instanceof goog.html.SafeUrl) {
-    link.href = goog.html.SafeUrl.unwrapTrustedURL(url);
+    link.href = goog.html.SafeUrl.unwrap(url);
   } else {  // string
     // SafeUrl.sanitize must return legitimate SafeUrl when passed a string.
-    link.href = goog.html.SafeUrl.unwrapTrustedURL(
+    link.href = goog.html.SafeUrl.unwrap(
         goog.html.SafeUrl.sanitizeAssertUnchanged(url));
   }
 };
@@ -558,13 +550,7 @@ goog.dom.safe.setObjectData = function(object, url) {
 goog.dom.safe.setScriptSrc = function(script, url) {
   goog.dom.asserts.assertIsHTMLScriptElement(script);
   script.src = goog.html.TrustedResourceUrl.unwrapTrustedScriptURL(url);
-
-  // If CSP nonces are used, propagate them to dynamically created scripts.
-  // This is necessary to allow nonce-based CSPs without 'strict-dynamic'.
-  var nonce = goog.getScriptNonce();
-  if (nonce) {
-    script.setAttribute('nonce', nonce);
-  }
+  goog.dom.safe.setNonceForScriptElement_(script);
 };
 
 
@@ -585,10 +571,19 @@ goog.dom.safe.setScriptSrc = function(script, url) {
 goog.dom.safe.setScriptContent = function(script, content) {
   goog.dom.asserts.assertIsHTMLScriptElement(script);
   script.text = goog.html.SafeScript.unwrapTrustedScript(content);
+  goog.dom.safe.setNonceForScriptElement_(script);
+};
 
-  // If CSP nonces are used, propagate them to dynamically created scripts.
-  // This is necessary to allow nonce-based CSPs without 'strict-dynamic'.
-  var nonce = goog.getScriptNonce();
+
+/**
+ * Set nonce-based CSPs to dynamically created scripts.
+ * @param {!HTMLScriptElement} script The script element whose nonce value
+ *     is to be calculated
+ * @private
+ */
+goog.dom.safe.setNonceForScriptElement_ = function(script) {
+  var win = script.ownerDocument && script.ownerDocument.defaultView;
+  var nonce = goog.getScriptNonce(win);
   if (nonce) {
     script.setAttribute('nonce', nonce);
   }
@@ -623,7 +618,7 @@ goog.dom.safe.setLocationHref = function(loc, url) {
   } else {
     safeUrl = goog.html.SafeUrl.sanitizeAssertUnchanged(url);
   }
-  loc.href = goog.html.SafeUrl.unwrapTrustedURL(safeUrl);
+  loc.href = goog.html.SafeUrl.unwrap(safeUrl);
 };
 
 /**
@@ -656,7 +651,7 @@ goog.dom.safe.assignLocation = function(loc, url) {
   } else {
     safeUrl = goog.html.SafeUrl.sanitizeAssertUnchanged(url);
   }
-  loc.assign(goog.html.SafeUrl.unwrapTrustedURL(safeUrl));
+  loc.assign(goog.html.SafeUrl.unwrap(safeUrl));
 };
 
 
@@ -679,7 +674,6 @@ goog.dom.safe.assignLocation = function(loc, url) {
  * @see goog.html.SafeUrl#sanitize
  */
 goog.dom.safe.replaceLocation = function(loc, url) {
-  goog.dom.asserts.assertIsLocation(loc);
   /** @type {!goog.html.SafeUrl} */
   var safeUrl;
   if (url instanceof goog.html.SafeUrl) {
@@ -687,7 +681,7 @@ goog.dom.safe.replaceLocation = function(loc, url) {
   } else {
     safeUrl = goog.html.SafeUrl.sanitizeAssertUnchanged(url);
   }
-  loc.replace(goog.html.SafeUrl.unwrapTrustedURL(safeUrl));
+  loc.replace(goog.html.SafeUrl.unwrap(safeUrl));
 };
 
 
@@ -705,14 +699,15 @@ goog.dom.safe.replaceLocation = function(loc, url) {
  *   goog.dom.safe.openInWindow(url);
  * which is a safe alternative to
  *   window.open(url);
- * The latter can result in XSS vulnerabilities if redirectUrl is a
+ * The latter can result in XSS vulnerabilities if url is a
  * user-/attacker-controlled value.
  *
  * @param {string|!goog.html.SafeUrl} url The URL to open.
  * @param {Window=} opt_openerWin Window of which to call the .open() method.
  *     Defaults to the global window.
- * @param {!goog.string.Const=} opt_name Name of the window to open in. Can be
- *     _top, etc as allowed by window.open().
+ * @param {!goog.string.Const|string=} opt_name Name of the window to open in.
+ *     Can be _top, etc as allowed by window.open(). This accepts string for
+ *     legacy reasons. Pass goog.string.Const if possible.
  * @param {string=} opt_specs Comma-separated list of specifications, same as
  *     in window.open().
  * @param {boolean=} opt_replace Whether to replace the current entry in browser
@@ -729,14 +724,15 @@ goog.dom.safe.openInWindow = function(
     safeUrl = goog.html.SafeUrl.sanitizeAssertUnchanged(url);
   }
   var win = opt_openerWin || goog.global;
+  // If opt_name is undefined, simply passing that in to open() causes IE to
+  // reuse the current window instead of opening a new one. Thus we pass '' in
+  // instead, which according to spec opens a new window. See
+  // https://html.spec.whatwg.org/multipage/browsers.html#dom-open .
+  var name = opt_name instanceof goog.string.Const ?
+      goog.string.Const.unwrap(opt_name) :
+      opt_name || '';
   return win.open(
-      goog.html.SafeUrl.unwrapTrustedURL(safeUrl),
-      // If opt_name is undefined, simply passing that in to open() causes IE to
-      // reuse the current window instead of opening a new one. Thus we pass ''
-      // in instead, which according to spec opens a new window. See
-      // https://html.spec.whatwg.org/multipage/browsers.html#dom-open .
-      opt_name ? goog.string.Const.unwrap(opt_name) : '', opt_specs,
-      opt_replace);
+      goog.html.SafeUrl.unwrap(safeUrl), name, opt_specs, opt_replace);
 };
 
 

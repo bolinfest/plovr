@@ -1,4 +1,2 @@
-base.js
 mochikit/async/deferred.js
 mochikit/async/deferredlist.js
-svgpan/svgpan.js

@@ -1,30 +1,19 @@
-// Copyright 2013 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the 'License');
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an 'AS-IS' BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * @license
+ * Copyright The Closure Library Authors.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @fileoverview Various User-Agent strings.
  * See http://go/useragentexamples and http://www.useragentstring.com/ for
  * examples.
- *
- * @author martone@google.com (Andy Martone)
  */
 
-goog.provide('goog.labs.userAgent.testAgents');
-goog.setTestOnly('goog.labs.userAgent.testAgents');
+goog.module('goog.labs.userAgent.testAgents');
+goog.setTestOnly();
 
-goog.scope(function() {
-const testAgents = goog.labs.userAgent.testAgents;
+const testAgents = {};
 
 
 /** @const {string} */
@@ -249,6 +238,14 @@ testAgents.SAFARI_WINDOWS =
     'Mozilla/5.0 (Windows; U; Windows NT 6.1; tr-TR) AppleWebKit/533.20.25' +
     ' (KHTML, like Gecko) Version/5.0.4 Safari/533.20.27';
 
+/**
+ * The user-agent for desktop Safari and iPadOS Safari are identical and require
+ * runtime examination.
+ * @const {string}
+ */
+testAgents.SAFARI_13 =
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15' +
+    ' (KHTML, like Gecko) Version/13.0 Safari/605.1.15';
 
 /** @const {string} */
 testAgents.COAST =
@@ -347,6 +344,12 @@ testAgents.CHROME_ANDROID_TABLET_4_4 =
 
 
 /** @const {string} */
+testAgents.CHROME_HEADLESS =
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
+    'HeadlessChrome/79.0.3945.84 Safari/537.36';
+
+
+/** @const {string} */
 testAgents.CHROME_IPHONE =
     'Mozilla/5.0 (iPhone; CPU iPhone OS 5_1_1 like Mac OS X; en-us) ' +
     'AppleWebKit/534.46.0 (KHTML, like Gecko) CriOS/22.0.1194.0 Mobile/11E53 ' +
@@ -412,9 +415,4 @@ testAgents.KAIOS =
     'Mozilla/5.0 (Mobile; LYF/F90M/LYF_F90M_000-03-19-240319; Android; ' +
     'rv:48.0) Gecko/48.0 Firefox/48.0 KAIOS/2.5';
 
-/** @const {string} */
-testAgents.GO2PHONE =
-    'Mozilla/5.0 (Linux; Android 8.1.0; GAFP sp9820e_1h10_go_native)' +
-    ' AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3605.0 Mobile' +
-    ' Safari/537.36';
-});  // goog.scope
+exports = testAgents;

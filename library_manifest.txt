@@ -5,12 +5,14 @@ a11y/aria/datatables.js
 a11y/aria/roles.js
 array/array.js
 asserts/asserts.js
+asserts/dom.js
 async/animationdelay.js
 async/conditionaldelay.js
 async/debouncer.js
 async/delay.js
 async/freelist.js
 async/nexttick.js
+async/promises.js
 async/run.js
 async/throttle.js
 async/workqueue.js
@@ -56,7 +58,6 @@ datasource/jsondatasource.js
 datasource/jsxmlhttpdatasource.js
 datasource/xmldatasource.js
 date/date.js
-date/datelike.js
 date/daterange.js
 date/duration.js
 date/relative.js
@@ -73,6 +74,7 @@ db/transaction.js
 debug/console.js
 debug/debug.js
 debug/debugwindow.js
+debug/deepfreeze.js
 debug/devcss/devcss.js
 debug/devcss/devcssrunner.js
 debug/divconsole.js
@@ -93,8 +95,6 @@ debug/relativetimeprovider.js
 debug/tracer.js
 delegate/delegateregistry.js
 delegate/delegates.js
-demos/autocompleteremotedata.js
-demos/autocompleterichremotedata.js
 demos/editor/helloworld.js
 demos/editor/helloworlddialog.js
 demos/editor/helloworlddialogplugin.js
@@ -125,6 +125,7 @@ dom/classlist.js
 dom/controlrange.js
 dom/dataset.js
 dom/dom.js
+dom/element.js
 dom/fontsizemonitor.js
 dom/forms.js
 dom/fullscreen.js
@@ -238,6 +239,7 @@ format/format.js
 format/htmlprettyprinter.js
 format/internationalizedemailaddress.js
 format/jsonprettyprinter.js
+fs/blob.js
 fs/entry.js
 fs/entryimpl.js
 fs/error.js
@@ -381,7 +383,7 @@ json/json_perf.js
 json/jsonable.js
 json/nativejsonprocessor.js
 json/processor.js
-labs/collections/iterables.js
+labs/collections/iters.js
 labs/dom/pagevisibilitymonitor.js
 labs/events/nondisposableeventtarget.js
 labs/events/touch.js
@@ -394,7 +396,6 @@ labs/mock/timeoutmode.js
 labs/mock/verificationmode.js
 labs/net/image.js
 labs/net/webchannel.js
-labs/net/webchannel/basetestchannel.js
 labs/net/webchannel/channel.js
 labs/net/webchannel/channelrequest.js
 labs/net/webchannel/connectionstate.js
@@ -427,6 +428,7 @@ labs/testing/stringmatcher.js
 labs/useragent/browser.js
 labs/useragent/device.js
 labs/useragent/engine.js
+labs/useragent/extra.js
 labs/useragent/platform.js
 labs/useragent/test_agents.js
 labs/useragent/util.js
@@ -587,7 +589,6 @@ pubsub/pubsub.js
 pubsub/topicid.js
 pubsub/typedpubsub.js
 reflect/reflect.js
-result/deferredadaptor.js
 result/dependentresult.js
 result/result_interface.js
 result/resultutil.js
@@ -843,6 +844,7 @@ ui/keyboardeventdata.js
 ui/keyboardshortcuthandler.js
 ui/labelinput.js
 ui/linkbuttonrenderer.js
+ui/map.js
 ui/media/flashobject.js
 ui/media/flickr.js
 ui/media/googlevideo.js
@@ -935,6 +937,7 @@ ui/twothumbslider.js
 ui/zippy.js
 uri/uri.js
 uri/utils.js
+url/url.js
 useragent/adobereader.js
 useragent/flash.js
 useragent/iphoto.js
