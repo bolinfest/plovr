@@ -2,6 +2,7 @@ goog.require("example.App");
 
 goog.require("goog.module.ModuleLoader");
 goog.require("goog.module.ModuleManager");
+goog.require("goog.Uri");
 
 example.App.setButtonClickHandler(function(e) {
   var moduleManager = goog.module.ModuleManager.getInstance();
